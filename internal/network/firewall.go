@@ -250,3 +250,106 @@ COMMIT
 
 	return nil
 }
+
+func RemoveFirewallRules() {
+	fwType := DetectFirewall()
+
+	switch fwType {
+	case FirewallFirewalld:
+		removeFirewalldRules()
+	case FirewallUFW:
+		removeUFWRules()
+	case FirewallIptables, FirewallNone:
+		clearIptablesRules()
+		clearIp6tablesRules()
+		saveIptablesRules()
+	}
+}
+
+func removeFirewalldRules() {
+	cmds := [][]string{
+		{"firewall-cmd", "--permanent", "--remove-port=53/udp"},
+		{"firewall-cmd", "--permanent", "--remove-port=53/tcp"},
+		{"firewall-cmd", "--permanent", "--remove-port=" + DnsttPort + "/udp"},
+		{"firewall-cmd", "--permanent", "--remove-port=" + DnsttPort + "/tcp"},
+		{"firewall-cmd", "--permanent", "--direct", "--remove-rule", "ipv4", "nat", "PREROUTING", "0", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", DnsttPort},
+		{"firewall-cmd", "--reload"},
+	}
+
+	for _, args := range cmds {
+		exec.Command(args[0], args[1:]...).Run()
+	}
+}
+
+func removeUFWRules() {
+	// Remove port rules
+	cmds := [][]string{
+		{"ufw", "delete", "allow", "53/udp"},
+		{"ufw", "delete", "allow", "53/tcp"},
+		{"ufw", "delete", "allow", DnsttPort + "/udp"},
+		{"ufw", "delete", "allow", DnsttPort + "/tcp"},
+	}
+
+	for _, args := range cmds {
+		exec.Command(args[0], args[1:]...).Run()
+	}
+
+	// Remove NAT rules from before.rules
+	removeUFWNatRules(ufwBeforeRulesPath)
+	removeUFWNatRules(ufwBefore6RulesPath)
+
+	exec.Command("ufw", "reload").Run()
+}
+
+func removeUFWNatRules(filePath string) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return
+	}
+
+	contentStr := string(content)
+	if !strings.Contains(contentStr, dnsttNatMarker) {
+		return
+	}
+
+	// Remove the NAT block we added
+	lines := strings.Split(contentStr, "\n")
+	var newLines []string
+	inNatBlock := false
+
+	for _, line := range lines {
+		if strings.Contains(line, dnsttNatMarker) {
+			inNatBlock = true
+			continue
+		}
+		if inNatBlock {
+			if line == "COMMIT" {
+				inNatBlock = false
+				continue
+			}
+			if strings.HasPrefix(line, "*nat") ||
+			   strings.HasPrefix(line, ":PREROUTING") ||
+			   strings.HasPrefix(line, "-A PREROUTING") {
+				continue
+			}
+			// Empty line after COMMIT
+			if line == "" {
+				continue
+			}
+		}
+		newLines = append(newLines, line)
+	}
+
+	os.WriteFile(filePath, []byte(strings.Join(newLines, "\n")), 0640)
+}
+
+func clearIp6tablesRules() {
+	rules := [][]string{
+		{"-t", "nat", "-D", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", DnsttPort},
+		{"-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-ports", DnsttPort},
+	}
+
+	for _, args := range rules {
+		exec.Command("ip6tables", args...).Run()
+	}
+}

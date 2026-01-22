@@ -31,3 +31,11 @@ func DnsttUserExists() bool {
 	_, err := user.Lookup(DnsttUser)
 	return err == nil
 }
+
+func RemoveDnsttUser() {
+	if _, err := user.Lookup(DnsttUser); err != nil {
+		return
+	}
+
+	exec.Command("userdel", DnsttUser).Run()
+}

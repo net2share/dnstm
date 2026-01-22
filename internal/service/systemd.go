@@ -150,3 +150,15 @@ func GetLogs(lines int) (string, error) {
 	}
 	return string(output), nil
 }
+
+func Disable() error {
+	cmd := exec.Command("systemctl", "disable", ServiceName)
+	cmd.Run()
+	return nil
+}
+
+func Remove() error {
+	os.Remove(ServicePath)
+	exec.Command("systemctl", "daemon-reload").Run()
+	return nil
+}
