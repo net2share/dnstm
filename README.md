@@ -1,4 +1,4 @@
-# dnstm
+# DNS Tunnel Manager (dnstm)
 
 A tool to deploy and manage [dnstt](https://www.bamsoftware.com/software/dnstt/) DNS tunnel servers on Linux.
 
