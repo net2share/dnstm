@@ -1,0 +1,22 @@
+# Binaries
+dnstm
+dnstm-*
+*.exe
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test and coverage
+*.test
+*.out
+coverage.html
+
+# Vendor (if not using go modules)
+vendor/
