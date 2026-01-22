@@ -1,9 +1,8 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -38,7 +37,7 @@ jobs:
           if [ "$ARCH" = "arm" ]; then
             ARCH="armv7"
           fi
-          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION=${{ github.event.release.tag_name }}
           OUTPUT_NAME="dnstm-${{ matrix.goos }}-${ARCH}"
           go build -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o "${OUTPUT_NAME}" .
           chmod +x "${OUTPUT_NAME}"
