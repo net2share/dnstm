@@ -183,3 +183,7 @@ func IsDnsttInstalled() bool {
 	_, err := os.Stat(filepath.Join(InstallDir, "dnstt-server"))
 	return err == nil
 }
+
+func RemoveBinary() {
+	os.Remove(filepath.Join(InstallDir, "dnstt-server"))
+}

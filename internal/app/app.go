@@ -51,6 +51,7 @@ func showMainMenu() error {
 			{Key: "3", Label: "View service logs"},
 			{Key: "4", Label: "Show configuration info"},
 			{Key: "5", Label: "Restart service"},
+			{Key: "6", Label: "Uninstall"},
 			{Key: "0", Label: "Exit"},
 		}
 
@@ -72,6 +73,10 @@ func showMainMenu() error {
 			showConfig()
 		case "5":
 			restartService()
+		case "6":
+			if runUninstall() {
+				return nil
+			}
 		case "0", "q", "quit", "exit":
 			ui.PrintInfo("Goodbye!")
 			return nil
@@ -348,4 +353,67 @@ func restartService() {
 		ui.PrintStatus("Service restarted successfully")
 	}
 	ui.WaitForEnter()
+}
+
+func runUninstall() bool {
+	fmt.Println()
+	ui.PrintWarning("This will completely remove dnstt from your system:")
+	fmt.Println("  - Stop and remove the dnstt-server service")
+	fmt.Println("  - Remove the dnstt-server binary")
+	fmt.Println("  - Remove all configuration files and keys")
+	fmt.Println("  - Remove firewall rules")
+	fmt.Println("  - Remove the dnstt system user")
+	fmt.Println()
+
+	if !ui.Confirm("Are you sure you want to uninstall?", false) {
+		ui.PrintInfo("Uninstall cancelled")
+		ui.WaitForEnter()
+		return false
+	}
+
+	fmt.Println()
+	totalSteps := 5
+	currentStep := 0
+
+	// Step 1: Stop and remove service
+	currentStep++
+	ui.PrintStep(currentStep, totalSteps, "Stopping and removing service...")
+	if service.IsActive() {
+		service.Stop()
+	}
+	if service.IsEnabled() {
+		service.Disable()
+	}
+	service.Remove()
+	ui.PrintStatus("Service removed")
+
+	// Step 2: Remove binary
+	currentStep++
+	ui.PrintStep(currentStep, totalSteps, "Removing dnstt-server binary...")
+	download.RemoveBinary()
+	ui.PrintStatus("Binary removed")
+
+	// Step 3: Remove configuration and keys
+	currentStep++
+	ui.PrintStep(currentStep, totalSteps, "Removing configuration and keys...")
+	config.RemoveAll()
+	ui.PrintStatus("Configuration removed")
+
+	// Step 4: Remove firewall rules
+	currentStep++
+	ui.PrintStep(currentStep, totalSteps, "Removing firewall rules...")
+	network.RemoveFirewallRules()
+	ui.PrintStatus("Firewall rules removed")
+
+	// Step 5: Remove user
+	currentStep++
+	ui.PrintStep(currentStep, totalSteps, "Removing dnstt user...")
+	system.RemoveDnsttUser()
+	ui.PrintStatus("User removed")
+
+	fmt.Println()
+	ui.PrintSuccess("Uninstallation complete!")
+	ui.PrintInfo("All dnstt components have been removed from your system.")
+
+	return true
 }

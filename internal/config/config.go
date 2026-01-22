@@ -114,3 +114,7 @@ func GetKeyFilenames(subdomain string) (privateKey, publicKey string) {
 	publicKey = filepath.Join(ConfigDir, sanitized+"_server.pub")
 	return
 }
+
+func RemoveAll() {
+	os.RemoveAll(ConfigDir)
+}

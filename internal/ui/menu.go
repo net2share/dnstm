@@ -105,7 +105,7 @@ func PromptInt(prompt string, defaultVal, min, max int) int {
 
 	for {
 		promptColor.Printf("%s ", prompt)
-		defaultColor.Printf("(%d-%d) [%d]", min, max, defaultVal)
+		defaultColor.Printf("[%d]", defaultVal)
 		fmt.Print(": ")
 
 		input, _ := reader.ReadString('\n')
@@ -129,8 +129,8 @@ func PromptChoice(prompt string, options []string, defaultVal string) string {
 	reader := bufio.NewReader(os.Stdin)
 
 	optStr := strings.Join(options, "/")
-	promptColor.Printf("%s ", prompt)
-	defaultColor.Printf("(%s) [%s]", optStr, defaultVal)
+	promptColor.Printf("%s (%s) ", prompt, optStr)
+	defaultColor.Printf("[%s]", defaultVal)
 	fmt.Print(": ")
 
 	input, _ := reader.ReadString('\n')
