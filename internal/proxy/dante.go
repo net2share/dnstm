@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/net2share/dnstm/internal/system"
+	"github.com/net2share/go-corelib/osdetect"
 )
 
 const (
@@ -36,7 +36,7 @@ func InstallDante(pkgManager string) error {
 }
 
 func ConfigureDante() error {
-	iface, err := system.GetDefaultInterface()
+	iface, err := osdetect.GetDefaultInterface()
 	if err != nil || iface == "" {
 		iface = "eth0"
 	}

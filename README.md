@@ -30,6 +30,7 @@ curl -sSL https://raw.githubusercontent.com/net2share/dnstm/main/install.sh | su
 Before running dnstm, configure your DNS records:
 
 1. Create an A record pointing to your server:
+
    ```
    ns.example.com.  IN  A  YOUR_SERVER_IP
    ```
@@ -77,11 +78,13 @@ dnstt-client -udp RESOLVER_IP:53 -pubkey-file server.pub t.example.com 127.0.0.1
 ```
 
 For SSH tunnel mode:
+
 ```bash
 ssh -o ProxyCommand="dnstt-client -udp RESOLVER_IP:53 -pubkey-file server.pub t.example.com 127.0.0.1:8000" user@localhost
 ```
 
 For SOCKS mode (with Dante):
+
 ```bash
 dnstt-client -udp RESOLVER_IP:53 -pubkey-file server.pub t.example.com 127.0.0.1:1080
 # Then configure your application to use SOCKS5 proxy at 127.0.0.1:1080
@@ -94,7 +97,3 @@ git clone https://github.com/net2share/dnstm.git
 cd dnstm
 go build -o dnstm .
 ```
-
-## License
-
-MIT
