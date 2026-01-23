@@ -4,6 +4,7 @@ go 1.21
 
 require (
 	github.com/fatih/color v1.16.0
+	github.com/net2share/go-corelib v0.1.0
 	golang.org/x/crypto v0.18.0
 )
 
