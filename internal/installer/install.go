@@ -54,10 +54,6 @@ func DetectArch() *ArchInfo {
 		dnsttArch = "linux-amd64"
 	case "arm64":
 		dnsttArch = "linux-arm64"
-	case "arm":
-		dnsttArch = "linux-armv7"
-	case "386":
-		dnsttArch = "linux-386"
 	}
 
 	return &ArchInfo{
@@ -221,15 +217,15 @@ func performInstallation(osInfo *osdetect.OSInfo, archInfo *ArchInfo, cfg *confi
 	tui.PrintStep(currentStep, totalSteps, "Downloading dnstt-server binary...")
 
 	if !download.IsDnsttInstalled() {
-		checksums, _ := download.FetchChecksums(archInfo.DnsttArch)
+		checksums, _ := download.FetchChecksums(config.DnsttReleaseURL, archInfo.DnsttArch)
 
-		tmpPath, err := download.DownloadDnsttServer(archInfo.DnsttArch, tui.PrintProgress)
+		tmpPath, err := download.DownloadDnsttServer(config.DnsttReleaseURL, archInfo.DnsttArch, tui.PrintProgress)
 		tui.ClearLine()
 		if err != nil {
 			return fmt.Errorf("download failed: %w", err)
 		}
 
-		if checksums.SHA256 != "" || checksums.MD5 != "" {
+		if checksums.SHA256 != "" {
 			if err := download.VerifyChecksums(tmpPath, checksums); err != nil {
 				os.Remove(tmpPath)
 				return fmt.Errorf("checksum verification failed: %w", err)

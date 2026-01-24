@@ -1,8 +1,7 @@
 package download
 
 import (
-	"crypto/md5"
-	"crypto/sha1"
+	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -14,19 +13,16 @@ import (
 )
 
 const (
-	DnsttBaseURL = "https://dnstt.network"
-	InstallDir   = "/usr/local/bin"
+	InstallDir = "/usr/local/bin"
 )
 
 type Checksums struct {
-	MD5    string
-	SHA1   string
 	SHA256 string
 }
 
-func DownloadDnsttServer(arch string, progressFn func(downloaded, total int64)) (string, error) {
+func DownloadDnsttServer(baseURL, arch string, progressFn func(downloaded, total int64)) (string, error) {
 	binaryName := fmt.Sprintf("dnstt-server-%s", arch)
-	url := fmt.Sprintf("%s/%s", DnsttBaseURL, binaryName)
+	url := fmt.Sprintf("%s/%s", baseURL, binaryName)
 
 	tmpFile, err := os.CreateTemp("", "dnstt-server-*")
 	if err != nil {
@@ -86,37 +82,37 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func FetchChecksums(arch string) (*Checksums, error) {
+func FetchChecksums(baseURL, arch string) (*Checksums, error) {
 	checksums := &Checksums{}
-
-	types := []struct {
-		name string
-		ptr  *string
-	}{
-		{"md5", &checksums.MD5},
-		{"sha1", &checksums.SHA1},
-		{"sha256", &checksums.SHA256},
-	}
-
 	binaryName := fmt.Sprintf("dnstt-server-%s", arch)
 
-	for _, ct := range types {
-		url := fmt.Sprintf("%s/%s.%s", DnsttBaseURL, binaryName, ct.name)
-		resp, err := http.Get(url)
-		if err != nil {
-			continue
-		}
-		defer resp.Body.Close()
+	url := fmt.Sprintf("%s/checksums.sha256", baseURL)
+	resp, err := http.Get(url)
+	if err != nil {
+		return checksums, fmt.Errorf("failed to fetch checksums: %w", err)
+	}
+	defer resp.Body.Close()
 
-		if resp.StatusCode == http.StatusOK {
-			data, err := io.ReadAll(resp.Body)
-			if err == nil {
-				parts := strings.Fields(string(data))
-				if len(parts) > 0 {
-					*ct.ptr = parts[0]
-				}
+	if resp.StatusCode != http.StatusOK {
+		return checksums, fmt.Errorf("failed to fetch checksums: %s", resp.Status)
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			hash := parts[0]
+			filename := parts[1]
+			if filename == binaryName {
+				checksums.SHA256 = hash
+				break
 			}
 		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return checksums, fmt.Errorf("failed to parse checksums: %w", err)
 	}
 
 	return checksums, nil
@@ -129,27 +125,13 @@ func VerifyChecksums(filePath string, expected *Checksums) error {
 	}
 	defer file.Close()
 
-	md5Hash := md5.New()
-	sha1Hash := sha1.New()
 	sha256Hash := sha256.New()
 
-	multiWriter := io.MultiWriter(md5Hash, sha1Hash, sha256Hash)
-
-	if _, err := io.Copy(multiWriter, file); err != nil {
-		return fmt.Errorf("failed to compute checksums: %w", err)
+	if _, err := io.Copy(sha256Hash, file); err != nil {
+		return fmt.Errorf("failed to compute checksum: %w", err)
 	}
 
-	md5Sum := hex.EncodeToString(md5Hash.Sum(nil))
-	sha1Sum := hex.EncodeToString(sha1Hash.Sum(nil))
 	sha256Sum := hex.EncodeToString(sha256Hash.Sum(nil))
-
-	if expected.MD5 != "" && md5Sum != expected.MD5 {
-		return fmt.Errorf("MD5 checksum mismatch: expected %s, got %s", expected.MD5, md5Sum)
-	}
-
-	if expected.SHA1 != "" && sha1Sum != expected.SHA1 {
-		return fmt.Errorf("SHA1 checksum mismatch: expected %s, got %s", expected.SHA1, sha1Sum)
-	}
 
 	if expected.SHA256 != "" && sha256Sum != expected.SHA256 {
 		return fmt.Errorf("SHA256 checksum mismatch: expected %s, got %s", expected.SHA256, sha256Sum)

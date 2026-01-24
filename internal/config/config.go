@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	ConfigDir  = "/etc/dnstt"
-	ConfigFile = "dnstt-server.conf"
-	DnsttPort  = "5300"
+	ConfigDir       = "/etc/dnstt"
+	ConfigFile      = "dnstt-server.conf"
+	DnsttPort       = "5300"
+	DnsttReleaseURL = "https://github.com/net2share/dnstt/releases/download/latest"
 )
 
 type Config struct {
