@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/net2share/dnstm/compare/v0.1.1...v0.1.2) (2026-01-24)
+
+
+### Features
+
+* add CLI commands and integrate sshtun-user module ([#13](https://github.com/net2share/dnstm/issues/13)) ([908c80a](https://github.com/net2share/dnstm/commit/908c80ac41f52bbff67f4ccf3cf6173a5cf2f266))
+
 ## [0.1.1](https://github.com/net2share/dnstm/compare/v0.1.0...v0.1.1) (2026-01-22)
 
 
