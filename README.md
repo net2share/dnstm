@@ -4,12 +4,13 @@ A tool to deploy and manage [dnstt](https://www.bamsoftware.com/software/dnstt/)
 
 ## Features
 
-- Interactive CLI wizard for easy setup
+- Interactive menu and full CLI command support
 - Downloads and installs dnstt-server binary
 - Generates Curve25519 key pairs
 - Configures firewall rules (UFW, firewalld, iptables)
 - Sets up systemd service with security hardening
-- Optional Dante SOCKS proxy setup
+- SSH tunnel mode with integrated user management via [sshtun-user](https://github.com/net2share/sshtun-user)
+- Optional Dante SOCKS proxy setup for SOCKS mode
 - Supports multiple architectures (amd64, arm64, armv7, 386)
 
 ## Quick Install
@@ -42,19 +43,97 @@ Before running dnstm, configure your DNS records:
 
 ## Usage
 
-Run the tool as root:
+### Interactive Menu
+
+Run without arguments for an interactive menu:
 
 ```bash
 sudo dnstm
 ```
 
-The interactive menu provides options to:
+**When dnstt is not installed:**
+1. Install dnstt server
+2. Manage SSH tunnel users
 
-1. **Install/Update dnstt** - Download the latest dnstt-server binary
-2. **Configure** - Set up domain, keys, and tunnel mode
-3. **Start/Stop/Restart** - Manage the dnstt service
-4. **View Status** - Check service status and configuration
-5. **Setup Dante Proxy** - Optional SOCKS5 proxy for SSH tunneling
+**When dnstt is installed:**
+1. Reconfigure dnstt server
+2. Check service status
+3. View service logs
+4. Show configuration info
+5. Restart service
+6. Manage SSH tunnel users
+7. Uninstall
+
+### CLI Commands
+
+```bash
+# Show help
+dnstm --help
+
+# Install with interactive wizard
+sudo dnstm install
+
+# Install with CLI options (non-interactive)
+sudo dnstm install --ns-subdomain t.example.com --mode ssh
+
+# Check service status
+sudo dnstm status
+
+# View service logs
+sudo dnstm logs
+
+# Show current configuration
+sudo dnstm config
+
+# Restart the service
+sudo dnstm restart
+
+# Manage SSH tunnel users (opens submenu)
+sudo dnstm ssh-users
+
+# Uninstall (interactive - asks about SSH users)
+sudo dnstm uninstall
+
+# Uninstall and remove SSH tunnel users
+sudo dnstm uninstall --remove-ssh-users
+
+# Uninstall but keep SSH tunnel users
+sudo dnstm uninstall --keep-ssh-users
+```
+
+### Install Options
+
+| Option | Description |
+| ------ | ----------- |
+| `--ns-subdomain <domain>` | NS subdomain (e.g., t.example.com) |
+| `--mtu <value>` | MTU value (512-1400, default: 1232) |
+| `--mode <ssh\|socks>` | Tunnel mode (default: ssh) |
+| `--port <port>` | Target port (default: 22 for ssh, 1080 for socks) |
+
+### Global Options
+
+| Option | Description |
+| ------ | ----------- |
+| `--help`, `-h` | Show help message |
+| `--version`, `-v` | Show version |
+
+## Tunnel Modes
+
+### SSH Mode (default)
+
+In SSH mode, dnstt tunnels SSH traffic. During installation, dnstm automatically:
+
+1. Applies sshd hardening configuration
+2. Configures fail2ban for brute-force protection
+3. Prompts to create a restricted tunnel user
+
+Tunnel users can only create local (`-L`) and SOCKS (`-D`) tunnels, with no shell access.
+
+Manage SSH tunnel users anytime via `sudo dnstm ssh-users` or menu option 6.
+
+### SOCKS Mode
+
+In SOCKS mode, dnstt runs a Dante SOCKS5 proxy. Clients connect directly to the proxy without SSH.
 
 ## Configuration
 
@@ -89,6 +168,26 @@ For SOCKS mode (with Dante):
 dnstt-client -udp RESOLVER_IP:53 -pubkey-file server.pub t.example.com 127.0.0.1:1080
 # Then configure your application to use SOCKS5 proxy at 127.0.0.1:1080
 ```
+
+## Uninstall
+
+```bash
+# Interactive uninstall (asks about SSH tunnel users)
+sudo dnstm uninstall
+
+# Uninstall everything including SSH tunnel users and config
+sudo dnstm uninstall --remove-ssh-users
+
+# Uninstall dnstt but keep SSH tunnel users
+sudo dnstm uninstall --keep-ssh-users
+```
+
+The uninstall process removes:
+- dnstt-server service and binary
+- Configuration files and keys
+- Firewall rules
+- dnstt system user
+- (Optionally) SSH tunnel users and sshd hardening config
 
 ## Building from Source
 

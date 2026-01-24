@@ -7,6 +7,8 @@ github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWE
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/net2share/go-corelib v0.1.0 h1:1uwGJVgaoxDf49LSX5BP3yRwsWVFK0zpkZrAlG8IGZs=
 github.com/net2share/go-corelib v0.1.0/go.mod h1:0gACJp4RRjo4vtC4We0uhK9RNBv06xgER9tuXx9FffA=
+github.com/net2share/sshtun-user v0.3.0 h1:f7+oJizXcMbbCi9gUCzN2odZrW/uiTr3sRMqo+Nm0T4=
+github.com/net2share/sshtun-user v0.3.0/go.mod h1:Y/dzfHCD6SmT1klEvBmlsvJSUtA72JcwTwmIGNlKMro=
 golang.org/x/crypto v0.18.0 h1:PGVlW0xEltQnzFZ55hkuX5+KLyrMYhHld1YHO4AKcdc=
 golang.org/x/crypto v0.18.0/go.mod h1:R0j02AL6hcrfOiy9T4ZYp/rcWeMxM3L6QYxlOuEG1mg=
 golang.org/x/sys v0.0.0-20220811171246-fbc7d0a398ab/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=

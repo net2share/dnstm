@@ -13,7 +13,7 @@ var (
 )
 
 func main() {
-	if err := app.Run(Version, BuildTime); err != nil {
+	if err := app.Run(Version, BuildTime, os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

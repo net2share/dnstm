@@ -15,12 +15,13 @@ const (
 )
 
 type Config struct {
-	NSSubdomain    string
-	MTU            string
-	TunnelMode     string
-	PrivateKeyFile string
-	PublicKeyFile  string
-	TargetPort     string
+	NSSubdomain      string
+	MTU              string
+	TunnelMode       string
+	PrivateKeyFile   string
+	PublicKeyFile    string
+	TargetPort       string
+	SSHTunnelEnabled string // "true" or "false" - tracks if SSH tunnel hardening is applied
 }
 
 func Load() (*Config, error) {
@@ -71,6 +72,8 @@ func Load() (*Config, error) {
 			config.PublicKeyFile = value
 		case "TARGET_PORT":
 			config.TargetPort = value
+		case "SSH_TUNNEL_ENABLED":
+			config.SSHTunnelEnabled = value
 		}
 	}
 
@@ -93,7 +96,8 @@ TUNNEL_MODE="%s"
 PRIVATE_KEY_FILE="%s"
 PUBLIC_KEY_FILE="%s"
 TARGET_PORT="%s"
-`, c.NSSubdomain, c.MTU, c.TunnelMode, c.PrivateKeyFile, c.PublicKeyFile, c.TargetPort)
+SSH_TUNNEL_ENABLED="%s"
+`, c.NSSubdomain, c.MTU, c.TunnelMode, c.PrivateKeyFile, c.PublicKeyFile, c.TargetPort, c.SSHTunnelEnabled)
 
 	if err := os.WriteFile(configPath, []byte(content), 0640); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
