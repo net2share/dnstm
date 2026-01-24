@@ -1,11 +1,6 @@
 package main
 
-import (
-	"fmt"
-	"os"
-
-	"github.com/net2share/dnstm/internal/app"
-)
+import "github.com/net2share/dnstm/cmd"
 
 var (
 	Version   = "dev"
@@ -13,8 +8,6 @@ var (
 )
 
 func main() {
-	if err := app.Run(Version, BuildTime, os.Args[1:]); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
+	cmd.SetVersionInfo(Version, BuildTime)
+	cmd.Execute()
 }
