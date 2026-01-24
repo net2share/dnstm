@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/net2share/dnstm/compare/v0.1.2...v0.1.3) (2026-01-24)
+
+
+### Features
+
+* rewrite CLI with Cobra, huh, and shared go-corelib/tui ([#15](https://github.com/net2share/dnstm/issues/15)) ([84058b4](https://github.com/net2share/dnstm/commit/84058b45849ce83a538d6d0f649eb72aff195ecb))
+
 ## [0.1.2](https://github.com/net2share/dnstm/compare/v0.1.1...v0.1.2) (2026-01-24)
 
 
