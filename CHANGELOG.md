@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.0](https://github.com/net2share/dnstm/compare/v0.2.0...v0.3.0) (2026-01-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* Provider installation no longer automatically sets up SOCKS proxy or SSH tunnel users. These are now managed separately.
+
+### Features
+
+* decouple SOCKS and SSH user management from providers ([#20](https://github.com/net2share/dnstm/issues/20)) ([9ba6a6a](https://github.com/net2share/dnstm/commit/9ba6a6ac2584d5a7f41b7e40e1546386e31ffbf0))
+
 ## [0.2.0](https://github.com/net2share/dnstm/compare/v0.1.3...v0.2.0) (2026-01-25)
 
 
