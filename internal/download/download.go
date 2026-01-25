@@ -20,11 +20,20 @@ type Checksums struct {
 	SHA256 string
 }
 
-func DownloadDnsttServer(baseURL, arch string, progressFn func(downloaded, total int64)) (string, error) {
-	binaryName := fmt.Sprintf("dnstt-server-%s", arch)
-	url := fmt.Sprintf("%s/%s", baseURL, binaryName)
+// BinaryConfig contains configuration for downloading a binary.
+type BinaryConfig struct {
+	BaseURL      string
+	BinaryName   string // e.g., "dnstt-server" or "slipstream-server"
+	Arch         string // e.g., "linux-amd64"
+	ChecksumFile string // e.g., "checksums.sha256" or "SHA256SUMS"
+}
 
-	tmpFile, err := os.CreateTemp("", "dnstt-server-*")
+// DownloadBinary downloads a binary from the given configuration.
+func DownloadBinary(cfg *BinaryConfig, progressFn func(downloaded, total int64)) (string, error) {
+	binaryName := fmt.Sprintf("%s-%s", cfg.BinaryName, cfg.Arch)
+	url := fmt.Sprintf("%s/%s", cfg.BaseURL, binaryName)
+
+	tmpFile, err := os.CreateTemp("", cfg.BinaryName+"-*")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
@@ -66,6 +75,16 @@ func DownloadDnsttServer(baseURL, arch string, progressFn func(downloaded, total
 	return tmpFile.Name(), nil
 }
 
+// DownloadDnsttServer downloads the dnstt-server binary (backward compatible wrapper).
+func DownloadDnsttServer(baseURL, arch string, progressFn func(downloaded, total int64)) (string, error) {
+	return DownloadBinary(&BinaryConfig{
+		BaseURL:      baseURL,
+		BinaryName:   "dnstt-server",
+		Arch:         arch,
+		ChecksumFile: "checksums.sha256",
+	}, progressFn)
+}
+
 type progressReader struct {
 	reader     io.Reader
 	total      int64
@@ -82,11 +101,17 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func FetchChecksums(baseURL, arch string) (*Checksums, error) {
+// FetchChecksumsForBinary fetches checksums for a binary using the given configuration.
+func FetchChecksumsForBinary(cfg *BinaryConfig) (*Checksums, error) {
 	checksums := &Checksums{}
-	binaryName := fmt.Sprintf("dnstt-server-%s", arch)
+	binaryName := fmt.Sprintf("%s-%s", cfg.BinaryName, cfg.Arch)
 
-	url := fmt.Sprintf("%s/checksums.sha256", baseURL)
+	checksumFile := cfg.ChecksumFile
+	if checksumFile == "" {
+		checksumFile = "checksums.sha256"
+	}
+
+	url := fmt.Sprintf("%s/%s", cfg.BaseURL, checksumFile)
 	resp, err := http.Get(url)
 	if err != nil {
 		return checksums, fmt.Errorf("failed to fetch checksums: %w", err)
@@ -118,6 +143,16 @@ func FetchChecksums(baseURL, arch string) (*Checksums, error) {
 	return checksums, nil
 }
 
+// FetchChecksums fetches checksums for dnstt-server (backward compatible wrapper).
+func FetchChecksums(baseURL, arch string) (*Checksums, error) {
+	return FetchChecksumsForBinary(&BinaryConfig{
+		BaseURL:      baseURL,
+		BinaryName:   "dnstt-server",
+		Arch:         arch,
+		ChecksumFile: "checksums.sha256",
+	})
+}
+
 func VerifyChecksums(filePath string, expected *Checksums) error {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -140,8 +175,9 @@ func VerifyChecksums(filePath string, expected *Checksums) error {
 	return nil
 }
 
-func InstallBinary(tmpPath string) error {
-	destPath := filepath.Join(InstallDir, "dnstt-server")
+// InstallBinaryAs installs a binary with the given name.
+func InstallBinaryAs(tmpPath, binaryName string) error {
+	destPath := filepath.Join(InstallDir, binaryName)
 
 	if err := os.MkdirAll(InstallDir, 0755); err != nil {
 		return fmt.Errorf("failed to create install directory: %w", err)
@@ -161,11 +197,28 @@ func InstallBinary(tmpPath string) error {
 	return nil
 }
 
-func IsDnsttInstalled() bool {
-	_, err := os.Stat(filepath.Join(InstallDir, "dnstt-server"))
+// InstallBinary installs dnstt-server (backward compatible wrapper).
+func InstallBinary(tmpPath string) error {
+	return InstallBinaryAs(tmpPath, "dnstt-server")
+}
+
+// IsBinaryInstalled checks if a binary is installed.
+func IsBinaryInstalled(binaryName string) bool {
+	_, err := os.Stat(filepath.Join(InstallDir, binaryName))
 	return err == nil
 }
 
+// IsDnsttInstalled checks if dnstt-server is installed (backward compatible wrapper).
+func IsDnsttInstalled() bool {
+	return IsBinaryInstalled("dnstt-server")
+}
+
+// RemoveBinaryByName removes a binary by name.
+func RemoveBinaryByName(binaryName string) {
+	os.Remove(filepath.Join(InstallDir, binaryName))
+}
+
+// RemoveBinary removes dnstt-server (backward compatible wrapper).
 func RemoveBinary() {
-	os.Remove(filepath.Join(InstallDir, "dnstt-server"))
+	RemoveBinaryByName("dnstt-server")
 }
