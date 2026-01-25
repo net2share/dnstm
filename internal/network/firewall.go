@@ -7,7 +7,10 @@ import (
 	"strings"
 )
 
-const DnsttPort = "5300"
+const (
+	DnsttPort      = "5300"
+	SlipstreamPort = "5301"
+)
 
 type FirewallType int
 
@@ -41,29 +44,39 @@ func DetectFirewall() FirewallType {
 	return FirewallNone
 }
 
+// ConfigureFirewall configures the firewall for dnstt (backward compatible wrapper).
 func ConfigureFirewall() error {
+	return ConfigureFirewallForPort(DnsttPort)
+}
+
+// ConfigureFirewallForPort configures the firewall to redirect port 53 to the given port.
+func ConfigureFirewallForPort(port string) error {
 	fwType := DetectFirewall()
 
 	switch fwType {
 	case FirewallFirewalld:
-		return configureFirewalld()
+		return configureFirewalldForPort(port)
 	case FirewallUFW:
-		return configureUFW()
+		return configureUFWForPort(port)
 	case FirewallIptables, FirewallNone:
-		return configureIptables()
+		return configureIptablesForPort(port)
 	}
 
 	return nil
 }
 
 func configureFirewalld() error {
+	return configureFirewalldForPort(DnsttPort)
+}
+
+func configureFirewalldForPort(port string) error {
 	cmds := [][]string{
 		{"firewall-cmd", "--permanent", "--add-port=53/udp"},
 		{"firewall-cmd", "--permanent", "--add-port=53/tcp"},
-		{"firewall-cmd", "--permanent", "--add-port=" + DnsttPort + "/udp"},
-		{"firewall-cmd", "--permanent", "--add-port=" + DnsttPort + "/tcp"},
+		{"firewall-cmd", "--permanent", "--add-port=" + port + "/udp"},
+		{"firewall-cmd", "--permanent", "--add-port=" + port + "/tcp"},
 		{"firewall-cmd", "--permanent", "--add-masquerade"},
-		{"firewall-cmd", "--permanent", "--direct", "--add-rule", "ipv4", "nat", "PREROUTING", "0", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", DnsttPort},
+		{"firewall-cmd", "--permanent", "--direct", "--add-rule", "ipv4", "nat", "PREROUTING", "0", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
 		{"firewall-cmd", "--reload"},
 	}
 
@@ -78,14 +91,18 @@ func configureFirewalld() error {
 }
 
 func configureUFW() error {
+	return configureUFWForPort(DnsttPort)
+}
+
+func configureUFWForPort(port string) error {
 	// Allow port 53 for external DNS queries
-	// Allow port 5300 because after NAT PREROUTING redirects 53->5300,
-	// packets arrive at INPUT chain with dport 5300
+	// Allow the target port because after NAT PREROUTING redirects 53->port,
+	// packets arrive at INPUT chain with dport port
 	cmds := [][]string{
 		{"ufw", "allow", "53/udp"},
 		{"ufw", "allow", "53/tcp"},
-		{"ufw", "allow", DnsttPort + "/udp"},
-		{"ufw", "allow", DnsttPort + "/tcp"},
+		{"ufw", "allow", port + "/udp"},
+		{"ufw", "allow", port + "/tcp"},
 	}
 
 	for _, args := range cmds {
@@ -94,9 +111,9 @@ func configureUFW() error {
 	}
 
 	// Add NAT rules to /etc/ufw/before.rules for persistence
-	if err := addUFWNatRules(); err != nil {
+	if err := addUFWNatRulesForPort(port); err != nil {
 		// Fall back to direct iptables if UFW config fails
-		return configureIptables()
+		return configureIptablesForPort(port)
 	}
 
 	// Reload UFW to apply the NAT rules
@@ -106,17 +123,24 @@ func configureUFW() error {
 }
 
 const ufwBeforeRulesPath = "/etc/ufw/before.rules"
-const dnsttNatMarker = "# NAT table rules for dnstt"
+const dnstmNatMarker = "# NAT table rules for dnstm"
+const dnsttNatMarker = "# NAT table rules for dnstt" // Legacy marker for backward compat
 
 func addUFWNatRules() error {
+	return addUFWNatRulesForPort(DnsttPort)
+}
+
+func addUFWNatRulesForPort(port string) error {
 	content, err := os.ReadFile(ufwBeforeRulesPath)
 	if err != nil {
 		return err
 	}
 
-	// Check if NAT rules already exist
-	if strings.Contains(string(content), dnsttNatMarker) {
-		return nil
+	// Check if NAT rules already exist (check both old and new markers)
+	if strings.Contains(string(content), dnstmNatMarker) || strings.Contains(string(content), dnsttNatMarker) {
+		// Remove existing rules first, then add new ones
+		removeUFWNatRules(ufwBeforeRulesPath)
+		content, _ = os.ReadFile(ufwBeforeRulesPath)
 	}
 
 	// NAT rules to prepend before the *filter section
@@ -127,7 +151,7 @@ func addUFWNatRules() error {
 -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports %s
 COMMIT
 
-`, dnsttNatMarker, DnsttPort, DnsttPort, DnsttPort)
+`, dnstmNatMarker, port, port, port)
 
 	// Prepend NAT rules to the file
 	newContent := natRules + string(content)
@@ -140,11 +164,17 @@ COMMIT
 }
 
 func configureIptables() error {
-	clearIptablesRules()
+	return configureIptablesForPort(DnsttPort)
+}
+
+func configureIptablesForPort(port string) error {
+	// Clear any existing rules for both ports
+	clearIptablesRulesForPort(DnsttPort)
+	clearIptablesRulesForPort(SlipstreamPort)
 
 	rules := [][]string{
-		{"-t", "nat", "-A", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", DnsttPort},
-		{"-t", "nat", "-A", "PREROUTING", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-ports", DnsttPort},
+		{"-t", "nat", "-A", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
+		{"-t", "nat", "-A", "PREROUTING", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
 	}
 
 	for _, args := range rules {
@@ -158,9 +188,13 @@ func configureIptables() error {
 }
 
 func clearIptablesRules() {
+	clearIptablesRulesForPort(DnsttPort)
+}
+
+func clearIptablesRulesForPort(port string) {
 	rules := [][]string{
-		{"-t", "nat", "-D", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", DnsttPort},
-		{"-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-ports", DnsttPort},
+		{"-t", "nat", "-D", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
+		{"-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
 	}
 
 	for _, args := range rules {
@@ -195,17 +229,27 @@ func saveIptablesRules() error {
 	return nil
 }
 
+// ConfigureIPv6 configures IPv6 firewall rules for dnstt (backward compatible wrapper).
 func ConfigureIPv6() error {
+	return ConfigureIPv6ForPort(DnsttPort)
+}
+
+// ConfigureIPv6ForPort configures IPv6 firewall rules for the given port.
+func ConfigureIPv6ForPort(port string) error {
 	fwType := DetectFirewall()
 
 	if fwType == FirewallUFW {
-		return addUFWNatRulesIPv6()
+		return addUFWNatRulesIPv6ForPort(port)
 	}
 
 	// Direct ip6tables for non-UFW systems
+	// Clear any existing rules first
+	clearIp6tablesRulesForPort(DnsttPort)
+	clearIp6tablesRulesForPort(SlipstreamPort)
+
 	rules := [][]string{
-		{"-t", "nat", "-A", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", DnsttPort},
-		{"-t", "nat", "-A", "PREROUTING", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-ports", DnsttPort},
+		{"-t", "nat", "-A", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
+		{"-t", "nat", "-A", "PREROUTING", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
 	}
 
 	for _, args := range rules {
@@ -218,14 +262,20 @@ func ConfigureIPv6() error {
 const ufwBefore6RulesPath = "/etc/ufw/before6.rules"
 
 func addUFWNatRulesIPv6() error {
+	return addUFWNatRulesIPv6ForPort(DnsttPort)
+}
+
+func addUFWNatRulesIPv6ForPort(port string) error {
 	content, err := os.ReadFile(ufwBefore6RulesPath)
 	if err != nil {
 		return err
 	}
 
-	// Check if NAT rules already exist
-	if strings.Contains(string(content), dnsttNatMarker) {
-		return nil
+	// Check if NAT rules already exist (check both old and new markers)
+	if strings.Contains(string(content), dnstmNatMarker) || strings.Contains(string(content), dnsttNatMarker) {
+		// Remove existing rules first, then add new ones
+		removeUFWNatRules(ufwBefore6RulesPath)
+		content, _ = os.ReadFile(ufwBefore6RulesPath)
 	}
 
 	// NAT rules to prepend before the *filter section
@@ -236,7 +286,7 @@ func addUFWNatRulesIPv6() error {
 -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports %s
 COMMIT
 
-`, dnsttNatMarker, DnsttPort, DnsttPort, DnsttPort)
+`, dnstmNatMarker, port, port, port)
 
 	// Prepend NAT rules to the file
 	newContent := natRules + string(content)
@@ -251,28 +301,58 @@ COMMIT
 	return nil
 }
 
+// RemoveFirewallRules removes all firewall rules for dnstt (backward compatible wrapper).
 func RemoveFirewallRules() {
+	RemoveFirewallRulesForPort(DnsttPort)
+}
+
+// RemoveFirewallRulesForPort removes firewall rules for a specific port.
+func RemoveFirewallRulesForPort(port string) {
 	fwType := DetectFirewall()
 
 	switch fwType {
 	case FirewallFirewalld:
-		removeFirewalldRules()
+		removeFirewalldRulesForPort(port)
 	case FirewallUFW:
-		removeUFWRules()
+		removeUFWRulesForPort(port)
 	case FirewallIptables, FirewallNone:
-		clearIptablesRules()
-		clearIp6tablesRules()
+		clearIptablesRulesForPort(port)
+		clearIp6tablesRulesForPort(port)
+		saveIptablesRules()
+	}
+}
+
+// RemoveAllFirewallRules removes firewall rules for all providers.
+func RemoveAllFirewallRules() {
+	fwType := DetectFirewall()
+
+	switch fwType {
+	case FirewallFirewalld:
+		removeFirewalldRulesForPort(DnsttPort)
+		removeFirewalldRulesForPort(SlipstreamPort)
+	case FirewallUFW:
+		removeUFWRulesForPort(DnsttPort)
+		removeUFWRulesForPort(SlipstreamPort)
+	case FirewallIptables, FirewallNone:
+		clearIptablesRulesForPort(DnsttPort)
+		clearIptablesRulesForPort(SlipstreamPort)
+		clearIp6tablesRulesForPort(DnsttPort)
+		clearIp6tablesRulesForPort(SlipstreamPort)
 		saveIptablesRules()
 	}
 }
 
 func removeFirewalldRules() {
+	removeFirewalldRulesForPort(DnsttPort)
+}
+
+func removeFirewalldRulesForPort(port string) {
 	cmds := [][]string{
 		{"firewall-cmd", "--permanent", "--remove-port=53/udp"},
 		{"firewall-cmd", "--permanent", "--remove-port=53/tcp"},
-		{"firewall-cmd", "--permanent", "--remove-port=" + DnsttPort + "/udp"},
-		{"firewall-cmd", "--permanent", "--remove-port=" + DnsttPort + "/tcp"},
-		{"firewall-cmd", "--permanent", "--direct", "--remove-rule", "ipv4", "nat", "PREROUTING", "0", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", DnsttPort},
+		{"firewall-cmd", "--permanent", "--remove-port=" + port + "/udp"},
+		{"firewall-cmd", "--permanent", "--remove-port=" + port + "/tcp"},
+		{"firewall-cmd", "--permanent", "--direct", "--remove-rule", "ipv4", "nat", "PREROUTING", "0", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
 		{"firewall-cmd", "--reload"},
 	}
 
@@ -282,12 +362,16 @@ func removeFirewalldRules() {
 }
 
 func removeUFWRules() {
+	removeUFWRulesForPort(DnsttPort)
+}
+
+func removeUFWRulesForPort(port string) {
 	// Remove port rules
 	cmds := [][]string{
 		{"ufw", "delete", "allow", "53/udp"},
 		{"ufw", "delete", "allow", "53/tcp"},
-		{"ufw", "delete", "allow", DnsttPort + "/udp"},
-		{"ufw", "delete", "allow", DnsttPort + "/tcp"},
+		{"ufw", "delete", "allow", port + "/udp"},
+		{"ufw", "delete", "allow", port + "/tcp"},
 	}
 
 	for _, args := range cmds {
@@ -308,7 +392,8 @@ func removeUFWNatRules(filePath string) {
 	}
 
 	contentStr := string(content)
-	if !strings.Contains(contentStr, dnsttNatMarker) {
+	// Check for both old and new markers
+	if !strings.Contains(contentStr, dnstmNatMarker) && !strings.Contains(contentStr, dnsttNatMarker) {
 		return
 	}
 
@@ -318,7 +403,7 @@ func removeUFWNatRules(filePath string) {
 	inNatBlock := false
 
 	for _, line := range lines {
-		if strings.Contains(line, dnsttNatMarker) {
+		if strings.Contains(line, dnstmNatMarker) || strings.Contains(line, dnsttNatMarker) {
 			inNatBlock = true
 			continue
 		}
@@ -328,8 +413,8 @@ func removeUFWNatRules(filePath string) {
 				continue
 			}
 			if strings.HasPrefix(line, "*nat") ||
-			   strings.HasPrefix(line, ":PREROUTING") ||
-			   strings.HasPrefix(line, "-A PREROUTING") {
+				strings.HasPrefix(line, ":PREROUTING") ||
+				strings.HasPrefix(line, "-A PREROUTING") {
 				continue
 			}
 			// Empty line after COMMIT
@@ -344,12 +429,33 @@ func removeUFWNatRules(filePath string) {
 }
 
 func clearIp6tablesRules() {
+	clearIp6tablesRulesForPort(DnsttPort)
+}
+
+func clearIp6tablesRulesForPort(port string) {
 	rules := [][]string{
-		{"-t", "nat", "-D", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", DnsttPort},
-		{"-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-ports", DnsttPort},
+		{"-t", "nat", "-D", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
+		{"-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
 	}
 
 	for _, args := range rules {
 		exec.Command("ip6tables", args...).Run()
 	}
+}
+
+// SwitchDNSRouting switches the DNS routing from one port to another.
+// This is used when switching between providers.
+func SwitchDNSRouting(fromPort, toPort string) error {
+	// First, remove rules for the old port
+	RemoveFirewallRulesForPort(fromPort)
+
+	// Then, configure rules for the new port
+	if err := ConfigureFirewallForPort(toPort); err != nil {
+		return err
+	}
+
+	// Configure IPv6 if available
+	ConfigureIPv6ForPort(toPort)
+
+	return nil
 }

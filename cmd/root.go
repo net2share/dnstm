@@ -33,11 +33,12 @@ func init() {
 	rootCmd.Version = Version
 
 	rootCmd.AddCommand(installCmd)
+	rootCmd.AddCommand(uninstallCmd)
+	rootCmd.AddCommand(switchCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(logsCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(restartCmd)
-	rootCmd.AddCommand(uninstallCmd)
 	rootCmd.AddCommand(sshUsersCmd)
 }
 

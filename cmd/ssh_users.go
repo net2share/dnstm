@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/net2share/dnstm/internal/installer"
+	"github.com/net2share/dnstm/internal/menu"
 	"github.com/net2share/dnstm/internal/sshtunnel"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/spf13/cobra"
@@ -18,7 +18,9 @@ func runSSHUsers(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	installer.PrintBanner(Version, BuildTime)
+	menu.Version = Version
+	menu.BuildTime = BuildTime
+	menu.PrintBanner()
 	sshtunnel.ShowMenu()
 	return nil
 }

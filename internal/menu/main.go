@@ -6,11 +6,10 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/huh"
-	"github.com/net2share/dnstm/internal/config"
-	"github.com/net2share/dnstm/internal/installer"
-	"github.com/net2share/dnstm/internal/keys"
-	"github.com/net2share/dnstm/internal/service"
 	"github.com/net2share/dnstm/internal/sshtunnel"
+	"github.com/net2share/dnstm/internal/tunnel"
+	_ "github.com/net2share/dnstm/internal/tunnel/dnstt"
+	_ "github.com/net2share/dnstm/internal/tunnel/slipstream"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"
 )
@@ -24,9 +23,28 @@ var (
 	BuildTime = "unknown"
 )
 
+// ASCII art banner for dnstm
+const dnstmBanner = `
+    ____  _   _______  ________  ___
+   / __ \/ | / / ___/ /_  __/  |/  /
+  / / / /  |/ /\__ \   / / / /|_/ /
+ / /_/ / /|  /___/ /  / / / /  / /
+/_____/_/ |_//____/  /_/ /_/  /_/
+`
+
+// PrintBanner displays the dnstm banner with version info.
+func PrintBanner() {
+	tui.PrintBanner(tui.BannerConfig{
+		AppName:   "DNS Tunnel Manager",
+		Version:   Version,
+		BuildTime: BuildTime,
+		ASCII:     dnstmBanner,
+	})
+}
+
 // RunInteractive shows the main interactive menu.
 func RunInteractive() error {
-	installer.PrintBanner(Version, BuildTime)
+	PrintBanner()
 
 	osInfo, err := osdetect.Detect()
 	if err != nil {
@@ -35,20 +53,29 @@ func RunInteractive() error {
 		tui.PrintInfo(fmt.Sprintf("Detected OS: %s", osInfo.PrettyName))
 	}
 
-	archInfo := installer.DetectArch()
-	tui.PrintInfo(fmt.Sprintf("Architecture: %s", archInfo.Arch))
+	arch := osdetect.GetArch()
+	tui.PrintInfo(fmt.Sprintf("Architecture: %s", arch))
 
-	return runMenuLoop(osInfo, archInfo)
+	return runMenuLoop()
 }
 
-func runMenuLoop(osInfo *osdetect.OSInfo, archInfo *installer.ArchInfo) error {
+func runMenuLoop() error {
+	firstRun := true
 	for {
+		if !firstRun {
+			// Clear screen when returning to main menu from submenus
+			tui.ClearScreen()
+			PrintBanner()
+		}
+		firstRun = false
+
 		fmt.Println()
 
-		// Check current state
-		isInstalled := service.IsInstalled() && config.Exists()
+		// Show status line
+		statusLine := GetStatusLine()
+		tui.PrintInfo(fmt.Sprintf("Status: %s", statusLine))
 
-		options := buildMenuOptions(isInstalled)
+		options := buildMainMenuOptions()
 		var choice string
 
 		err := huh.NewSelect[string]().
@@ -66,117 +93,68 @@ func runMenuLoop(osInfo *osdetect.OSInfo, archInfo *installer.ArchInfo) error {
 			return nil
 		}
 
-		err = handleChoice(choice, osInfo, archInfo, isInstalled)
+		err = handleMainMenuChoice(choice)
 		if errors.Is(err, errCancelled) {
 			continue
 		}
 		if err != nil {
 			tui.PrintError(err.Error())
+			tui.WaitForEnter()
 		}
-		tui.WaitForEnter()
 	}
 }
 
-func buildMenuOptions(isInstalled bool) []huh.Option[string] {
-	if isInstalled {
-		return []huh.Option[string]{
-			huh.NewOption("Reconfigure dnstt server", "install"),
-			huh.NewOption("Check service status", "status"),
-			huh.NewOption("View service logs", "logs"),
-			huh.NewOption("Show configuration", "config"),
-			huh.NewOption("Restart service", "restart"),
-			huh.NewOption("Manage SSH tunnel users", "ssh-users"),
-			huh.NewOption("Uninstall", "uninstall"),
-			huh.NewOption("Exit", "exit"),
+func buildMainMenuOptions() []huh.Option[string] {
+	var options []huh.Option[string]
+
+	// Add provider submenus
+	for _, pt := range tunnel.Types() {
+		provider, err := tunnel.Get(pt)
+		if err != nil {
+			continue
 		}
+
+		status, _ := provider.Status()
+		label := provider.DisplayName()
+
+		if status != nil && status.Installed {
+			if status.Active && status.Running {
+				label += " (active)"
+			} else if status.Running {
+				label += " (running)"
+			} else {
+				label += " (installed)"
+			}
+		}
+
+		label += " →"
+		options = append(options, huh.NewOption(label, string(pt)))
 	}
-	return []huh.Option[string]{
-		huh.NewOption("Install dnstt server", "install"),
-		huh.NewOption("Manage SSH tunnel users", "ssh-users"),
-		huh.NewOption("Exit", "exit"),
-	}
+
+	// Add common options
+	options = append(options, huh.NewOption("View Overall Status", "status"))
+	options = append(options, huh.NewOption("Manage SSH tunnel users", "ssh-users"))
+	options = append(options, huh.NewOption("Exit", "exit"))
+
+	return options
 }
 
-func handleChoice(choice string, osInfo *osdetect.OSInfo, archInfo *installer.ArchInfo, isInstalled bool) error {
+func handleMainMenuChoice(choice string) error {
+	// Check if it's a provider type
+	pt, err := tunnel.ParseProviderType(choice)
+	if err == nil {
+		return RunProviderMenu(pt)
+	}
+
 	switch choice {
-	case "install":
-		return installer.RunInteractive(osInfo, archInfo)
 	case "status":
-		showStatus()
-		return nil
-	case "logs":
-		showLogs()
-		return nil
-	case "config":
-		showConfig()
-		return nil
-	case "restart":
-		restartService()
-		return nil
+		ShowOverallStatus()
+		tui.WaitForEnter()
+		return errCancelled
 	case "ssh-users":
 		sshtunnel.ShowMenu()
 		return errCancelled // Submenu handles its own flow
-	case "uninstall":
-		installer.RunUninstallInteractive()
-		return errCancelled // Submenu handles its own flow
 	}
+
 	return nil
-}
-
-func showStatus() {
-	fmt.Println()
-	status, _ := service.Status()
-	fmt.Println(status)
-}
-
-func showLogs() {
-	fmt.Println()
-	logs, err := service.GetLogs(50)
-	if err != nil {
-		tui.PrintError(err.Error())
-	} else {
-		fmt.Println(logs)
-	}
-}
-
-func showConfig() {
-	cfg, err := config.Load()
-	if err != nil {
-		tui.PrintError("Failed to load configuration: " + err.Error())
-		return
-	}
-
-	publicKey := ""
-	if cfg.PublicKeyFile != "" {
-		publicKey, _ = keys.ReadPublicKey(cfg.PublicKeyFile)
-	}
-
-	lines := []string{
-		fmt.Sprintf("NS Subdomain:    %s", cfg.NSSubdomain),
-		fmt.Sprintf("Tunnel Mode:     %s", cfg.TunnelMode),
-		fmt.Sprintf("MTU:             %s", cfg.MTU),
-		fmt.Sprintf("Target Port:     %s", cfg.TargetPort),
-		fmt.Sprintf("Private Key:     %s", cfg.PrivateKeyFile),
-		fmt.Sprintf("Public Key File: %s", cfg.PublicKeyFile),
-		"",
-		"Public Key (for client):",
-		publicKey,
-	}
-
-	tui.PrintBox("Current Configuration", lines)
-
-	if service.IsActive() {
-		tui.PrintStatus("Service is running")
-	} else {
-		tui.PrintWarning("Service is not running")
-	}
-}
-
-func restartService() {
-	tui.PrintInfo("Restarting service...")
-	if err := service.Restart(); err != nil {
-		tui.PrintError(err.Error())
-	} else {
-		tui.PrintStatus("Service restarted successfully")
-	}
 }
