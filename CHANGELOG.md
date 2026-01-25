@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/net2share/dnstm/compare/v0.1.3...v0.2.0) (2026-01-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* add Slipstream-Rust and improve SSH user management ([#19](https://github.com/net2share/dnstm/issues/19))
+
+### Features
+
+* add Slipstream-Rust and improve SSH user management ([#19](https://github.com/net2share/dnstm/issues/19)) ([ad5ba5b](https://github.com/net2share/dnstm/commit/ad5ba5b66d9f2217dce92545739601563a0fe531))
+* switch dnstt binaries to GitHub releases ([#17](https://github.com/net2share/dnstm/issues/17)) ([b1f407c](https://github.com/net2share/dnstm/commit/b1f407c6d88446ad5404cce9cf1d385743137207))
+
 ## [0.1.3](https://github.com/net2share/dnstm/compare/v0.1.2...v0.1.3) (2026-01-24)
 
 
