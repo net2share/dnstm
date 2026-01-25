@@ -8,8 +8,6 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/net2share/dnstm/internal/download"
 	"github.com/net2share/dnstm/internal/network"
-	"github.com/net2share/dnstm/internal/proxy"
-	"github.com/net2share/dnstm/internal/sshtunnel"
 	"github.com/net2share/dnstm/internal/system"
 	"github.com/net2share/dnstm/internal/tunnel"
 	"github.com/net2share/go-corelib/osdetect"
@@ -78,10 +76,9 @@ func (p *Provider) Install(cfg *tunnel.InstallConfig) (*tunnel.InstallResult, er
 }
 
 func (p *Provider) performInstallation(cfg *Config) (*tunnel.InstallResult, error) {
-	osInfo, _ := osdetect.Detect()
 	archInfo := detectArch()
 
-	totalSteps := 7
+	totalSteps := 6
 	currentStep := 0
 
 	// Step 1: Download dnstt-server
@@ -177,54 +174,7 @@ func (p *Provider) performInstallation(cfg *Config) (*tunnel.InstallResult, erro
 		tui.PrintStatus("IPv6 rules configured")
 	}
 
-	// Step 6: Setup Dante (if SOCKS mode) or SSH tunnel hardening (if SSH mode)
-	var createdUser *tunnel.CreatedUserInfo
-	currentStep++
-	if cfg.TunnelMode == "socks" {
-		tui.PrintStep(currentStep, totalSteps, "Setting up Dante SOCKS proxy...")
-
-		if !proxy.IsDanteInstalled() {
-			if osInfo != nil {
-				if err := proxy.InstallDante(osInfo.PackageManager); err != nil {
-					return nil, fmt.Errorf("failed to install Dante: %w", err)
-				}
-			}
-		}
-
-		if err := proxy.ConfigureDante(); err != nil {
-			return nil, fmt.Errorf("failed to configure Dante: %w", err)
-		}
-
-		if err := proxy.StartDante(); err != nil {
-			tui.PrintWarning("Dante start warning: " + err.Error())
-		}
-		tui.PrintStatus("Dante SOCKS proxy configured")
-		cfg.SSHTunnelEnabled = "false"
-	} else {
-		tui.PrintStep(currentStep, totalSteps, "Setting up SSH tunnel hardening...")
-		sshCreatedUser := sshtunnel.ConfigureAndCreateUser()
-		if sshCreatedUser != nil {
-			createdUser = &tunnel.CreatedUserInfo{
-				Username: sshCreatedUser.Username,
-				AuthMode: sshCreatedUser.AuthMode,
-				Password: sshCreatedUser.Password,
-			}
-		}
-		if sshtunnel.IsConfigured() {
-			cfg.SSHTunnelEnabled = "true"
-			tui.PrintStatus("SSH tunnel hardening configured")
-		} else {
-			cfg.SSHTunnelEnabled = "false"
-			tui.PrintStatus("SSH mode selected (tunnel hardening skipped)")
-		}
-	}
-
-	// Save config again to persist SSHTunnelEnabled
-	if err := cfg.Save(); err != nil {
-		tui.PrintWarning("Failed to save SSH tunnel state: " + err.Error())
-	}
-
-	// Step 7: Create and start systemd service
+	// Step 6: Create and start systemd service
 	currentStep++
 	tui.PrintStep(currentStep, totalSteps, "Creating systemd service...")
 
@@ -249,20 +199,16 @@ func (p *Provider) performInstallation(cfg *Config) (*tunnel.InstallResult, erro
 	tunnel.SetActiveProvider(tunnel.ProviderDNSTT)
 
 	return &tunnel.InstallResult{
-		PublicKey:   publicKey,
-		Domain:      cfg.NSSubdomain,
-		TunnelMode:  cfg.TunnelMode,
-		MTU:         cfg.MTU,
-		CreatedUser: createdUser,
+		PublicKey:  publicKey,
+		Domain:     cfg.NSSubdomain,
+		TunnelMode: cfg.TunnelMode,
+		MTU:        cfg.MTU,
 	}, nil
 }
 
 // Uninstall removes DNSTT.
-func (p *Provider) Uninstall(removeSSHUsers bool) error {
+func (p *Provider) Uninstall() error {
 	totalSteps := 5
-	if removeSSHUsers {
-		totalSteps = 6
-	}
 	currentStep := 0
 
 	// Step 1: Stop and remove service
@@ -300,17 +246,6 @@ func (p *Provider) Uninstall(removeSSHUsers bool) error {
 	tui.PrintStep(currentStep, totalSteps, "Removing dnstt user...")
 	system.RemoveDnsttUser()
 	tui.PrintStatus("User removed")
-
-	// Step 6: Remove SSH tunnel users and config (if requested)
-	if removeSSHUsers {
-		currentStep++
-		tui.PrintStep(currentStep, totalSteps, "Removing SSH tunnel users and config...")
-		if err := sshtunnel.UninstallAll(); err != nil {
-			tui.PrintWarning("SSH tunnel uninstall warning: " + err.Error())
-		} else {
-			tui.PrintStatus("SSH tunnel config removed")
-		}
-	}
 
 	return nil
 }
@@ -453,12 +388,34 @@ func (p *Provider) RunInteractiveInstall() (*tunnel.InstallResult, error) {
 		Title("Tunnel Mode").
 		Options(
 			huh.NewOption("SSH Tunnel", "ssh"),
-			huh.NewOption("SOCKS Proxy", "socks"),
+			huh.NewOption("SOCKS Proxy (Legacy)", "socks"),
 		).
 		Value(&tunnelMode).
 		Run()
 	if err != nil {
 		return nil, err
+	}
+
+	// Warn about SOCKS mode fingerprinting
+	if tunnelMode == "socks" {
+		tui.PrintWarning("SOCKS mode has more obvious fingerprints on network traffic.")
+		tui.PrintWarning("It is recommended only for temporary use or testing/debugging.")
+		fmt.Println()
+
+		confirmSocks := false
+		err = huh.NewConfirm().
+			Title("Are you sure you want to use SOCKS mode?").
+			Affirmative("Yes").
+			Negative("No").
+			Value(&confirmSocks).
+			Run()
+		if err != nil {
+			return nil, err
+		}
+		if !confirmSocks {
+			tunnelMode = "ssh"
+			tui.PrintInfo("Switched to SSH tunnel mode")
+		}
 	}
 	cfg.TunnelMode = tunnelMode
 

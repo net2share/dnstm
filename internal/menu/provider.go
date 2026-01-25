@@ -6,7 +6,6 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/net2share/dnstm/internal/network"
-	"github.com/net2share/dnstm/internal/sshtunnel"
 	"github.com/net2share/dnstm/internal/tunnel"
 	"github.com/net2share/dnstm/internal/tunnel/dnstt"
 	"github.com/net2share/dnstm/internal/tunnel/slipstream"
@@ -68,8 +67,8 @@ func buildProviderMenuOptions(provider tunnel.Provider, isInstalled bool, isActi
 
 	if isInstalled {
 		options = append(options, huh.NewOption("Reconfigure", "install"))
-		options = append(options, huh.NewOption("Check service status", "status"))
-		options = append(options, huh.NewOption("View service logs", "logs"))
+		options = append(options, huh.NewOption("Service status", "status"))
+		options = append(options, huh.NewOption("Logs", "logs"))
 		options = append(options, huh.NewOption("Show configuration", "config"))
 		options = append(options, huh.NewOption("Restart service", "restart"))
 
@@ -244,20 +243,6 @@ func runProviderUninstall(provider tunnel.Provider) error {
 		return errCancelled
 	}
 
-	// Ask about SSH tunnel users
-	removeSSHUsers := false
-	if sshtunnel.IsConfigured() {
-		fmt.Println()
-		tui.PrintInfo("SSH tunnel hardening is configured on this system.")
-		err = huh.NewConfirm().
-			Title("Also remove SSH tunnel users and sshd hardening config?").
-			Value(&removeSSHUsers).
-			Run()
-		if err != nil {
-			return errCancelled
-		}
-	}
-
 	// Check if this is the active provider
 	globalCfg, _ := tunnel.LoadGlobalConfig()
 	if globalCfg != nil && globalCfg.ActiveProvider == provider.Name() {
@@ -281,7 +266,7 @@ func runProviderUninstall(provider tunnel.Provider) error {
 	}
 
 	fmt.Println()
-	if err := provider.Uninstall(removeSSHUsers); err != nil {
+	if err := provider.Uninstall(); err != nil {
 		return err
 	}
 
@@ -315,19 +300,19 @@ func showInstallSuccess(provider tunnel.Provider, result *tunnel.InstallResult) 
 		lines = append(lines, tui.Value(formatFingerprint(result.Fingerprint)))
 	}
 
-	// Add created user info if available
-	if result.CreatedUser != nil {
-		lines = append(lines, "")
-		lines = append(lines, tui.Header("SSH Tunnel User Created:"))
-		lines = append(lines, tui.KV("  Username: ", result.CreatedUser.Username))
-		lines = append(lines, tui.KV("  Auth:     ", result.CreatedUser.AuthMode))
-		if result.CreatedUser.Password != "" {
-			lines = append(lines, tui.KV("  Password: ", result.CreatedUser.Password))
-		}
-	}
-
 	tui.PrintBox("Installation Complete!", lines)
 
+	// Show next steps guidance based on tunnel mode
+	fmt.Println()
+	tui.PrintInfo("Next steps:")
+	if result.TunnelMode == "socks" {
+		fmt.Println("  Run 'dnstm socks install' to set up the SOCKS proxy")
+	} else {
+		fmt.Println("  1. Run 'dnstm ssh-users' to configure SSH hardening")
+		fmt.Println("  2. Create tunnel users with the SSH users menu")
+	}
+
+	fmt.Println()
 	tui.PrintInfo("Useful commands:")
 	fmt.Println(tui.KV(fmt.Sprintf("  systemctl status %s  ", provider.ServiceName()), "- Check service status"))
 	fmt.Println(tui.KV(fmt.Sprintf("  journalctl -u %s -f  ", provider.ServiceName()), "- View live logs"))

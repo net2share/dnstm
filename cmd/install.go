@@ -240,19 +240,19 @@ func showInstallSuccess(provider tunnel.Provider, result *tunnel.InstallResult) 
 		lines = append(lines, tui.Value(slipstream.FormatFingerprint(result.Fingerprint)))
 	}
 
-	// Add created user info if available
-	if result.CreatedUser != nil {
-		lines = append(lines, "")
-		lines = append(lines, tui.Header("SSH Tunnel User Created:"))
-		lines = append(lines, tui.KV("  Username: ", result.CreatedUser.Username))
-		lines = append(lines, tui.KV("  Auth:     ", result.CreatedUser.AuthMode))
-		if result.CreatedUser.Password != "" {
-			lines = append(lines, tui.KV("  Password: ", result.CreatedUser.Password))
-		}
-	}
-
 	tui.PrintBox("Installation Complete!", lines)
 
+	// Show next steps guidance based on tunnel mode
+	fmt.Println()
+	tui.PrintInfo("Next steps:")
+	if result.TunnelMode == "socks" {
+		fmt.Println("  Run 'dnstm socks install' to set up the SOCKS proxy")
+	} else {
+		fmt.Println("  1. Run 'dnstm ssh-users' to configure SSH hardening")
+		fmt.Println("  2. Create tunnel users with the SSH users menu")
+	}
+
+	fmt.Println()
 	tui.PrintInfo("Useful commands:")
 	fmt.Println(tui.KV(fmt.Sprintf("  systemctl status %s  ", provider.ServiceName()), "- Check service status"))
 	fmt.Println(tui.KV(fmt.Sprintf("  journalctl -u %s -f  ", provider.ServiceName()), "- View live logs"))

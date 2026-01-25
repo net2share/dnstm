@@ -16,7 +16,7 @@ Both providers can be installed simultaneously, with one active at a time handli
 - Configures firewall rules (UFW, firewalld, iptables)
 - Sets up systemd services with security hardening
 - SSH tunnel mode with integrated user management via [sshtun-user](https://github.com/net2share/sshtun-user)
-- Optional Dante SOCKS proxy setup for SOCKS mode
+- Optional microsocks SOCKS5 proxy for SOCKS mode
 - Supports multiple architectures (amd64, arm64)
 
 ## Quick Install
@@ -60,19 +60,18 @@ sudo dnstm
 The main menu shows both providers with their status:
 
 ```
-Status: Slipstream not installed, DNSTT active
-
 > Slipstream →
   DNSTT (active) →
-  View Overall Status
   Manage SSH tunnel users
+  Manage SOCKS proxy
+  Status
   Exit
 ```
 
 Each provider submenu offers:
 - Install/Reconfigure
-- Check service status
-- View logs
+- Service status
+- Logs
 - Show configuration
 - Restart service
 - Set as Active DNS Handler (if installed but not active)
@@ -134,12 +133,6 @@ sudo dnstm restart dnstt
 # Uninstall provider (interactive)
 sudo dnstm uninstall slipstream
 sudo dnstm uninstall dnstt
-
-# Uninstall and remove SSH tunnel users
-sudo dnstm uninstall slipstream --remove-ssh-users
-
-# Uninstall but keep SSH tunnel users
-sudo dnstm uninstall dnstt --keep-ssh-users
 ```
 
 #### SSH Tunnel Users
@@ -147,6 +140,19 @@ sudo dnstm uninstall dnstt --keep-ssh-users
 ```bash
 # Manage SSH tunnel users (opens submenu)
 sudo dnstm ssh-users
+```
+
+#### SOCKS Proxy
+
+```bash
+# Install/reinstall SOCKS proxy
+sudo dnstm socks install
+
+# Uninstall SOCKS proxy
+sudo dnstm socks uninstall
+
+# Show SOCKS proxy status
+sudo dnstm socks status
 ```
 
 ### Install Options
@@ -235,21 +241,25 @@ The switch command:
 
 ## Tunnel Modes
 
-### SSH Mode (default)
+### SSH Mode (Recommended)
 
-In SSH mode, the tunnel forwards SSH traffic. During installation, dnstm automatically:
+In SSH mode, the tunnel forwards SSH traffic. After installation, configure SSH hardening separately:
 
-1. Applies sshd hardening configuration
-2. Configures fail2ban for brute-force protection
-3. Prompts to create a restricted tunnel user
+1. Run `sudo dnstm ssh-users` to access the SSH users menu
+2. Apply sshd hardening configuration
+3. Create restricted tunnel users
 
 Tunnel users can only create local (`-L`) and SOCKS (`-D`) tunnels, with no shell access.
 
-Manage SSH tunnel users anytime via `sudo dnstm ssh-users`.
+### SOCKS Mode (Legacy)
 
-### SOCKS Mode
+In SOCKS mode, you need to install the microsocks SOCKS5 proxy separately:
 
-In SOCKS mode, dnstm installs a Dante SOCKS5 proxy. Clients connect directly to the proxy without SSH authentication.
+```bash
+sudo dnstm socks install
+```
+
+Clients connect directly to the proxy without SSH authentication. This mode has more obvious network fingerprints and is recommended only for testing or temporary use.
 
 ## Configuration
 
@@ -304,7 +314,16 @@ The uninstall process removes:
 - Configuration files and credentials
 - Firewall rules for that provider
 - Provider system user
-- (Optionally) SSH tunnel users and sshd hardening config
+
+SSH tunnel users and SOCKS proxy are managed separately and are not affected by provider uninstall. To remove them:
+
+```bash
+# Remove SOCKS proxy
+sudo dnstm socks uninstall
+
+# Remove SSH tunnel users (via ssh-users menu)
+sudo dnstm ssh-users
+```
 
 If uninstalling the active provider while another is installed, dnstm automatically switches to the other provider.
 
@@ -322,7 +341,7 @@ go build -o dnstm .
 /etc/dnstm/           # Global config (active provider)
 /etc/slipstream/      # Slipstream config and TLS certs
 /etc/dnstt/           # DNSTT config and keys
-/usr/local/bin/       # Provider binaries
+/usr/local/bin/       # Provider binaries, microsocks
 ```
 
 Both providers use NAT PREROUTING rules to redirect port 53 to their respective ports:

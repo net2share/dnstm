@@ -197,3 +197,35 @@ func IsConfigured() bool {
 func UninstallAll() error {
 	return cli.UninstallAllNonInteractive()
 }
+
+// StatusInfo contains SSH tunnel hardening status information.
+type StatusInfo struct {
+	Configured       bool
+	UserCount        int
+	PasswordAuthCount int
+	KeyAuthCount     int
+}
+
+// GetStatus returns the current SSH tunnel hardening status.
+func GetStatus() *StatusInfo {
+	info := &StatusInfo{
+		Configured: IsConfigured(),
+	}
+
+	users, err := tunneluser.List()
+	if err != nil {
+		return info
+	}
+
+	info.UserCount = len(users)
+	for _, u := range users {
+		switch u.AuthMode {
+		case tunneluser.AuthModePassword:
+			info.PasswordAuthCount++
+		case tunneluser.AuthModeKey:
+			info.KeyAuthCount++
+		}
+	}
+
+	return info
+}

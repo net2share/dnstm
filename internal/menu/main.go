@@ -71,10 +71,6 @@ func runMenuLoop() error {
 
 		fmt.Println()
 
-		// Show status line
-		statusLine := GetStatusLine()
-		tui.PrintInfo(fmt.Sprintf("Status: %s", statusLine))
-
 		options := buildMainMenuOptions()
 		var choice string
 
@@ -132,8 +128,9 @@ func buildMainMenuOptions() []huh.Option[string] {
 	}
 
 	// Add common options
-	options = append(options, huh.NewOption("View Overall Status", "status"))
 	options = append(options, huh.NewOption("Manage SSH tunnel users", "ssh-users"))
+	options = append(options, huh.NewOption("Manage SOCKS proxy", "socks"))
+	options = append(options, huh.NewOption("Status", "status"))
 	options = append(options, huh.NewOption("Exit", "exit"))
 
 	return options
@@ -153,6 +150,9 @@ func handleMainMenuChoice(choice string) error {
 		return errCancelled
 	case "ssh-users":
 		sshtunnel.ShowMenu()
+		return errCancelled // Submenu handles its own flow
+	case "socks":
+		RunSOCKSProxyMenu()
 		return errCancelled // Submenu handles its own flow
 	}
 

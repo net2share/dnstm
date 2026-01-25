@@ -28,19 +28,11 @@ type InstallConfig struct {
 
 // InstallResult contains information about a completed installation.
 type InstallResult struct {
-	PublicKey    string // Hex-encoded public key (DNSTT)
-	Fingerprint  string // Certificate fingerprint (Slipstream)
-	CreatedUser  *CreatedUserInfo
-	Domain       string
-	TunnelMode   string
-	MTU          string // DNSTT only
-}
-
-// CreatedUserInfo contains information about a created SSH tunnel user.
-type CreatedUserInfo struct {
-	Username string
-	AuthMode string
-	Password string // Auto-generated only
+	PublicKey   string // Hex-encoded public key (DNSTT)
+	Fingerprint string // Certificate fingerprint (Slipstream)
+	Domain      string
+	TunnelMode  string
+	MTU         string // DNSTT only
 }
 
 // Provider defines the interface that all tunnel providers must implement.
@@ -64,7 +56,7 @@ type Provider interface {
 	Install(cfg *InstallConfig) (*InstallResult, error)
 
 	// Uninstall removes the provider.
-	Uninstall(removeSSHUsers bool) error
+	Uninstall() error
 
 	// Start starts the provider's service.
 	Start() error

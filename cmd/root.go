@@ -40,6 +40,7 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(restartCmd)
 	rootCmd.AddCommand(sshUsersCmd)
+	rootCmd.AddCommand(socksCmd)
 }
 
 // Execute runs the root command.
