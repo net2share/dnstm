@@ -11,9 +11,7 @@ import (
 	"github.com/net2share/dnstm/internal/download"
 	"github.com/net2share/dnstm/internal/keys"
 	"github.com/net2share/dnstm/internal/network"
-	"github.com/net2share/dnstm/internal/proxy"
 	"github.com/net2share/dnstm/internal/service"
-	"github.com/net2share/dnstm/internal/sshtunnel"
 	"github.com/net2share/dnstm/internal/system"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"
@@ -146,12 +144,34 @@ func RunInteractive(osInfo *osdetect.OSInfo, archInfo *ArchInfo) error {
 		Title("Tunnel Mode").
 		Options(
 			huh.NewOption("SSH Tunnel", "ssh"),
-			huh.NewOption("SOCKS Proxy", "socks"),
+			huh.NewOption("SOCKS Proxy (Legacy)", "socks"),
 		).
 		Value(&tunnelMode).
 		Run()
 	if err != nil {
 		return err
+	}
+
+	// Warn about SOCKS mode fingerprinting
+	if tunnelMode == "socks" {
+		tui.PrintWarning("SOCKS mode has more obvious fingerprints on network traffic.")
+		tui.PrintWarning("It is recommended only for temporary use or testing/debugging.")
+		fmt.Println()
+
+		confirmSocks := false
+		err = huh.NewConfirm().
+			Title("Are you sure you want to use SOCKS mode?").
+			Affirmative("Yes").
+			Negative("No").
+			Value(&confirmSocks).
+			Run()
+		if err != nil {
+			return err
+		}
+		if !confirmSocks {
+			tunnelMode = "ssh"
+			tui.PrintInfo("Switched to SSH tunnel mode")
+		}
 	}
 	cfg.TunnelMode = tunnelMode
 
@@ -209,7 +229,7 @@ func RunCLI(osInfo *osdetect.OSInfo, archInfo *ArchInfo, nsSubdomain, mtu, mode,
 }
 
 func performInstallation(osInfo *osdetect.OSInfo, archInfo *ArchInfo, cfg *config.Config) error {
-	totalSteps := 7
+	totalSteps := 6
 	currentStep := 0
 
 	// Step 1: Download dnstt-server
@@ -298,47 +318,7 @@ func performInstallation(osInfo *osdetect.OSInfo, archInfo *ArchInfo, cfg *confi
 		tui.PrintStatus("IPv6 rules configured")
 	}
 
-	// Step 6: Setup Dante (if SOCKS mode) or SSH tunnel hardening (if SSH mode)
-	var createdUser *sshtunnel.CreatedUserInfo
-	currentStep++
-	if cfg.TunnelMode == "socks" {
-		tui.PrintStep(currentStep, totalSteps, "Setting up Dante SOCKS proxy...")
-
-		if !proxy.IsDanteInstalled() {
-			if osInfo != nil {
-				if err := proxy.InstallDante(osInfo.PackageManager); err != nil {
-					return fmt.Errorf("failed to install Dante: %w", err)
-				}
-			}
-		}
-
-		if err := proxy.ConfigureDante(); err != nil {
-			return fmt.Errorf("failed to configure Dante: %w", err)
-		}
-
-		if err := proxy.StartDante(); err != nil {
-			tui.PrintWarning("Dante start warning: " + err.Error())
-		}
-		tui.PrintStatus("Dante SOCKS proxy configured")
-		cfg.SSHTunnelEnabled = "false"
-	} else {
-		tui.PrintStep(currentStep, totalSteps, "Setting up SSH tunnel hardening...")
-		createdUser = sshtunnel.ConfigureAndCreateUser()
-		if sshtunnel.IsConfigured() {
-			cfg.SSHTunnelEnabled = "true"
-			tui.PrintStatus("SSH tunnel hardening configured")
-		} else {
-			cfg.SSHTunnelEnabled = "false"
-			tui.PrintStatus("SSH mode selected (tunnel hardening failed)")
-		}
-	}
-
-	// Save config again to persist SSHTunnelEnabled
-	if err := cfg.Save(); err != nil {
-		tui.PrintWarning("Failed to save SSH tunnel state: " + err.Error())
-	}
-
-	// Step 7: Create and start systemd service
+	// Step 6: Create and start systemd service
 	currentStep++
 	tui.PrintStep(currentStep, totalSteps, "Creating systemd service...")
 
@@ -360,12 +340,12 @@ func performInstallation(osInfo *osdetect.OSInfo, archInfo *ArchInfo, cfg *confi
 	tui.PrintStatus("Service started")
 
 	// Show success information
-	showSuccessInfo(cfg, publicKey, createdUser)
+	showSuccessInfo(cfg, publicKey)
 
 	return nil
 }
 
-func showSuccessInfo(cfg *config.Config, publicKey string, createdUser *sshtunnel.CreatedUserInfo) {
+func showSuccessInfo(cfg *config.Config, publicKey string) {
 	lines := []string{
 		tui.KV("NS Subdomain: ", cfg.NSSubdomain),
 		tui.KV("Tunnel Mode:  ", cfg.TunnelMode),
@@ -375,19 +355,19 @@ func showSuccessInfo(cfg *config.Config, publicKey string, createdUser *sshtunne
 		tui.Value(publicKey),
 	}
 
-	// Add created user info if available
-	if createdUser != nil {
-		lines = append(lines, "")
-		lines = append(lines, tui.Header("SSH Tunnel User Created:"))
-		lines = append(lines, tui.KV("  Username: ", createdUser.Username))
-		lines = append(lines, tui.KV("  Auth:     ", createdUser.AuthMode))
-		if createdUser.Password != "" {
-			lines = append(lines, tui.KV("  Password: ", createdUser.Password))
-		}
-	}
-
 	tui.PrintBox("Installation Complete!", lines)
 
+	// Show next steps guidance
+	fmt.Println()
+	tui.PrintInfo("Next steps:")
+	if cfg.TunnelMode == "socks" {
+		fmt.Println("  Run 'dnstm socks install' to set up the SOCKS proxy")
+	} else {
+		fmt.Println("  1. Run 'dnstm ssh-users' to configure SSH hardening")
+		fmt.Println("  2. Create tunnel users with the SSH users menu")
+	}
+
+	fmt.Println()
 	tui.PrintInfo("Useful commands:")
 	fmt.Println(tui.KV("  systemctl status dnstt-server  ", "- Check service status"))
 	fmt.Println(tui.KV("  journalctl -u dnstt-server -f  ", "- View live logs"))

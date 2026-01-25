@@ -5,18 +5,12 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/net2share/dnstm/internal/menu"
-	"github.com/net2share/dnstm/internal/sshtunnel"
 	"github.com/net2share/dnstm/internal/tunnel"
 	_ "github.com/net2share/dnstm/internal/tunnel/dnstt"
 	_ "github.com/net2share/dnstm/internal/tunnel/slipstream"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"
 	"github.com/spf13/cobra"
-)
-
-var (
-	uninstallRemoveSSH bool
-	uninstallKeepSSH   bool
 )
 
 var uninstallCmd = &cobra.Command{
@@ -40,16 +34,6 @@ var uninstallSlipstreamCmd = &cobra.Command{
 }
 
 func init() {
-	// DNSTT uninstall flags
-	uninstallDnsttCmd.Flags().BoolVar(&uninstallRemoveSSH, "remove-ssh-users", false, "Also remove SSH tunnel users and sshd config")
-	uninstallDnsttCmd.Flags().BoolVar(&uninstallKeepSSH, "keep-ssh-users", false, "Keep SSH tunnel users and sshd config")
-	uninstallDnsttCmd.MarkFlagsMutuallyExclusive("remove-ssh-users", "keep-ssh-users")
-
-	// Slipstream uninstall flags (reset for this command)
-	uninstallSlipstreamCmd.Flags().BoolVar(&uninstallRemoveSSH, "remove-ssh-users", false, "Also remove SSH tunnel users and sshd config")
-	uninstallSlipstreamCmd.Flags().BoolVar(&uninstallKeepSSH, "keep-ssh-users", false, "Keep SSH tunnel users and sshd config")
-	uninstallSlipstreamCmd.MarkFlagsMutuallyExclusive("remove-ssh-users", "keep-ssh-users")
-
 	uninstallCmd.AddCommand(uninstallDnsttCmd)
 	uninstallCmd.AddCommand(uninstallSlipstreamCmd)
 }
@@ -80,12 +64,6 @@ func runUninstallProvider(cmd *cobra.Command, pt tunnel.ProviderType) error {
 		return fmt.Errorf("%s is not installed", provider.DisplayName())
 	}
 
-	// Check if CLI mode (flags provided)
-	if cmd.Flags().Changed("remove-ssh-users") || cmd.Flags().Changed("keep-ssh-users") {
-		return runUninstallCLI(provider)
-	}
-
-	// Interactive mode
 	return runUninstallInteractive(provider)
 }
 
@@ -113,41 +91,11 @@ func runUninstallInteractive(provider tunnel.Provider) error {
 		return nil
 	}
 
-	// Ask about SSH tunnel users
-	removeSSHUsers := false
-	if sshtunnel.IsConfigured() {
-		fmt.Println()
-		tui.PrintInfo("SSH tunnel hardening is configured on this system.")
-		err = huh.NewConfirm().
-			Title("Also remove SSH tunnel users and sshd hardening config?").
-			Value(&removeSSHUsers).
-			Run()
-		if err != nil {
-			return err
-		}
-	}
-
 	// Check if this is the active provider
 	handleActiveProviderSwitch(provider)
 
 	fmt.Println()
-	if err := provider.Uninstall(removeSSHUsers); err != nil {
-		return err
-	}
-
-	fmt.Println()
-	tui.PrintSuccess("Uninstallation complete!")
-	tui.PrintInfo(fmt.Sprintf("All %s components have been removed from your system.", provider.DisplayName()))
-
-	return nil
-}
-
-func runUninstallCLI(provider tunnel.Provider) error {
-	// Check if this is the active provider
-	handleActiveProviderSwitch(provider)
-
-	fmt.Println()
-	if err := provider.Uninstall(uninstallRemoveSSH); err != nil {
+	if err := provider.Uninstall(); err != nil {
 		return err
 	}
 

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/net2share/dnstm/internal/proxy"
+	"github.com/net2share/dnstm/internal/sshtunnel"
 	"github.com/net2share/dnstm/internal/tunnel"
 	_ "github.com/net2share/dnstm/internal/tunnel/dnstt"
 	_ "github.com/net2share/dnstm/internal/tunnel/slipstream"
@@ -31,7 +33,7 @@ func ShowOverallStatus() {
 	}
 
 	var lines []string
-	lines = append(lines, tui.Header("Provider Status:"))
+	lines = append(lines, tui.Header("Tunnel Providers:"))
 	lines = append(lines, "")
 
 	for _, pt := range tunnel.Types() {
@@ -45,50 +47,66 @@ func ShowOverallStatus() {
 		lines = append(lines, statusStr)
 	}
 
-	tui.PrintBox("Overall Status", lines)
+	// Add SSH tunnel hardening status
+	lines = append(lines, "")
+	lines = append(lines, tui.Header("SSH Tunnel Hardening:"))
+	lines = append(lines, "")
+	lines = append(lines, buildSSHTunnelStatusString())
+
+	// Add microsocks status
+	lines = append(lines, "")
+	lines = append(lines, tui.Header("SOCKS Proxy:"))
+	lines = append(lines, "")
+	lines = append(lines, buildMicrosocksStatusString())
+
+	tui.PrintBox("Status", lines)
 }
 
-// GetStatusLine returns a brief status line for the main menu header.
-func GetStatusLine() string {
-	globalCfg, _ := tunnel.LoadGlobalConfig()
-	activeProvider := tunnel.ProviderType("")
-	if globalCfg != nil {
-		activeProvider = globalCfg.ActiveProvider
+func buildSSHTunnelStatusString() string {
+	boldName := bold + "Hardening:" + reset
+
+	sshStatus := sshtunnel.GetStatus()
+	if !sshStatus.Configured {
+		return fmt.Sprintf("  %s Not configured", boldName)
 	}
 
-	var parts []string
+	var states []string
+	states = append(states, green+"Configured"+reset)
 
-	for _, pt := range tunnel.Types() {
-		provider, err := tunnel.Get(pt)
-		if err != nil {
-			continue
+	if sshStatus.UserCount == 0 {
+		states = append(states, "No users")
+	} else {
+		userStr := fmt.Sprintf("%d user(s)", sshStatus.UserCount)
+		if sshStatus.PasswordAuthCount > 0 && sshStatus.KeyAuthCount > 0 {
+			userStr += fmt.Sprintf(" (%d password, %d key)", sshStatus.PasswordAuthCount, sshStatus.KeyAuthCount)
+		} else if sshStatus.PasswordAuthCount > 0 {
+			userStr += " (password auth)"
+		} else if sshStatus.KeyAuthCount > 0 {
+			userStr += " (key auth)"
 		}
-
-		status, _ := provider.Status()
-		if status == nil {
-			continue
-		}
-
-		var partStr string
-		if status.Installed {
-			if activeProvider == pt && status.Running {
-				partStr = fmt.Sprintf("%s active", provider.DisplayName())
-			} else if status.Running {
-				partStr = fmt.Sprintf("%s running (not active)", provider.DisplayName())
-			} else {
-				partStr = fmt.Sprintf("%s installed (stopped)", provider.DisplayName())
-			}
-		} else {
-			partStr = fmt.Sprintf("%s not installed", provider.DisplayName())
-		}
-		parts = append(parts, partStr)
+		states = append(states, userStr)
 	}
 
-	if len(parts) == 0 {
-		return "No providers available"
+	return fmt.Sprintf("  %s %s", boldName, strings.Join(states, ", "))
+}
+
+func buildMicrosocksStatusString() string {
+	boldName := bold + "Microsocks:" + reset
+
+	if !proxy.IsMicrosocksInstalled() {
+		return fmt.Sprintf("  %s Not installed", boldName)
 	}
 
-	return strings.Join(parts, ", ")
+	var states []string
+	states = append(states, "Installed")
+
+	if proxy.IsMicrosocksRunning() {
+		states = append(states, green+"Running"+reset)
+	} else {
+		states = append(states, yellow+"Stopped"+reset)
+	}
+
+	return fmt.Sprintf("  %s %s", boldName, strings.Join(states, ", "))
 }
 
 func buildStatusString(status *tunnel.ProviderStatus, displayName string, isActive bool) string {
