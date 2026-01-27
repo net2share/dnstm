@@ -63,8 +63,8 @@ github.com/muesli/termenv v0.16.0 h1:S5AlUN9dENB57rsbnkPyfdGuWIlkmzJjbFf0Tf5FWUc
 github.com/muesli/termenv v0.16.0/go.mod h1:ZRfOIKPFDYQoDFF4Olj7/QJbW60Ol/kL1pU3VfY/Cnk=
 github.com/net2share/go-corelib v0.1.1 h1:qrRIX+Jxx1LtummstEp5o5AEtII5KG/m2asKdtYNUVQ=
 github.com/net2share/go-corelib v0.1.1/go.mod h1:cWKNVlrhLw1XSLiYECluSMAqe7EJf5i28sq5KaeaE28=
-github.com/net2share/sshtun-user v0.3.2 h1:LDsRRtBEc0k/p5GjD5NQ64Go8WS8yQFHrfBoZin2Za0=
-github.com/net2share/sshtun-user v0.3.2/go.mod h1:KE7D9FbE6Ieng9e/KqtYi6NZa7Tiq3B2llx/xz7lkKQ=
+github.com/net2share/sshtun-user v0.3.3 h1:/SRF8YZAGv+7KJLc45CU+mlmtc5MuVRSnjg+UmomqIo=
+github.com/net2share/sshtun-user v0.3.3/go.mod h1:KE7D9FbE6Ieng9e/KqtYi6NZa7Tiq3B2llx/xz7lkKQ=
 github.com/rivo/uniseg v0.2.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.4.7 h1:WUdvkW8uEhrYfLC4ZzdpI2ztxP1I582+49Oc5Mq64VQ=
 github.com/rivo/uniseg v0.4.7/go.mod h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUcx88=

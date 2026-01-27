@@ -6,6 +6,7 @@ import (
 	"github.com/net2share/dnstm/internal/network"
 	"github.com/net2share/dnstm/internal/tunnel"
 	_ "github.com/net2share/dnstm/internal/tunnel/dnstt"
+	_ "github.com/net2share/dnstm/internal/tunnel/shadowsocks"
 	_ "github.com/net2share/dnstm/internal/tunnel/slipstream"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"
@@ -15,7 +16,7 @@ import (
 var switchCmd = &cobra.Command{
 	Use:   "switch <provider>",
 	Short: "Switch active DNS tunnel provider",
-	Long:  "Switch the active DNS handler to a different provider (dnstt or slipstream)",
+	Long:  "Switch the active DNS handler to a different provider (dnstt, slipstream, or shadowsocks)",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runSwitch,
 }

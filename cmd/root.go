@@ -41,6 +41,7 @@ func init() {
 	rootCmd.AddCommand(restartCmd)
 	rootCmd.AddCommand(sshUsersCmd)
 	rootCmd.AddCommand(socksCmd)
+	rootCmd.AddCommand(shadowsocksCmd)
 }
 
 // Execute runs the root command.

@@ -108,10 +108,10 @@ func performUninstall(removeSSHUsers bool) {
 	network.RemoveFirewallRules()
 	tui.PrintStatus("Firewall rules removed")
 
-	// Step 5: Remove dnstt user
+	// Step 5: Clean up dnstm user
 	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Removing dnstt user...")
-	system.RemoveDnsttUser()
+	tui.PrintStep(currentStep, totalSteps, "Cleaning up dnstm user...")
+	system.RemoveDnstmUser()
 	tui.PrintStatus("User removed")
 
 	// Step 6: Remove SSH tunnel users and config (if requested)

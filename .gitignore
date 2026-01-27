@@ -20,3 +20,6 @@ coverage.html
 
 # Vendor (if not using go modules)
 vendor/
+
+CLAUDE.md
+claude.md
