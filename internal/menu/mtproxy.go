@@ -3,15 +3,15 @@ package menu
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/net2share/dnstm/internal/mtproxy"
 	"github.com/net2share/dnstm/internal/tunnel"
+	"github.com/net2share/dnstm/internal/tunnel/dnstt"
+	"github.com/net2share/dnstm/internal/tunnel/slipstream"
 	"github.com/net2share/go-corelib/tui"
 )
 
-// RunMTProxyMenu shows the MTProxy management menu.
 func RunMTProxyMenu() error {
 	for {
 		fmt.Println()
@@ -19,9 +19,7 @@ func RunMTProxyMenu() error {
 		installed := mtproxy.IsMtProxyInstalled()
 		running := mtproxy.IsMTProxyRunning()
 
-		// Show status line
-		statusLine := getMTProxyStatusLine(installed, running)
-		tui.PrintInfo(fmt.Sprintf("Status: %s", statusLine))
+		tui.PrintInfo(fmt.Sprintf("Status: %s", getMTProxyStatusLine(installed, running)))
 
 		options := buildMTProxyMenuOptions(installed, running)
 		var choice string
@@ -40,7 +38,7 @@ func RunMTProxyMenu() error {
 			return nil
 		}
 
-		err = handleMTProxyChoice(choice, installed, running)
+		err = handleMTProxyChoice(choice)
 		if errors.Is(err, errCancelled) {
 			continue
 		}
@@ -67,11 +65,10 @@ func buildMTProxyMenuOptions(installed, running bool) []huh.Option[string] {
 	}
 
 	options = append(options, huh.NewOption("Back", "back"))
-
 	return options
 }
 
-func handleMTProxyChoice(choice string, installed, running bool) error {
+func handleMTProxyChoice(choice string) error {
 	switch choice {
 	case "install":
 		return installMTProxy()
@@ -92,10 +89,19 @@ func installMTProxy() error {
 	fmt.Println()
 
 	isReinstall := mtproxy.IsMtProxyInstalled()
+	domainName, existingSecret := getProviderInfo()
 
-	secret, err := mtproxy.GenerateSecret()
-	if err != nil {
-		return fmt.Errorf("failed to generate secret: %w", err)
+	var secret string
+	if existingSecret != "" {
+		secret = existingSecret
+		tui.PrintSuccess(fmt.Sprintf("Using existing MTProxy secret: %s", secret))
+	} else {
+		var err error
+		secret, err = mtproxy.GenerateSecret()
+		if err != nil {
+			return fmt.Errorf("failed to generate secret: %w", err)
+		}
+		tui.PrintSuccess(fmt.Sprintf("Generated new MTProxy secret: %s", secret))
 	}
 
 	tui.PrintStep(1, 3, "Installing MTProxy...")
@@ -128,39 +134,13 @@ func installMTProxy() error {
 	fmt.Println()
 	tui.PrintInfo("MTProxy is now running on port 8443")
 
-	globalCfg, err := tunnel.LoadGlobalConfig()
-	if err == nil && globalCfg != nil {
-		domainName := ""
-		switch globalCfg.ActiveProvider {
-		case tunnel.ProviderDNSTT:
-			provider, _ := tunnel.Get(tunnel.ProviderDNSTT)
-			if provider != nil {
-				if dnsttCfg, err := provider.GetConfig(); err == nil {
-					mapped := parseConf(dnsttCfg)
-					domainName = mapped["NS Subdomain"]
-				}
-			}
-		case tunnel.ProviderSlipstream:
-			provider, _ := tunnel.Get(tunnel.ProviderSlipstream)
-			if provider != nil {
-				if slipstreamCfg, err := provider.GetConfig(); err == nil {
-					mapped := parseConf(slipstreamCfg)
-					domainName = mapped["Domain"]
-				}
-			}
-		}
-
-		if domainName != "" {
-			proxyURL := mtproxy.FormatProxyURL(secret, domainName)
-			fmt.Println()
-			tui.PrintInfo("Telegram Proxy URL:")
-			fmt.Printf("  %s\n", proxyURL)
-			fmt.Println()
-			tui.PrintInfo("Share this URL with Telegram users or scan the QR code.")
-		} else {
-			fmt.Println()
-			tui.PrintInfo("Note: To generate a proxy URL, configure your DNS subdomain first.")
-		}
+	if domainName != "" {
+		proxyURL := mtproxy.FormatProxyURL(secret, domainName)
+		fmt.Println()
+		tui.PrintInfo("Telegram Proxy URL:")
+		fmt.Printf("  %s\n", proxyURL)
+		fmt.Println()
+		tui.PrintInfo("Share this URL with Telegram users or scan the QR code.")
 	} else {
 		fmt.Println()
 		tui.PrintInfo("Note: To generate a proxy URL, configure your DNS subdomain first.")
@@ -169,22 +149,33 @@ func installMTProxy() error {
 	return nil
 }
 
-func parseConf(conf string) map[string]string {
-	result := make(map[string]string)
-	lines := strings.Split(conf, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) == 2 {
-			key := strings.TrimSpace(parts[0])
-			value := strings.TrimSpace(parts[1])
-			result[key] = value
-		}
+func getProviderInfo() (domain, secret string) {
+	globalCfg, err := tunnel.LoadGlobalConfig()
+	if err != nil || globalCfg == nil {
+		return "", ""
 	}
-	return result
+
+	switch globalCfg.ActiveProvider {
+	case tunnel.ProviderDNSTT:
+		cfg, err := dnstt.Load()
+		if err != nil {
+			return "", ""
+		}
+		domain = cfg.NSSubdomain
+		secret = cfg.MTProxySecret
+
+	case tunnel.ProviderSlipstream:
+		cfg, err := slipstream.Load()
+		if err != nil {
+			return "", ""
+		}
+		domain = cfg.Domain
+		secret = cfg.MTProxySecret
+	default:
+		return "", ""
+	}
+
+	return domain, secret
 }
 
 func uninstallMTProxy() error {
@@ -231,7 +222,6 @@ func showMTProxyStatus() {
 	fmt.Printf("  Running: %v\n", running)
 
 	if installed && running {
-		// Check if ports are accessible
 		clientReachable := mtproxy.CheckPort(8443)
 		statsReachable := mtproxy.CheckPort(8888)
 

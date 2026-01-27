@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/net2share/dnstm/internal/menu"
 	"github.com/net2share/dnstm/internal/mtproxy"
 	"github.com/net2share/dnstm/internal/tunnel"
+	"github.com/net2share/dnstm/internal/tunnel/dnstt"
+	"github.com/net2share/dnstm/internal/tunnel/slipstream"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"
 	"github.com/spf13/cobra"
@@ -54,42 +55,20 @@ func runMTProxyInstall(cmd *cobra.Command, args []string) error {
 	menu.BuildTime = BuildTime
 	menu.PrintBanner()
 
-	globalCfg, err := tunnel.LoadGlobalConfig()
-	if err != nil {
-		return err
-	}
-	domainName := ""
-	if globalCfg != nil {
-		switch globalCfg.ActiveProvider {
-		case tunnel.ProviderDNSTT:
-			provider, err := tunnel.Get(tunnel.ProviderDNSTT)
-			if err != nil {
-				return err
-			}
-			dnsttCfg, err := provider.GetConfig()
-			if err != nil {
-				return err
-			}
-			mapped := parseConf(dnsttCfg)
-			domainName = mapped["NS Subdomain"]
-		case tunnel.ProviderSlipstream:
-			provider, err := tunnel.Get(tunnel.ProviderSlipstream)
-			if err != nil {
-				return err
-			}
-			slipstreamCfg, err := provider.GetConfig()
-			if err != nil {
-				return err
-			}
-			mapped := parseConf(slipstreamCfg)
-			domainName = mapped["Domain"]
+	domainName, existingSecret := getProviderInfo()
+
+	var secret string
+	if existingSecret != "" {
+		secret = existingSecret
+		tui.PrintSuccess(fmt.Sprintf("Using existing MTProxy secret: %s", secret))
+	} else {
+		var err error
+		secret, err = mtproxy.GenerateSecret()
+		if err != nil {
+			return fmt.Errorf("failed to generate secret: %w", err)
 		}
+		tui.PrintSuccess(fmt.Sprintf("Generated new MTProxy secret: %s", secret))
 	}
-	secret, err := mtproxy.GenerateSecret()
-	if err != nil {
-		return fmt.Errorf("failed to generate secret: %w", err)
-	}
-	tui.PrintSuccess(fmt.Sprintf("Generated MTProxy secret: %s", secret))
 
 	progressFn := func(downloaded, total int64) {
 		if total > 0 {
@@ -117,23 +96,35 @@ func runMTProxyInstall(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func parseConf(conf string) map[string]string {
-	result := make(map[string]string)
-	lines := strings.Split(conf, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) == 2 {
-			key := strings.TrimSpace(parts[0])
-			value := strings.TrimSpace(parts[1])
-			result[key] = value
-		}
+func getProviderInfo() (domain, secret string) {
+	globalCfg, err := tunnel.LoadGlobalConfig()
+	if err != nil || globalCfg == nil {
+		return "", ""
 	}
-	return result
+
+	switch globalCfg.ActiveProvider {
+	case tunnel.ProviderDNSTT:
+		cfg, err := dnstt.Load()
+		if err != nil {
+			return "", ""
+		}
+		domain = cfg.NSSubdomain
+		secret = cfg.MTProxySecret
+
+	case tunnel.ProviderSlipstream:
+		cfg, err := slipstream.Load()
+		if err != nil {
+			return "", ""
+		}
+		domain = cfg.Domain
+		secret = cfg.MTProxySecret
+	default:
+		return "", ""
+	}
+
+	return domain, secret
 }
+
 func runMTProxyUninstall(cmd *cobra.Command, args []string) error {
 	if err := osdetect.RequireRoot(); err != nil {
 		return err
