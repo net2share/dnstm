@@ -44,7 +44,6 @@ func GenerateSecret() (string, error) {
 	}
 	return fmt.Sprintf("%s", hex.EncodeToString(bytes)), nil
 }
-
 func IsMtProxyInstalled() bool {
 	_, err := os.Stat(filepath.Join(MTProxyInstallationDir, MTPRoxyBinaryName))
 	return err == nil
@@ -355,6 +354,55 @@ systemctl restart mtproxy
 			tui.PrintSuccess(fmt.Sprintf("%s service restarted successfully", service))
 		}
 	}
+
+	return nil
+}
+
+func IsMTProxyRunning() bool {
+	return service.IsServiceActive(MTProxyServiceName)
+}
+
+// CheckPort checks if a TCP port is reachable on localhost
+func CheckPort(port int) bool {
+	address := fmt.Sprintf("localhost:%d", port)
+	conn, err := net.DialTimeout("tcp", address, 2*time.Second)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
+
+// StartMTProxy starts the MTProxy service
+func StartMTProxy() error {
+	return service.StartService(MTProxyServiceName)
+}
+
+// StopMTProxy stops the MTProxy service
+func StopMTProxy() error {
+	return service.StopService(MTProxyServiceName)
+}
+
+// RestartMTProxy restarts the MTProxy service
+func RestartMTProxy() error {
+	return service.RestartService(MTProxyServiceName)
+}
+
+func UninstallMTProxy() error {
+	if service.IsServiceActive(MTProxyServiceName) {
+		service.StopService(MTProxyServiceName)
+	}
+	if service.IsServiceEnabled(MTProxyServiceName) {
+		service.DisableService(MTProxyServiceName)
+	}
+	service.RemoveService(MTProxyServiceName)
+
+	os.Remove(filepath.Join(MTProxyInstallationDir, MTPRoxyBinaryName))
+	os.RemoveAll(MTProxyConfigDir)
+	os.Remove("/etc/cron.daily/mtproxy-update-config")
+
+	cmd := exec.Command("userdel", MTProxyUser)
+	cmd.Run()
 
 	return nil
 }

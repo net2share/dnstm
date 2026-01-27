@@ -130,6 +130,7 @@ func buildMainMenuOptions() []huh.Option[string] {
 	// Add common options
 	options = append(options, huh.NewOption("Manage SSH tunnel users", "ssh-users"))
 	options = append(options, huh.NewOption("Manage SOCKS proxy", "socks"))
+	options = append(options, huh.NewOption("Manage MTProxy (Telegram)", "mtproxy"))
 	options = append(options, huh.NewOption("Status", "status"))
 	options = append(options, huh.NewOption("Exit", "exit"))
 
@@ -153,6 +154,9 @@ func handleMainMenuChoice(choice string) error {
 		return errCancelled // Submenu handles its own flow
 	case "socks":
 		RunSOCKSProxyMenu()
+		return errCancelled // Submenu handles its own flow
+	case "mtproxy":
+		RunMTProxyMenu()
 		return errCancelled // Submenu handles its own flow
 	}
 

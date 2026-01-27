@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/net2share/dnstm/internal/mtproxy"
 	"github.com/net2share/dnstm/internal/proxy"
 	"github.com/net2share/dnstm/internal/sshtunnel"
 	"github.com/net2share/dnstm/internal/tunnel"
@@ -59,6 +60,12 @@ func ShowOverallStatus() {
 	lines = append(lines, "")
 	lines = append(lines, buildMicrosocksStatusString())
 
+	// Add MTProxy status
+	lines = append(lines, "")
+	lines = append(lines, tui.Header("MTProxy (Telegram):"))
+	lines = append(lines, "")
+	lines = append(lines, buildMTProxyStatusString())
+
 	tui.PrintBox("Status", lines)
 }
 
@@ -101,6 +108,25 @@ func buildMicrosocksStatusString() string {
 	states = append(states, "Installed")
 
 	if proxy.IsMicrosocksRunning() {
+		states = append(states, green+"Running"+reset)
+	} else {
+		states = append(states, yellow+"Stopped"+reset)
+	}
+
+	return fmt.Sprintf("  %s %s", boldName, strings.Join(states, ", "))
+}
+
+func buildMTProxyStatusString() string {
+	boldName := bold + "MTProxy:" + reset
+
+	if !mtproxy.IsMtProxyInstalled() {
+		return fmt.Sprintf("  %s Not installed", boldName)
+	}
+
+	var states []string
+	states = append(states, "Installed")
+
+	if mtproxy.IsMTProxyRunning() {
 		states = append(states, green+"Running"+reset)
 	} else {
 		states = append(states, yellow+"Stopped"+reset)
