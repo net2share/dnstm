@@ -131,16 +131,13 @@ func ConfigureMTProxy(secret string) error {
 	if err := registerConfigCronJob(configPath); err != nil {
 		tui.PrintWarning("Failed to register config update cron job: " + err.Error())
 	}
-	if err := registerMTProxyUser(); err != nil {
-		return fmt.Errorf("failed to register mtproxy user: %w", err)
-	}
 
 	if err := service.CreateGenericService(&service.ServiceConfig{
 		Name:        MTProxyServiceName,
 		Description: "Telegram MTProxy Server",
-		User:        "mtproxy",
-		Group:       "mtproxy",
-		ExecStart: fmt.Sprintf("%s -u mtproxy -p %s -H %s -S %s --aes-pwd %s %s",
+		User:        "nobody",
+		Group:       "nogroup",
+		ExecStart: fmt.Sprintf("%s -u nobody -p %s -H %s -S %s --aes-pwd %s %s",
 			binaryPath,
 			MTProxyStatsPort,
 			MTProxyPort,
@@ -182,35 +179,6 @@ func ConfigureMTProxy(secret string) error {
 	return nil
 }
 
-func registerMTProxyUser() error {
-	cmd := exec.Command("id", "-u", MTProxyUser)
-	if err := cmd.Run(); err != nil {
-		tui.PrintStatus("Creating mtproxy system user...")
-		cmd = exec.Command("useradd",
-			"-r",
-			"-s", "/usr/sbin/nologin",
-			"-d", "/nonexistent",
-			"-M",
-			"-U",
-			MTProxyUser)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("failed to create mtproxy user: %w\n%s", err, output)
-		}
-		tui.PrintSuccess("mtproxy user created")
-	} else {
-		tui.PrintStatus("mtproxy user already exists")
-	}
-
-	if err := os.Chown(MTProxyConfigDir, 0, 0); err != nil {
-		return fmt.Errorf("failed to set ownership on config directory: %w", err)
-	}
-
-	if err := os.Chmod(MTProxyConfigDir, 0755); err != nil {
-		return fmt.Errorf("failed to set permissions on config directory: %w", err)
-	}
-
-	return nil
-}
 func FormatProxyURL(secret, nsSubdomain string) string {
 	return fmt.Sprintf("tg://proxy?server=%s&port=%s&secret=%s", nsSubdomain, MTProxyPort, secret)
 }
