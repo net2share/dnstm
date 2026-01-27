@@ -2,10 +2,11 @@
 
 A tool to deploy and manage DNS tunnel servers on Linux. Supports multiple providers:
 
+- **[Shadowsocks](https://github.com/shadowsocks/shadowsocks-rust)** - Shadowsocks with Slipstream DNS tunnel plugin (SIP003)
 - **[Slipstream](https://github.com/Mygod/slipstream-rust)** - Modern DNS tunnel with TLS encryption
 - **[DNSTT](https://www.bamsoftware.com/software/dnstt/)** - Classic DNS tunnel with Curve25519 keys
 
-Both providers can be installed simultaneously, with one active at a time handling DNS queries.
+All providers can be installed simultaneously, with one active at a time handling DNS queries.
 
 ## Features
 
@@ -57,11 +58,12 @@ Run without arguments for an interactive menu:
 sudo dnstm
 ```
 
-The main menu shows both providers with their status:
+The main menu shows all providers with their status:
 
 ```
-> Slipstream →
-  DNSTT (active) →
+> Shadowsocks →
+  Slipstream (active) →
+  DNSTT →
   Manage SSH tunnel users
   Manage SOCKS proxy
   Status
@@ -94,45 +96,56 @@ sudo dnstm status dnstt
 #### Install Commands
 
 ```bash
+# Install Shadowsocks (interactive)
+sudo dnstm shadowsocks install
+
+# Install Shadowsocks (CLI mode)
+sudo dnstm shadowsocks install --domain t.example.com
+
 # Install Slipstream (interactive)
-sudo dnstm install slipstream
+sudo dnstm slipstream install
 
 # Install Slipstream (CLI mode)
-sudo dnstm install slipstream --domain t.example.com --mode ssh
+sudo dnstm slipstream install --domain t.example.com --mode ssh
 
 # Install DNSTT (interactive)
-sudo dnstm install dnstt
+sudo dnstm dnstt install
 
 # Install DNSTT (CLI mode)
-sudo dnstm install dnstt --ns-subdomain t.example.com --mtu 1232 --mode ssh
+sudo dnstm dnstt install --ns-subdomain t.example.com --mtu 1232 --mode ssh
 ```
 
 #### Provider Management
 
 ```bash
 # Switch active DNS handler
+sudo dnstm switch shadowsocks
 sudo dnstm switch slipstream
 sudo dnstm switch dnstt
 
 # View logs
-sudo dnstm logs slipstream
-sudo dnstm logs dnstt
+sudo dnstm shadowsocks logs
+sudo dnstm slipstream logs
+sudo dnstm dnstt logs
 
 # Show configuration
-sudo dnstm config slipstream
-sudo dnstm config dnstt
+sudo dnstm shadowsocks config
+sudo dnstm slipstream config
+sudo dnstm dnstt config
 
 # Restart service
-sudo dnstm restart slipstream
-sudo dnstm restart dnstt
+sudo dnstm shadowsocks restart
+sudo dnstm slipstream restart
+sudo dnstm dnstt restart
 ```
 
 #### Uninstall Commands
 
 ```bash
-# Uninstall provider (interactive)
-sudo dnstm uninstall slipstream
-sudo dnstm uninstall dnstt
+# Uninstall provider
+sudo dnstm shadowsocks uninstall
+sudo dnstm slipstream uninstall
+sudo dnstm dnstt uninstall
 ```
 
 #### SSH Tunnel Users
@@ -140,6 +153,9 @@ sudo dnstm uninstall dnstt
 ```bash
 # Manage SSH tunnel users (opens submenu)
 sudo dnstm ssh-users
+
+# Uninstall SSH tunnel hardening and users
+sudo dnstm ssh-users uninstall
 ```
 
 #### SOCKS Proxy
@@ -156,6 +172,14 @@ sudo dnstm socks status
 ```
 
 ### Install Options
+
+**Shadowsocks:**
+
+| Option | Description |
+| ------ | ----------- |
+| `--domain <domain>` | Tunnel domain (e.g., t.example.com) |
+| `--password <pass>` | Shadowsocks password (auto-generated if empty) |
+| `--method <method>` | Encryption method (default: aes-256-gcm) |
 
 **Slipstream:**
 
@@ -176,6 +200,32 @@ sudo dnstm socks status
 
 ## Providers
 
+### Shadowsocks (SIP003)
+
+[Shadowsocks](https://github.com/shadowsocks/shadowsocks-rust) with [Slipstream](https://github.com/Mygod/slipstream-rust) as a SIP003 plugin. This combines Shadowsocks encryption with DNS tunneling.
+
+**Features:**
+- AEAD encryption (aes-256-gcm, chacha20-ietf-poly1305)
+- Slipstream plugin handles DNS tunnel transport
+- Listens on port 5302 (NAT redirected from 53)
+- Configuration stored in `/etc/shadowsocks-slipstream/`
+
+**Installation creates:**
+- Shadowsocks config with Slipstream plugin
+- TLS certificate for Slipstream (shared with Slipstream provider)
+- systemd service (`shadowsocks-slipstream`)
+
+**Client connection:**
+Requires a Shadowsocks client with Slipstream plugin support:
+```
+Server:      t.example.com (via DNS resolver)
+Port:        53
+Password:    <generated-password>
+Method:      aes-256-gcm
+Plugin:      slipstream
+Plugin Opts: domain=t.example.com;fingerprint=<SHA256>
+```
+
 ### Slipstream
 
 [Slipstream](https://github.com/Mygod/slipstream-rust) is a modern DNS tunnel implementation with TLS encryption.
@@ -188,7 +238,6 @@ sudo dnstm socks status
 **Installation creates:**
 - Self-signed TLS certificate (10-year validity)
 - systemd service (`slipstream-server`)
-- System user (`slipstream`)
 
 **Client connection:**
 ```bash
@@ -209,7 +258,6 @@ slipstream-client --domain t.example.com --fingerprint <SHA256_FINGERPRINT> \
 **Installation creates:**
 - Curve25519 key pair (64-char hex strings)
 - systemd service (`dnstt-server`)
-- System user (`dnstt`)
 
 **Client connection:**
 ```bash
@@ -223,9 +271,12 @@ ssh -o ProxyCommand="dnstt-client -udp RESOLVER_IP:53 -pubkey-file server.pub t.
 
 ## Switching Providers
 
-Both providers can be installed simultaneously. Only one handles DNS queries at a time.
+All providers can be installed simultaneously. Only one handles DNS queries at a time.
 
 ```bash
+# Switch to Shadowsocks
+sudo dnstm switch shadowsocks
+
 # Switch to Slipstream
 sudo dnstm switch slipstream
 
@@ -271,6 +322,21 @@ The active provider is tracked in `/etc/dnstm/dnstm.conf`:
 ACTIVE_PROVIDER="slipstream"
 ```
 
+### Shadowsocks Config
+
+Stored in `/etc/shadowsocks-slipstream/config.json`:
+
+```json
+{
+    "server": "0.0.0.0",
+    "server_port": 5302,
+    "password": "<generated-password>",
+    "method": "aes-256-gcm",
+    "plugin": "/usr/local/bin/slipstream-server",
+    "plugin_opts": "domain=t.example.com;cert=...;key=..."
+}
+```
+
 ### Slipstream Config
 
 Stored in `/etc/slipstream/slipstream-server.conf`:
@@ -302,18 +368,20 @@ TARGET_PORT="22"
 Each provider can be uninstalled independently:
 
 ```bash
+# Uninstall Shadowsocks
+sudo dnstm shadowsocks uninstall
+
 # Uninstall Slipstream
-sudo dnstm uninstall slipstream
+sudo dnstm slipstream uninstall
 
 # Uninstall DNSTT
-sudo dnstm uninstall dnstt
+sudo dnstm dnstt uninstall
 ```
 
 The uninstall process removes:
 - Provider service and binary
 - Configuration files and credentials
 - Firewall rules for that provider
-- Provider system user
 
 SSH tunnel users and SOCKS proxy are managed separately and are not affected by provider uninstall. To remove them:
 
@@ -321,8 +389,8 @@ SSH tunnel users and SOCKS proxy are managed separately and are not affected by 
 # Remove SOCKS proxy
 sudo dnstm socks uninstall
 
-# Remove SSH tunnel users (via ssh-users menu)
-sudo dnstm ssh-users
+# Remove SSH tunnel users and hardening
+sudo dnstm ssh-users uninstall
 ```
 
 If uninstalling the active provider while another is installed, dnstm automatically switches to the other provider.
@@ -338,12 +406,16 @@ go build -o dnstm .
 ## Architecture
 
 ```
-/etc/dnstm/           # Global config (active provider)
-/etc/slipstream/      # Slipstream config and TLS certs
-/etc/dnstt/           # DNSTT config and keys
-/usr/local/bin/       # Provider binaries, microsocks
+/etc/dnstm/                    # Global config (active provider)
+/etc/shadowsocks-slipstream/   # Shadowsocks config
+/etc/slipstream/               # Slipstream config and TLS certs (shared with Shadowsocks)
+/etc/dnstt/                    # DNSTT config and keys
+/usr/local/bin/                # Provider binaries, microsocks
 ```
 
-Both providers use NAT PREROUTING rules to redirect port 53 to their respective ports:
+All providers use NAT PREROUTING rules to redirect port 53 to their respective ports:
+- Shadowsocks: 53 → 5302
 - Slipstream: 53 → 5301
 - DNSTT: 53 → 5300
+
+All provider services run under a shared `dnstm` system user.
