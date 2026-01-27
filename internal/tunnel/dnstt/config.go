@@ -9,13 +9,13 @@ import (
 )
 
 const (
-	ConfigDir       = "/etc/dnstt"
-	ConfigFile      = "dnstt-server.conf"
-	Port            = "5300"
-	ReleaseURL      = "https://github.com/net2share/dnstt/releases/download/latest"
-	BinaryName      = "dnstt-server"
-	ServiceName     = "dnstt-server"
-	ServiceUser     = "dnstt"
+	ConfigDir   = "/etc/dnstt"
+	ConfigFile  = "dnstt-server.conf"
+	Port        = "5300"
+	ReleaseURL  = "https://github.com/net2share/dnstt/releases/download/latest"
+	BinaryName  = "dnstt-server"
+	ServiceName = "dnstt-server"
+	ServiceUser = "dnstt"
 )
 
 // Config holds the DNSTT server configuration.
@@ -23,6 +23,7 @@ type Config struct {
 	NSSubdomain      string
 	MTU              string
 	TunnelMode       string
+	MTProxySecret    string
 	PrivateKeyFile   string
 	PublicKeyFile    string
 	TargetPort       string
@@ -80,6 +81,8 @@ func Load() (*Config, error) {
 			config.TargetPort = value
 		case "SSH_TUNNEL_ENABLED":
 			config.SSHTunnelEnabled = value
+		case "MTPROXY_SECRET":
+			config.MTProxySecret = value
 		}
 	}
 
@@ -105,7 +108,11 @@ PUBLIC_KEY_FILE="%s"
 TARGET_PORT="%s"
 SSH_TUNNEL_ENABLED="%s"
 `, c.NSSubdomain, c.MTU, c.TunnelMode, c.PrivateKeyFile, c.PublicKeyFile, c.TargetPort, c.SSHTunnelEnabled)
-
+	// Add MTProxy secret if in mtproto mode
+	if c.TunnelMode == "mtproto" && c.MTProxySecret != "" {
+		content += fmt.Sprintf(`MTPROXY_SECRET="%s"
+`, c.MTProxySecret)
+	}
 	if err := os.WriteFile(configPath, []byte(content), 0640); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}

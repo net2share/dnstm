@@ -9,25 +9,26 @@ import (
 )
 
 const (
-	ConfigDir       = "/etc/slipstream"
-	ConfigFile      = "slipstream-server.conf"
-	Port            = "5301"
-	ReleaseURL      = "https://github.com/net2share/slipstream-rust-build/releases/download/latest"
-	BinaryName      = "slipstream-server"
-	ServiceName     = "slipstream-server"
-	ServiceUser     = "slipstream"
+	ConfigDir   = "/etc/slipstream"
+	ConfigFile  = "slipstream-server.conf"
+	Port        = "5301"
+	ReleaseURL  = "https://github.com/net2share/slipstream-rust-build/releases/download/latest"
+	BinaryName  = "slipstream-server"
+	ServiceName = "slipstream-server"
+	ServiceUser = "slipstream"
 )
 
 // Config holds the Slipstream server configuration.
 type Config struct {
-	Domain         string
-	DNSListenPort  string
-	TargetAddress  string
-	CertFile       string
-	KeyFile        string
-	TunnelMode     string
-	TargetPort     string
+	Domain           string
+	DNSListenPort    string
+	TargetAddress    string
+	CertFile         string
+	KeyFile          string
+	TunnelMode       string
+	TargetPort       string
 	SSHTunnelEnabled string
+	MTProxySecret    string
 }
 
 // Load loads the Slipstream configuration from file.
@@ -83,6 +84,8 @@ func Load() (*Config, error) {
 			config.TargetPort = value
 		case "SSH_TUNNEL_ENABLED":
 			config.SSHTunnelEnabled = value
+		case "MTPROXY_SECRET":
+			config.MTProxySecret = value
 		}
 	}
 
@@ -109,6 +112,12 @@ TUNNEL_MODE="%s"
 TARGET_PORT="%s"
 SSH_TUNNEL_ENABLED="%s"
 `, c.Domain, c.DNSListenPort, c.TargetAddress, c.CertFile, c.KeyFile, c.TunnelMode, c.TargetPort, c.SSHTunnelEnabled)
+
+	// Add MTProxy secret if in mtproto mode
+	if c.TunnelMode == "mtproto" && c.MTProxySecret != "" {
+		content += fmt.Sprintf(`MTPROXY_SECRET="%s"
+`, c.MTProxySecret)
+	}
 
 	if err := os.WriteFile(configPath, []byte(content), 0640); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)

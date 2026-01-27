@@ -52,13 +52,13 @@ func init() {
 	// DNSTT flags
 	installDnsttCmd.Flags().StringVar(&dnsttNSSubdomain, "ns-subdomain", "", "NS subdomain (e.g., t.example.com)")
 	installDnsttCmd.Flags().StringVar(&dnsttMTU, "mtu", "1232", "MTU value (512-1400)")
-	installDnsttCmd.Flags().StringVar(&dnsttMode, "mode", "ssh", "Tunnel mode (ssh|socks)")
-	installDnsttCmd.Flags().StringVar(&dnsttPort, "port", "", "Target port (default: 22 for SSH, 1080 for SOCKS)")
+	installDnsttCmd.Flags().StringVar(&dnsttMode, "mode", "ssh", "Tunnel mode (ssh|socks|mtproto)")
+	installDnsttCmd.Flags().StringVar(&dnsttPort, "port", "", "Target port (default: 22 for SSH, 1080 for SOCKS, 8443 for MTProxy)")
 
 	// Slipstream flags
 	installSlipstreamCmd.Flags().StringVar(&slipstreamDomain, "domain", "", "Domain (e.g., t.example.com)")
-	installSlipstreamCmd.Flags().StringVar(&slipstreamMode, "mode", "ssh", "Tunnel mode (ssh|socks)")
-	installSlipstreamCmd.Flags().StringVar(&slipstreamPort, "port", "", "Target port (default: 22 for SSH, 1080 for SOCKS)")
+	installSlipstreamCmd.Flags().StringVar(&slipstreamMode, "mode", "ssh", "Tunnel mode (ssh|socks|mtproto)")
+	installSlipstreamCmd.Flags().StringVar(&slipstreamPort, "port", "", "Target port (default: 22 for SSH, 1080 for SOCKS, 8443 for MTProxy)")
 
 	installCmd.AddCommand(installDnsttCmd)
 	installCmd.AddCommand(installSlipstreamCmd)
@@ -247,6 +247,14 @@ func showInstallSuccess(provider tunnel.Provider, result *tunnel.InstallResult) 
 	tui.PrintInfo("Next steps:")
 	if result.TunnelMode == "socks" {
 		fmt.Println("  Run 'dnstm socks install' to set up the SOCKS proxy")
+	} else if result.TunnelMode == "mtproto" {
+		fmt.Println("  Run 'dnstm mtproxy install' to set up MTProxy")
+		if result.MTProxySecret != "" {
+			fmt.Println()
+			tui.PrintInfo("MTProxy Configuration:")
+			fmt.Printf("  Secret: %s\n", result.MTProxySecret)
+			fmt.Printf("  Port:   8443\n")
+		}
 	} else {
 		fmt.Println("  1. Run 'dnstm ssh-users' to configure SSH hardening")
 		fmt.Println("  2. Create tunnel users with the SSH users menu")

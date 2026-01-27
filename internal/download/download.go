@@ -222,3 +222,76 @@ func RemoveBinaryByName(binaryName string) {
 func RemoveBinary() {
 	RemoveBinaryByName("dnstt-server")
 }
+
+// DownloadFile downloads a file from the given URL to the specified destination path.
+func DownloadFile(url, dest string, progressFn func(downloaded, total int64)) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to download file: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("bad status: %s", resp.Status)
+	}
+
+	tmpFile, err := os.CreateTemp("", "download-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	var reader io.Reader = resp.Body
+	if progressFn != nil {
+		reader = &progressReader{
+			reader:     resp.Body,
+			total:      resp.ContentLength,
+			progressFn: progressFn,
+		}
+	}
+
+	if _, err := io.Copy(tmpFile, reader); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to sync file: %w", err)
+	}
+	tmpFile.Close()
+
+	// Use file copy instead of rename to handle cross-device moves
+	if err := CopyFile(tmpPath, dest); err != nil {
+		return fmt.Errorf("failed to move file to destination: %w", err)
+	}
+
+	return nil
+}
+
+// CopyFile copies a file from src to dst using streaming I/O
+func CopyFile(src, dst string) error {
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open source file: %w", err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file: %w", err)
+	}
+	defer dstFile.Close()
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return fmt.Errorf("failed to copy file: %w", err)
+	}
+
+	if err := dstFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync file: %w", err)
+	}
+
+	return nil
+}

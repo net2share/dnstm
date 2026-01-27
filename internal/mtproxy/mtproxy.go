@@ -1,0 +1,360 @@
+package mtproxy
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"net"
+	"os"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"time"
+
+	"github.com/net2share/dnstm/internal/download"
+	"github.com/net2share/dnstm/internal/service"
+	"github.com/net2share/go-corelib/osdetect"
+	"github.com/net2share/go-corelib/tui"
+)
+
+const (
+	MTPRoxyBinaryName      = "mtproto-proxy"
+	MTProxyServiceName     = "mtproxy"
+	MTProxyPort            = "8443"
+	MTProxyStatsPort       = "8888"
+	MTProxyInstallationDir = "/usr/local/bin"
+	MTProxyConfigDir       = "/etc/mtproxy"
+	MTProxyUser            = "mtproxy"
+	MTProxyRepo            = "TelegramMessenger/MTProxy"
+	ProxySecretURL         = "https://core.telegram.org/getProxySecret"
+	ProxyConfigURL         = "https://core.telegram.org/getProxyConfig"
+)
+
+type Config struct {
+	Secret string
+	Port   string
+}
+
+// GenerateSecret generates a random MTProxy secret with dd prefix for random padding
+
+func GenerateSecret() (string, error) {
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+	return fmt.Sprintf("%s", hex.EncodeToString(bytes)), nil
+}
+
+func IsMtProxyInstalled() bool {
+	_, err := os.Stat(filepath.Join(MTProxyInstallationDir, MTPRoxyBinaryName))
+	return err == nil
+}
+
+func InstallMTProxy(secret string, progressFn func(downloaded, total int64)) error {
+	binaryPath := filepath.Join(MTProxyInstallationDir, MTPRoxyBinaryName)
+
+	// Check if binary exists and build if needed
+	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+		tmpDir, err := os.MkdirTemp("", "mtproxy-build-*")
+		if err != nil {
+			return fmt.Errorf("failed to create temp dir: %w", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		tmpFile := filepath.Join(tmpDir, "objs/bin/mtproto-proxy")
+
+		if err := buildFromSource(progressFn, tmpDir); err != nil {
+			return fmt.Errorf("failed to build MTProxy from source: %w", err)
+		}
+
+		if err := os.Chmod(tmpFile, 0755); err != nil {
+			return fmt.Errorf("failed to set executable permission: %w", err)
+		}
+
+		if err := download.CopyFile(tmpFile, binaryPath); err != nil {
+			return fmt.Errorf("failed to install MTProxy binary: %w", err)
+		}
+		tui.PrintSuccess("MTProxy binary installed")
+	} else {
+		tui.PrintStatus("MTProxy binary already exists")
+	}
+
+	// Always ensure config directory and files exist
+	if err := os.MkdirAll(MTProxyConfigDir, 0755); err != nil {
+		return fmt.Errorf("failed to create MTProxy config directory: %w", err)
+	}
+
+	configPath := filepath.Join(MTProxyConfigDir, "proxy-multi.conf")
+	secretPath := filepath.Join(MTProxyConfigDir, "proxy-secret")
+
+	// Download config files if they don't exist
+	if _, err := os.Stat(secretPath); os.IsNotExist(err) {
+		tui.PrintStatus("Downloading proxy-secret...")
+		if err := download.DownloadFile(ProxySecretURL, secretPath, progressFn); err != nil {
+			return fmt.Errorf("failed to download proxy secret: %w", err)
+		}
+		tui.PrintSuccess("Downloaded proxy-secret")
+	} else {
+		tui.PrintStatus("proxy-secret already exists")
+	}
+
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		tui.PrintStatus("Downloading proxy-multi.conf...")
+		if err := download.DownloadFile(ProxyConfigURL, configPath, progressFn); err != nil {
+			return fmt.Errorf("failed to download proxy-multi.conf: %w", err)
+		}
+		tui.PrintSuccess("Downloaded proxy-multi.conf")
+	} else {
+		tui.PrintStatus("proxy-multi.conf already exists")
+	}
+
+	return nil
+}
+
+// healthCheckPorts attempts TCP connections to verify ports are listening
+func healthCheckPorts(ports []string) error {
+	for _, port := range ports {
+		address := fmt.Sprintf("127.0.0.1:%s", port)
+
+		conn, err := net.DialTimeout("tcp", address, 3*time.Second)
+		if err != nil {
+			return fmt.Errorf("port %s is not open: %w", port, err)
+		}
+
+		conn.Close()
+		tui.PrintSuccess(fmt.Sprintf("Port %s is open and accepting connections", port))
+	}
+	return nil
+}
+
+func ConfigureMTProxy(secret string) error {
+	configPath := filepath.Join(MTProxyConfigDir, "proxy-multi.conf")
+	binaryPath := filepath.Join(MTProxyInstallationDir, MTPRoxyBinaryName)
+
+	if err := registerConfigCronJob(configPath); err != nil {
+		tui.PrintWarning("Failed to register config update cron job: " + err.Error())
+	}
+	if err := registerMTProxyUser(); err != nil {
+		return fmt.Errorf("failed to register mtproxy user: %w", err)
+	}
+
+	if err := service.CreateGenericService(&service.ServiceConfig{
+		Name:        MTProxyServiceName,
+		Description: "Telegram MTProxy Server",
+		User:        "mtproxy",
+		Group:       "mtproxy",
+		ExecStart: fmt.Sprintf("%s -u mtproxy -p %s -H %s -S %s --aes-pwd %s %s",
+			binaryPath,
+			MTProxyStatsPort,
+			MTProxyPort,
+			secret,
+			path.Join(MTProxyConfigDir, "proxy-secret"),
+			path.Join(MTProxyConfigDir, "proxy-multi.conf")),
+		ConfigDir: MTProxyConfigDir,
+	}); err != nil {
+		return fmt.Errorf("failed to create systemd service: %w", err)
+	}
+
+	tui.PrintStatus("Starting MTProxy service...")
+	if err := service.EnableService(MTProxyServiceName); err != nil {
+		return fmt.Errorf("failed to enable service: %w", err)
+	}
+
+	if err := service.StartService(MTProxyServiceName); err != nil {
+		return fmt.Errorf("failed to start service: %w", err)
+	}
+
+	time.Sleep(2 * time.Second)
+
+	if !service.IsServiceActive(MTProxyServiceName) {
+		tui.PrintWarning("MTProxy service is not active, checking logs...")
+		if logs, err := service.GetServiceLogs(MTProxyServiceName, 20); err == nil {
+			fmt.Println("\nRecent logs:")
+			fmt.Println(logs)
+		}
+		return fmt.Errorf("MTProxy service failed to start")
+	}
+
+	tui.PrintSuccess("MTProxy service started successfully")
+
+	tui.PrintStatus("Verifying MTProxy is listening on port " + MTProxyPort + "...")
+	if err := healthCheckPorts([]string{MTProxyPort}); err != nil {
+		tui.PrintWarning("Port check failed: " + err.Error())
+	}
+
+	return nil
+}
+
+func registerMTProxyUser() error {
+	cmd := exec.Command("id", "-u", MTProxyUser)
+	if err := cmd.Run(); err != nil {
+		tui.PrintStatus("Creating mtproxy system user...")
+		cmd = exec.Command("useradd",
+			"-r",
+			"-s", "/usr/sbin/nologin",
+			"-d", "/nonexistent",
+			"-M",
+			"-U",
+			MTProxyUser)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to create mtproxy user: %w\n%s", err, output)
+		}
+		tui.PrintSuccess("mtproxy user created")
+	} else {
+		tui.PrintStatus("mtproxy user already exists")
+	}
+
+	if err := os.Chown(MTProxyConfigDir, 0, 0); err != nil {
+		return fmt.Errorf("failed to set ownership on config directory: %w", err)
+	}
+
+	if err := os.Chmod(MTProxyConfigDir, 0755); err != nil {
+		return fmt.Errorf("failed to set permissions on config directory: %w", err)
+	}
+
+	return nil
+}
+func FormatProxyURL(secret, nsSubdomain string) string {
+	return fmt.Sprintf("tg://proxy?server=%s&port=%s&secret=%s", nsSubdomain, MTProxyPort, secret)
+}
+
+func buildFromSource(progressFn func(downloaded, total int64), tmpDir string) error {
+	if err := installBuildDeps(); err != nil {
+		return fmt.Errorf("failed to install build dependencies: %w", err)
+	}
+
+	// remove the tmp dir if exists
+	if _, err := os.Stat(tmpDir); err == nil {
+		os.RemoveAll(tmpDir)
+	}
+
+	tui.PrintStatus("Cloning MTProxy repository...")
+	cmd := exec.Command("git", "clone", fmt.Sprintf("https://github.com/%s.git", MTProxyRepo), tmpDir)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to clone repository: %w\n%s", err, output)
+	}
+	tui.PrintSuccess("Repository cloned, building MTProxy...")
+	cmd = exec.Command("make")
+	cmd.Dir = tmpDir
+	if output, err := cmd.CombinedOutput(); err != nil {
+		// we can run "make clean" but as we remove tmp dir in our Installation process its not required
+		return fmt.Errorf("failed to build MTProxy: %w\n%s", err, output)
+	}
+	tui.PrintSuccess("MTProxy built successfully")
+	return nil
+}
+func installBuildDeps() error {
+	tui.PrintStatus("Installing build dependencies...")
+
+	osInfo, err := osdetect.Detect()
+	if err != nil {
+		return fmt.Errorf("failed to detect Linux distribution: %w", err)
+	}
+
+	packageManager := osInfo.PackageManager
+
+	switch packageManager {
+	case "apt", "apt-get":
+		// Debian/Ubuntu
+		tui.PrintStatus("Detected Debian/Ubuntu, installing dependencies...")
+
+		if err := runCommand("apt-get", "update", "-qq"); err != nil {
+			tui.PrintWarning(fmt.Sprintf("apt-get update failed: %v", err))
+		}
+
+		deps := []string{"install", "-y", "-qq", "git", "curl", "build-essential", "libssl-dev", "zlib1g-dev"}
+		if err := runCommand("apt-get", deps...); err != nil {
+			return fmt.Errorf("failed to install dependencies: %w", err)
+		}
+
+	case "yum":
+
+		tui.PrintStatus("Detected RHEL/CentOS (yum), installing dependencies...")
+		deps := []string{"install", "-y", "-q", "git", "curl", "gcc", "gcc-c++", "make", "openssl-devel", "zlib-devel"}
+		if err := runCommand("yum", deps...); err != nil {
+			return fmt.Errorf("failed to install dependencies: %w", err)
+		}
+
+	case "dnf":
+
+		tui.PrintStatus("Detected RHEL-based system (dnf), installing dependencies...")
+		deps := []string{"install", "-y", "-q", "git", "curl", "gcc", "gcc-c++", "make", "openssl-devel", "zlib-devel"}
+		if err := runCommand("dnf", deps...); err != nil {
+			return fmt.Errorf("failed to install dependencies: %w", err)
+		}
+
+	case "zypper":
+
+		tui.PrintStatus("Detected openSUSE, installing dependencies...")
+		deps := []string{"install", "-y", "git", "curl", "gcc", "gcc-c++", "make", "libopenssl-devel", "zlib-devel"}
+		if err := runCommand("zypper", deps...); err != nil {
+			return fmt.Errorf("failed to install dependencies: %w", err)
+		}
+
+	default:
+		return fmt.Errorf("unsupported package manager: %s (detected from %s)", packageManager, osInfo.PrettyName)
+	}
+
+	tui.PrintSuccess("Build dependencies installed")
+	return nil
+}
+
+func runCommand(name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("command %s %v failed: %w", name, args, err)
+	}
+	return nil
+}
+
+func registerConfigCronJob(configPath string) error {
+	cronContent := fmt.Sprintf(`#!/bin/bash
+# MTProxy config update script
+curl -s %s -o %s
+curl -s %s -o %s
+systemctl restart mtproxy
+`, ProxySecretURL, path.Join(MTProxyConfigDir, "proxy-secret"), ProxyConfigURL, configPath)
+
+	cronPath := "/etc/cron.daily/mtproxy-update-config"
+	if _, err := os.Stat(cronPath); os.IsNotExist(err) {
+		if err := os.WriteFile(cronPath, []byte(cronContent), 0755); err != nil {
+			return fmt.Errorf("failed to write cron file: %w", err)
+		}
+		tui.PrintSuccess("MTProxy config update cron job created")
+	} else {
+		tui.PrintStatus("MTProxy config update cron job already exists")
+	}
+
+	osInfo, err := osdetect.Detect()
+	if err != nil {
+		tui.PrintWarning("Failed to detect OS, skipping cron service reload")
+		return nil
+	}
+
+	var cronServices []string
+
+	switch osInfo.PackageManager {
+	case "apt", "apt-get":
+		// Debian based systems use "cron"
+		cronServices = []string{"cron"}
+	case "yum", "dnf":
+		// RHEL/CentOS uses "crond"
+		cronServices = []string{"crond"}
+
+	default:
+		tui.PrintWarning("Unsupported package manager, cron service reload skipped")
+		return nil
+	}
+
+	for _, service := range cronServices {
+		if err := runCommand("systemctl", "restart", service); err != nil {
+			tui.PrintWarning(fmt.Sprintf("Failed to restart %s service: %v", service, err))
+		} else {
+			tui.PrintSuccess(fmt.Sprintf("%s service restarted successfully", service))
+		}
+	}
+
+	return nil
+}

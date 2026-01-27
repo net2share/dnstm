@@ -307,6 +307,14 @@ func showInstallSuccess(provider tunnel.Provider, result *tunnel.InstallResult) 
 	tui.PrintInfo("Next steps:")
 	if result.TunnelMode == "socks" {
 		fmt.Println("  Run 'dnstm socks install' to set up the SOCKS proxy")
+	} else if result.TunnelMode == "mtproto" {
+		fmt.Println("  Run 'dnstm mtproxy install' to set up MTProxy")
+		if result.MTProxySecret != "" {
+			fmt.Println()
+			tui.PrintInfo("MTProxy Configuration:")
+			fmt.Printf("  Secret: %s\n", result.MTProxySecret)
+			fmt.Printf("  Port:   8443\n")
+		}
 	} else {
 		fmt.Println("  1. Run 'dnstm ssh-users' to configure SSH hardening")
 		fmt.Println("  2. Create tunnel users with the SSH users menu")

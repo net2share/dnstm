@@ -28,11 +28,12 @@ type InstallConfig struct {
 
 // InstallResult contains information about a completed installation.
 type InstallResult struct {
-	PublicKey   string // Hex-encoded public key (DNSTT)
-	Fingerprint string // Certificate fingerprint (Slipstream)
-	Domain      string
-	TunnelMode  string
-	MTU         string // DNSTT only
+	PublicKey     string // Hex-encoded public key (DNSTT)
+	Fingerprint   string // Certificate fingerprint (Slipstream)
+	Domain        string
+	TunnelMode    string
+	MTU           string // DNSTT only
+	MTProxySecret string // MTProxy secret (for mtproto mode)
 }
 
 // Provider defines the interface that all tunnel providers must implement.
