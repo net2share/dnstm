@@ -231,7 +231,20 @@ func installBinary(tmpPath string) error {
 
 func getBinaryName() string {
 	arch := osdetect.GetArch()
+	libc := detectLibc()
 
+	// Prefer GNU/glibc builds for standard Linux distributions
+	// Fall back to musl for Alpine or when glibc is not available
+	if libc == "glibc" {
+		switch arch {
+		case "amd64":
+			return "microsocks-x86_64-linux-gnu"
+		case "arm64":
+			return "microsocks-aarch64-linux-gnu"
+		}
+	}
+
+	// musl builds for Alpine, other archs, or fallback
 	switch arch {
 	case "amd64":
 		return "microsocks-x86_64-linux-musl"
@@ -244,6 +257,29 @@ func getBinaryName() string {
 	}
 
 	return "microsocks-x86_64-linux-musl"
+}
+
+// detectLibc detects whether the system uses glibc or musl
+func detectLibc() string {
+	// Check for Alpine Linux (uses musl)
+	if _, err := os.Stat("/etc/alpine-release"); err == nil {
+		return "musl"
+	}
+
+	// Check ldd version output for glibc indicator
+	// Most glibc systems will have ldd that mentions "GNU libc" or "GLIBC"
+	if _, err := os.Stat("/lib/x86_64-linux-gnu"); err == nil {
+		return "glibc"
+	}
+	if _, err := os.Stat("/lib/aarch64-linux-gnu"); err == nil {
+		return "glibc"
+	}
+	if _, err := os.Stat("/lib64/ld-linux-x86-64.so.2"); err == nil {
+		return "glibc"
+	}
+
+	// Default to glibc for most systems
+	return "glibc"
 }
 
 // ConfigureMicrosocks creates the systemd service for microsocks.

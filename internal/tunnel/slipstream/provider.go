@@ -186,7 +186,8 @@ func (p *Provider) performInstallation(cfg *Config) (*tunnel.InstallResult, erro
 		return nil, fmt.Errorf("failed to enable service: %w", err)
 	}
 
-	if err := Start(); err != nil {
+	// Use Restart instead of Start to apply config changes if service is already running
+	if err := Restart(); err != nil {
 		return nil, fmt.Errorf("failed to start service: %w", err)
 	}
 	tui.PrintStatus("Service started")
