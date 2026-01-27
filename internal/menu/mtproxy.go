@@ -3,10 +3,11 @@ package menu
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/huh"
-	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/mtproxy"
+	"github.com/net2share/dnstm/internal/tunnel"
 	"github.com/net2share/go-corelib/tui"
 )
 
@@ -92,7 +93,6 @@ func installMTProxy() error {
 
 	isReinstall := mtproxy.IsMtProxyInstalled()
 
-	// Generate secret
 	secret, err := mtproxy.GenerateSecret()
 	if err != nil {
 		return fmt.Errorf("failed to generate secret: %w", err)
@@ -128,21 +128,63 @@ func installMTProxy() error {
 	fmt.Println()
 	tui.PrintInfo("MTProxy is now running on port 8443")
 
-	// Show the proxy URL - need the DNS subdomain from config
-	cfg, err := config.Load()
-	if err == nil && cfg.NSSubdomain != "" {
-		proxyURL := mtproxy.FormatProxyURL(secret, cfg.NSSubdomain)
-		fmt.Println()
-		tui.PrintInfo("Telegram Proxy URL:")
-		fmt.Printf("  %s\n", proxyURL)
-		fmt.Println()
-		tui.PrintInfo("Share this URL with Telegram users or scan the QR code.")
+	globalCfg, err := tunnel.LoadGlobalConfig()
+	if err == nil && globalCfg != nil {
+		domainName := ""
+		switch globalCfg.ActiveProvider {
+		case tunnel.ProviderDNSTT:
+			provider, _ := tunnel.Get(tunnel.ProviderDNSTT)
+			if provider != nil {
+				if dnsttCfg, err := provider.GetConfig(); err == nil {
+					mapped := parseConf(dnsttCfg)
+					domainName = mapped["NS Subdomain"]
+				}
+			}
+		case tunnel.ProviderSlipstream:
+			provider, _ := tunnel.Get(tunnel.ProviderSlipstream)
+			if provider != nil {
+				if slipstreamCfg, err := provider.GetConfig(); err == nil {
+					mapped := parseConf(slipstreamCfg)
+					domainName = mapped["Domain"]
+				}
+			}
+		}
+
+		if domainName != "" {
+			proxyURL := mtproxy.FormatProxyURL(secret, domainName)
+			fmt.Println()
+			tui.PrintInfo("Telegram Proxy URL:")
+			fmt.Printf("  %s\n", proxyURL)
+			fmt.Println()
+			tui.PrintInfo("Share this URL with Telegram users or scan the QR code.")
+		} else {
+			fmt.Println()
+			tui.PrintInfo("Note: To generate a proxy URL, configure your DNS subdomain first.")
+		}
 	} else {
 		fmt.Println()
 		tui.PrintInfo("Note: To generate a proxy URL, configure your DNS subdomain first.")
 	}
 
 	return nil
+}
+
+func parseConf(conf string) map[string]string {
+	result := make(map[string]string)
+	lines := strings.Split(conf, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			result[key] = value
+		}
+	}
+	return result
 }
 
 func uninstallMTProxy() error {

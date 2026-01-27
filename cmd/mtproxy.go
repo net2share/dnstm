@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
-	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/menu"
 	"github.com/net2share/dnstm/internal/mtproxy"
+	"github.com/net2share/dnstm/internal/tunnel"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"
 	"github.com/spf13/cobra"
@@ -53,9 +54,36 @@ func runMTProxyInstall(cmd *cobra.Command, args []string) error {
 	menu.BuildTime = BuildTime
 	menu.PrintBanner()
 
-	cfg, err := config.Load()
+	globalCfg, err := tunnel.LoadGlobalConfig()
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return err
+	}
+	domainName := ""
+	if globalCfg != nil {
+		switch globalCfg.ActiveProvider {
+		case tunnel.ProviderDNSTT:
+			provider, err := tunnel.Get(tunnel.ProviderDNSTT)
+			if err != nil {
+				return err
+			}
+			dnsttCfg, err := provider.GetConfig()
+			if err != nil {
+				return err
+			}
+			mapped := parseConf(dnsttCfg)
+			domainName = mapped["NS Subdomain"]
+		case tunnel.ProviderSlipstream:
+			provider, err := tunnel.Get(tunnel.ProviderSlipstream)
+			if err != nil {
+				return err
+			}
+			slipstreamCfg, err := provider.GetConfig()
+			if err != nil {
+				return err
+			}
+			mapped := parseConf(slipstreamCfg)
+			domainName = mapped["Domain"]
+		}
 	}
 	secret, err := mtproxy.GenerateSecret()
 	if err != nil {
@@ -78,7 +106,7 @@ func runMTProxyInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to configure MTProxy: %w", err)
 	}
 
-	proxyUrl := mtproxy.FormatProxyURL(secret, cfg.NSSubdomain)
+	proxyUrl := mtproxy.FormatProxyURL(secret, domainName)
 	tui.PrintBox("MTProxy Installation Complete", []string{
 		fmt.Sprintf("Secret: %s", secret),
 		fmt.Sprintf("Port: %s", mtproxy.MTProxyPort),
@@ -89,6 +117,23 @@ func runMTProxyInstall(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func parseConf(conf string) map[string]string {
+	result := make(map[string]string)
+	lines := strings.Split(conf, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			result[key] = value
+		}
+	}
+	return result
+}
 func runMTProxyUninstall(cmd *cobra.Command, args []string) error {
 	if err := osdetect.RequireRoot(); err != nil {
 		return err
