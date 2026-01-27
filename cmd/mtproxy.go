@@ -53,11 +53,15 @@ func runMTProxyInstall(cmd *cobra.Command, args []string) error {
 	menu.BuildTime = BuildTime
 	menu.PrintBanner()
 
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
 	secret, err := mtproxy.GenerateSecret()
 	if err != nil {
 		return fmt.Errorf("failed to generate secret: %w", err)
 	}
-	tui.PrintInfo(fmt.Sprintf("Generated MTProxy secret: %s", secret))
+	tui.PrintSuccess(fmt.Sprintf("Generated MTProxy secret: %s", secret))
 
 	progressFn := func(downloaded, total int64) {
 		if total > 0 {
@@ -74,18 +78,13 @@ func runMTProxyInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to configure MTProxy: %w", err)
 	}
 
-	cfg, err := config.Load()
-	if err != nil {
-		tui.PrintWarning("Failed to load dnstm config, skipping proxy URL generation")
-	} else {
-		proxyUrl := mtproxy.FormatProxyURL(secret, cfg.NSSubdomain)
-		tui.PrintBox("MTProxy Installation Complete", []string{
-			fmt.Sprintf("Secret: %s", secret),
-			fmt.Sprintf("Port: %s", mtproxy.MTProxyPort),
-			"",
-			fmt.Sprintf("Proxy URL: %s", proxyUrl),
-		})
-	}
+	proxyUrl := mtproxy.FormatProxyURL(secret, cfg.NSSubdomain)
+	tui.PrintBox("MTProxy Installation Complete", []string{
+		fmt.Sprintf("Secret: %s", secret),
+		fmt.Sprintf("Port: %s", mtproxy.MTProxyPort),
+		"",
+		fmt.Sprintf("Proxy URL: %s", proxyUrl),
+	})
 
 	return nil
 }

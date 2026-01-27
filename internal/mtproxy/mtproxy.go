@@ -35,14 +35,12 @@ type Config struct {
 	Port   string
 }
 
-// GenerateSecret generates a random MTProxy secret with dd prefix for random padding
-
 func GenerateSecret() (string, error) {
 	bytes := make([]byte, 16)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", fmt.Errorf("failed to generate random bytes: %w", err)
 	}
-	return fmt.Sprintf("%s", hex.EncodeToString(bytes)), nil
+	return hex.EncodeToString(bytes), nil
 }
 func IsMtProxyInstalled() bool {
 	_, err := os.Stat(filepath.Join(MTProxyInstallationDir, MTPRoxyBinaryName))

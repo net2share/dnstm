@@ -1,14 +1,13 @@
 package dnstt
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"strconv"
 
 	"github.com/charmbracelet/huh"
 	"github.com/net2share/dnstm/internal/download"
+	"github.com/net2share/dnstm/internal/mtproxy"
 	"github.com/net2share/dnstm/internal/network"
 	"github.com/net2share/dnstm/internal/system"
 	"github.com/net2share/dnstm/internal/tunnel"
@@ -426,20 +425,18 @@ func (p *Provider) RunInteractiveInstall() (*tunnel.InstallResult, error) {
 	// Step 4: Set target port based on mode
 	if cfg.TunnelMode == "ssh" {
 		cfg.TargetPort = osdetect.DetectSSHPort()
-	} else if cfg.TunnelMode == "socks" {
-		cfg.TargetPort = "1080"
 	} else if cfg.TunnelMode == "mtproto" {
 		cfg.TargetPort = "8443"
-		// Generate MTProxy secret if not already set
 		if cfg.MTProxySecret == "" {
-			// Import mtproxy package at top of file first
-			secret, err := generateMTProxySecret()
+			secret, err := mtproxy.GenerateSecret()
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate MTProxy secret: %w", err)
 			}
 			cfg.MTProxySecret = secret
 			tui.PrintSuccess(fmt.Sprintf("Generated MTProxy secret: %s", secret))
 		}
+	} else {
+		cfg.TargetPort = "1080"
 	}
 
 	// Set key file paths
@@ -472,15 +469,6 @@ func (p *Provider) RunInteractiveInstall() (*tunnel.InstallResult, error) {
 	}
 
 	return p.performInstallation(cfg)
-}
-
-// generateMTProxySecret generates a random 32-character hex secret with 'dd' prefix
-func generateMTProxySecret() (string, error) {
-	bytes := make([]byte, 16)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("failed to generate random bytes: %w", err)
-	}
-	return "dd" + hex.EncodeToString(bytes), nil
 }
 
 func detectArch() string {
