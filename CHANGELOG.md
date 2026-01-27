@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.0](https://github.com/net2share/dnstm/compare/v0.3.0...v0.4.0) (2026-01-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* add Shadowsocks provider and consolidate user management ([#28](https://github.com/net2share/dnstm/issues/28))
+
+### Features
+
+* add Shadowsocks provider and consolidate user management ([#28](https://github.com/net2share/dnstm/issues/28)) ([fec1b1e](https://github.com/net2share/dnstm/commit/fec1b1e512ea0c2eb4b121cd985975aad2819b39))
+
 ## [0.3.0](https://github.com/net2share/dnstm/compare/v0.2.0...v0.3.0) (2026-01-25)
 
 
