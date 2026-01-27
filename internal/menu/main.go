@@ -9,6 +9,7 @@ import (
 	"github.com/net2share/dnstm/internal/sshtunnel"
 	"github.com/net2share/dnstm/internal/tunnel"
 	_ "github.com/net2share/dnstm/internal/tunnel/dnstt"
+	_ "github.com/net2share/dnstm/internal/tunnel/shadowsocks"
 	_ "github.com/net2share/dnstm/internal/tunnel/slipstream"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"

@@ -6,16 +6,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/net2share/dnstm/internal/system"
 )
 
 const (
-	ConfigDir       = "/etc/dnstt"
-	ConfigFile      = "dnstt-server.conf"
-	Port            = "5300"
-	ReleaseURL      = "https://github.com/net2share/dnstt/releases/download/latest"
-	BinaryName      = "dnstt-server"
-	ServiceName     = "dnstt-server"
-	ServiceUser     = "dnstt"
+	ConfigDir   = "/etc/dnstt"
+	ConfigFile  = "dnstt-server.conf"
+	Port        = "5300"
+	ReleaseURL  = "https://github.com/net2share/dnstt/releases/download/latest"
+	BinaryName  = "dnstt-server"
+	ServiceName = "dnstt-server"
+	ServiceUser = system.DnstmUser
 )
 
 // Config holds the DNSTT server configuration.

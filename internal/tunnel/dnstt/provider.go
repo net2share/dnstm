@@ -117,11 +117,11 @@ func (p *Provider) performInstallation(cfg *Config) (*tunnel.InstallResult, erro
 
 	// Step 2: Create dnstt user
 	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Creating dnstt user...")
+	tui.PrintStep(currentStep, totalSteps, "Creating dnstm user...")
 	if err := system.CreateDnsttUser(); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
-	tui.PrintStatus("User 'dnstt' created")
+	tui.PrintStatus("User 'dnstm' created")
 
 	// Step 3: Generate keys
 	currentStep++
@@ -241,11 +241,15 @@ func (p *Provider) Uninstall() error {
 	network.RemoveFirewallRulesForPort(Port)
 	tui.PrintStatus("Firewall rules removed")
 
-	// Step 5: Remove dnstt user
+	// Step 5: Clean up dnstm user (only if no other providers installed)
 	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Removing dnstt user...")
-	system.RemoveDnsttUser()
-	tui.PrintStatus("User removed")
+	tui.PrintStep(currentStep, totalSteps, "Cleaning up dnstm user...")
+	system.RemoveDnstmUserIfOrphaned(tunnel.AnyInstalled)
+	if system.DnstmUserExists() {
+		tui.PrintStatus("User kept (other providers installed)")
+	} else {
+		tui.PrintStatus("User removed")
+	}
 
 	return nil
 }

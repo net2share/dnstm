@@ -1,4 +1,4 @@
-package slipstream
+package shadowsocks
 
 import (
 	"fmt"
@@ -9,26 +9,27 @@ import (
 	"github.com/net2share/dnstm/internal/network"
 	"github.com/net2share/dnstm/internal/system"
 	"github.com/net2share/dnstm/internal/tunnel"
+	slipstreamPkg "github.com/net2share/dnstm/internal/tunnel/slipstream"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"
 )
 
-// Provider implements the tunnel.Provider interface for Slipstream.
+// Provider implements the tunnel.Provider interface for Shadowsocks.
 type Provider struct{}
 
-// NewProvider creates a new Slipstream provider.
+// NewProvider creates a new Shadowsocks provider.
 func NewProvider() *Provider {
 	return &Provider{}
 }
 
 // Name returns the provider identifier.
 func (p *Provider) Name() tunnel.ProviderType {
-	return tunnel.ProviderSlipstream
+	return tunnel.ProviderShadowsocks
 }
 
 // DisplayName returns a human-readable name.
 func (p *Provider) DisplayName() string {
-	return "Slipstream"
+	return "Shadowsocks-Slipstream (SIP003)"
 }
 
 // Port returns the port this provider listens on.
@@ -39,7 +40,7 @@ func (p *Provider) Port() string {
 // Status returns the current status of the provider.
 func (p *Provider) Status() (*tunnel.ProviderStatus, error) {
 	globalCfg, _ := tunnel.LoadGlobalConfig()
-	isActive := globalCfg != nil && globalCfg.ActiveProvider == tunnel.ProviderSlipstream
+	isActive := globalCfg != nil && globalCfg.ActiveProvider == tunnel.ProviderShadowsocks
 
 	return &tunnel.ProviderStatus{
 		Installed:   p.IsInstalled(),
@@ -50,41 +51,59 @@ func (p *Provider) Status() (*tunnel.ProviderStatus, error) {
 	}, nil
 }
 
-// IsInstalled checks if Slipstream is installed.
+// IsInstalled checks if Shadowsocks is installed.
 func (p *Provider) IsInstalled() bool {
-	return download.IsBinaryInstalled(BinaryName) && IsServiceInstalled()
+	return IsSsserverInstalled() && IsServiceInstalled()
 }
 
-// Install performs the Slipstream installation.
+// Install performs the Shadowsocks installation.
 func (p *Provider) Install(cfg *tunnel.InstallConfig) (*tunnel.InstallResult, error) {
-	// Convert tunnel.InstallConfig to slipstream.Config
-	slipCfg := &Config{
-		Domain:        cfg.Domain,
-		DNSListenPort: Port,
-		TunnelMode:    cfg.TunnelMode,
-		TargetPort:    cfg.TargetPort,
+	// Convert tunnel.InstallConfig to shadowsocks.Config
+	ssCfg := &Config{
+		Domain: cfg.Domain,
+		Method: DefaultMethod,
 	}
 
-	slipCfg.CertFile, slipCfg.KeyFile = GetCertFilenames(slipCfg.Domain)
-	slipCfg.TargetAddress = "127.0.0.1:" + slipCfg.TargetPort
+	// Generate password if not provided
+	password, err := GeneratePassword()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate password: %w", err)
+	}
+	ssCfg.Password = password
 
-	return p.performInstallation(slipCfg)
+	ssCfg.CertFile, ssCfg.KeyFile = GetCertFilenames(ssCfg.Domain)
+
+	return p.performInstallation(ssCfg)
 }
 
 func (p *Provider) performInstallation(cfg *Config) (*tunnel.InstallResult, error) {
-	archInfo := detectArch()
-
-	totalSteps := 6
+	totalSteps := 8
 	currentStep := 0
 
-	// Step 1: Download slipstream-server
+	// Step 1: Download ssserver
 	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Downloading slipstream-server binary...")
+	tui.PrintStep(currentStep, totalSteps, "Downloading ssserver binary...")
 
-	if !download.IsBinaryInstalled(BinaryName) {
+	if !IsSsserverInstalled() {
+		if err := DownloadShadowsocks(tui.PrintProgress); err != nil {
+			tui.ClearLine()
+			return nil, fmt.Errorf("download failed: %w", err)
+		}
+		tui.ClearLine()
+	}
+	tui.PrintStatus("ssserver binary installed")
+
+	// Step 2: Download slipstream-server if not already installed
+	currentStep++
+	tui.PrintStep(currentStep, totalSteps, "Checking slipstream-server binary...")
+
+	if !download.IsBinaryInstalled(SlipstreamBin) {
+		tui.PrintStep(currentStep, totalSteps, "Downloading slipstream-server binary...")
+
+		archInfo := detectArch()
 		binCfg := &download.BinaryConfig{
-			BaseURL:      ReleaseURL,
-			BinaryName:   BinaryName,
+			BaseURL:      slipstreamPkg.ReleaseURL,
+			BinaryName:   SlipstreamBin,
 			Arch:         archInfo,
 			ChecksumFile: "SHA256SUMS",
 		}
@@ -94,38 +113,38 @@ func (p *Provider) performInstallation(cfg *Config) (*tunnel.InstallResult, erro
 		tmpPath, err := download.DownloadBinary(binCfg, tui.PrintProgress)
 		tui.ClearLine()
 		if err != nil {
-			return nil, fmt.Errorf("download failed: %w", err)
+			return nil, fmt.Errorf("slipstream download failed: %w", err)
 		}
 
 		if checksums.SHA256 != "" {
 			if err := download.VerifyChecksums(tmpPath, checksums); err != nil {
 				os.Remove(tmpPath)
-				return nil, fmt.Errorf("checksum verification failed: %w", err)
+				return nil, fmt.Errorf("slipstream checksum verification failed: %w", err)
 			}
-			tui.PrintStatus("Checksum verified")
+			tui.PrintStatus("Slipstream checksum verified")
 		}
 
-		if err := download.InstallBinaryAs(tmpPath, BinaryName); err != nil {
-			return nil, fmt.Errorf("installation failed: %w", err)
+		if err := download.InstallBinaryAs(tmpPath, SlipstreamBin); err != nil {
+			return nil, fmt.Errorf("slipstream installation failed: %w", err)
 		}
 	}
 	tui.PrintStatus("slipstream-server binary installed")
 
-	// Step 2: Create slipstream user
+	// Step 3: Create shadowsocks user
 	currentStep++
 	tui.PrintStep(currentStep, totalSteps, "Creating dnstm user...")
-	if err := system.CreateSlipstreamUser(); err != nil {
+	if err := system.CreateShadowsocksUser(); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 	tui.PrintStatus("User 'dnstm' created")
 
-	// Step 3: Generate TLS certificate
+	// Step 4: Generate TLS certificate
 	currentStep++
 	tui.PrintStep(currentStep, totalSteps, "Generating TLS certificate...")
 
 	var fingerprint string
 	var err error
-	if CertsExist(cfg.CertFile, cfg.KeyFile) {
+	if slipstreamPkg.CertsExist(cfg.CertFile, cfg.KeyFile) {
 		var regenerate bool
 		huh.NewConfirm().
 			Title("Certificates already exist. Regenerate?").
@@ -133,30 +152,45 @@ func (p *Provider) performInstallation(cfg *Config) (*tunnel.InstallResult, erro
 			Run()
 
 		if regenerate {
-			fingerprint, err = GenerateCertificate(cfg.CertFile, cfg.KeyFile, cfg.Domain)
+			fingerprint, err = slipstreamPkg.GenerateCertificate(cfg.CertFile, cfg.KeyFile, cfg.Domain)
 			if err != nil {
 				return nil, fmt.Errorf("certificate generation failed: %w", err)
 			}
 		} else {
-			fingerprint, _ = ReadCertificateFingerprint(cfg.CertFile)
+			fingerprint, _ = slipstreamPkg.ReadCertificateFingerprint(cfg.CertFile)
 		}
 	} else {
-		fingerprint, err = GenerateCertificate(cfg.CertFile, cfg.KeyFile, cfg.Domain)
+		fingerprint, err = slipstreamPkg.GenerateCertificate(cfg.CertFile, cfg.KeyFile, cfg.Domain)
 		if err != nil {
 			return nil, fmt.Errorf("certificate generation failed: %w", err)
 		}
 	}
 	tui.PrintStatus("TLS certificate generated")
 
-	// Step 4: Save configuration
+	// Step 5: Generate password if not set
+	currentStep++
+	tui.PrintStep(currentStep, totalSteps, "Generating secure password...")
+	if cfg.Password == "" {
+		password, err := GeneratePassword()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate password: %w", err)
+		}
+		cfg.Password = password
+	}
+	tui.PrintStatus("Password configured")
+
+	// Step 6: Save configuration
 	currentStep++
 	tui.PrintStep(currentStep, totalSteps, "Saving configuration...")
 	if err := cfg.Save(); err != nil {
 		return nil, fmt.Errorf("failed to save config: %w", err)
 	}
+	if err := cfg.WriteSSConfig(); err != nil {
+		return nil, fmt.Errorf("failed to write shadowsocks config: %w", err)
+	}
 	tui.PrintStatus("Configuration saved")
 
-	// Step 5: Configure firewall
+	// Step 7: Configure firewall
 	currentStep++
 	tui.PrintStep(currentStep, totalSteps, "Configuring firewall...")
 	if err := network.ConfigureFirewallForPort(Port); err != nil {
@@ -170,7 +204,7 @@ func (p *Provider) performInstallation(cfg *Config) (*tunnel.InstallResult, erro
 		tui.PrintStatus("IPv6 rules configured")
 	}
 
-	// Step 6: Create and start systemd service
+	// Step 8: Create and start systemd service
 	currentStep++
 	tui.PrintStep(currentStep, totalSteps, "Creating systemd service...")
 
@@ -192,16 +226,16 @@ func (p *Provider) performInstallation(cfg *Config) (*tunnel.InstallResult, erro
 	tui.PrintStatus("Service started")
 
 	// Update global config to set this as active provider
-	tunnel.SetActiveProvider(tunnel.ProviderSlipstream)
+	tunnel.SetActiveProvider(tunnel.ProviderShadowsocks)
 
 	return &tunnel.InstallResult{
 		Fingerprint: fingerprint,
 		Domain:      cfg.Domain,
-		TunnelMode:  cfg.TunnelMode,
+		TunnelMode:  "shadowsocks",
 	}, nil
 }
 
-// Uninstall removes Slipstream.
+// Uninstall removes Shadowsocks.
 func (p *Provider) Uninstall() error {
 	totalSteps := 5
 	currentStep := 0
@@ -218,15 +252,15 @@ func (p *Provider) Uninstall() error {
 	Remove()
 	tui.PrintStatus("Service removed")
 
-	// Step 2: Remove binary
+	// Step 2: Remove ssserver binary
 	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Removing slipstream-server binary...")
-	download.RemoveBinaryByName(BinaryName)
+	tui.PrintStep(currentStep, totalSteps, "Removing ssserver binary...")
+	RemoveSsserver()
 	tui.PrintStatus("Binary removed")
 
-	// Step 3: Remove configuration and certificates
+	// Step 3: Remove configuration
 	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Removing configuration and certificates...")
+	tui.PrintStep(currentStep, totalSteps, "Removing configuration...")
 	RemoveAll()
 	tui.PrintStatus("Configuration removed")
 
@@ -249,17 +283,17 @@ func (p *Provider) Uninstall() error {
 	return nil
 }
 
-// Start starts the Slipstream service.
+// Start starts the Shadowsocks service.
 func (p *Provider) Start() error {
 	return Start()
 }
 
-// Stop stops the Slipstream service.
+// Stop stops the Shadowsocks service.
 func (p *Provider) Stop() error {
 	return Stop()
 }
 
-// Restart restarts the Slipstream service.
+// Restart restarts the Shadowsocks service.
 func (p *Provider) Restart() error {
 	return Restart()
 }
@@ -279,9 +313,9 @@ func (p *Provider) GetConfig() (string, error) {
 	result := cfg.GetFormattedConfig()
 
 	if cfg.CertFile != "" {
-		fingerprint, err := ReadCertificateFingerprint(cfg.CertFile)
+		fingerprint, err := slipstreamPkg.ReadCertificateFingerprint(cfg.CertFile)
 		if err == nil {
-			result += fmt.Sprintf("\nCertificate SHA256 Fingerprint:\n%s\n", FormatFingerprint(fingerprint))
+			result += fmt.Sprintf("\nCertificate SHA256 Fingerprint:\n%s\n", slipstreamPkg.FormatFingerprint(fingerprint))
 		}
 	}
 
@@ -308,13 +342,12 @@ func (p *Provider) RunInteractiveInstall() (*tunnel.InstallResult, error) {
 	cfg, err := Load()
 	if err != nil {
 		cfg = &Config{
-			DNSListenPort: Port,
-			TunnelMode:    "ssh",
+			Method: DefaultMethod,
 		}
 	}
 
 	fmt.Println()
-	tui.PrintInfo("Starting Slipstream installation wizard...")
+	tui.PrintInfo("Starting Shadowsocks installation wizard...")
 	fmt.Println()
 
 	// Step 1: Get domain (loop until valid)
@@ -346,63 +379,63 @@ func (p *Provider) RunInteractiveInstall() (*tunnel.InstallResult, error) {
 		break
 	}
 
-	// Step 2: Get tunnel mode (pre-select current if reconfiguring)
-	tunnelMode := cfg.TunnelMode
-	if tunnelMode == "" {
-		tunnelMode = "ssh"
+	// Step 2: Get encryption method
+	method := cfg.Method
+	if method == "" {
+		method = DefaultMethod
 	}
 	err = huh.NewSelect[string]().
-		Title("Tunnel Mode").
+		Title("Encryption Method").
 		Options(
-			huh.NewOption("SSH Tunnel", "ssh"),
-			huh.NewOption("SOCKS Proxy (Legacy)", "socks"),
+			huh.NewOption("AES-256-GCM (Recommended)", "aes-256-gcm"),
+			huh.NewOption("ChaCha20-IETF-Poly1305", "chacha20-ietf-poly1305"),
+			huh.NewOption("AES-128-GCM", "aes-128-gcm"),
 		).
-		Value(&tunnelMode).
+		Value(&method).
 		Run()
 	if err != nil {
 		return nil, err
 	}
+	cfg.Method = method
 
-	// Warn about SOCKS mode fingerprinting
-	if tunnelMode == "socks" {
-		tui.PrintWarning("SOCKS mode has more obvious fingerprints on network traffic.")
-		tui.PrintWarning("It is recommended only for temporary use or testing/debugging.")
-		fmt.Println()
-
-		confirmSocks := false
-		err = huh.NewConfirm().
-			Title("Are you sure you want to use SOCKS mode?").
-			Affirmative("Yes").
-			Negative("No").
-			Value(&confirmSocks).
-			Run()
-		if err != nil {
-			return nil, err
-		}
-		if !confirmSocks {
-			tunnelMode = "ssh"
-			tui.PrintInfo("Switched to SSH tunnel mode")
-		}
-	}
-	cfg.TunnelMode = tunnelMode
-
-	// Step 3: Set target port based on mode
-	if cfg.TunnelMode == "ssh" {
-		cfg.TargetPort = osdetect.DetectSSHPort()
+	// Step 3: Get password (optional, auto-generate by default)
+	currentPassword := cfg.Password
+	var password string
+	input := huh.NewInput().
+		Title("Password").
+		Value(&password)
+	if currentPassword != "" {
+		input.Description("Current: (hidden) - press Enter to keep, or enter new password").
+			Placeholder("(keep current)")
 	} else {
-		cfg.TargetPort = "1080"
+		input.Description("Leave empty to auto-generate secure password")
 	}
-
-	cfg.TargetAddress = "127.0.0.1:" + cfg.TargetPort
+	err = input.Run()
+	if err != nil {
+		return nil, err
+	}
+	if password == "" {
+		if currentPassword != "" {
+			password = currentPassword
+		} else {
+			// Auto-generate
+			password, err = GeneratePassword()
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate password: %w", err)
+			}
+			tui.PrintInfo("Password will be auto-generated")
+		}
+	}
+	cfg.Password = password
 
 	// Set cert file paths
 	cfg.CertFile, cfg.KeyFile = GetCertFilenames(cfg.Domain)
 
 	// Show summary before confirmation
 	summaryLines := []string{
-		tui.KV("Domain:        ", cfg.Domain),
-		tui.KV("Tunnel Mode:   ", cfg.TunnelMode),
-		tui.KV("Target Port:   ", cfg.TargetPort),
+		tui.KV("Domain:     ", cfg.Domain),
+		tui.KV("Method:     ", cfg.Method),
+		tui.KV("Password:   ", "(configured)"),
 	}
 	tui.PrintBox("Installation Summary", summaryLines)
 

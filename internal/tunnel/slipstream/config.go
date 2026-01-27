@@ -6,16 +6,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/net2share/dnstm/internal/system"
 )
 
 const (
-	ConfigDir       = "/etc/slipstream"
-	ConfigFile      = "slipstream-server.conf"
-	Port            = "5301"
-	ReleaseURL      = "https://github.com/net2share/slipstream-rust-build/releases/download/latest"
-	BinaryName      = "slipstream-server"
-	ServiceName     = "slipstream-server"
-	ServiceUser     = "slipstream"
+	ConfigDir   = "/etc/slipstream"
+	ConfigFile  = "slipstream-server.conf"
+	Port        = "5301"
+	ReleaseURL  = "https://github.com/net2share/slipstream-rust-build/releases/download/latest"
+	BinaryName  = "slipstream-server"
+	ServiceName = "slipstream-server"
+	ServiceUser = system.DnstmUser
 )
 
 // Config holds the Slipstream server configuration.

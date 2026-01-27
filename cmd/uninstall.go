@@ -7,6 +7,7 @@ import (
 	"github.com/net2share/dnstm/internal/menu"
 	"github.com/net2share/dnstm/internal/tunnel"
 	_ "github.com/net2share/dnstm/internal/tunnel/dnstt"
+	_ "github.com/net2share/dnstm/internal/tunnel/shadowsocks"
 	_ "github.com/net2share/dnstm/internal/tunnel/slipstream"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"
@@ -16,7 +17,7 @@ import (
 var uninstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "Uninstall a DNS tunnel provider",
-	Long:  "Uninstall a DNS tunnel provider (dnstt or slipstream)",
+	Long:  "Uninstall a DNS tunnel provider (dnstt, slipstream, or shadowsocks)",
 }
 
 var uninstallDnsttCmd = &cobra.Command{
@@ -33,9 +34,17 @@ var uninstallSlipstreamCmd = &cobra.Command{
 	RunE:  runUninstallSlipstream,
 }
 
+var uninstallShadowsocksCmd = &cobra.Command{
+	Use:   "shadowsocks",
+	Short: "Uninstall Shadowsocks server",
+	Long:  "Completely remove the Shadowsocks DNS tunnel server",
+	RunE:  runUninstallShadowsocks,
+}
+
 func init() {
 	uninstallCmd.AddCommand(uninstallDnsttCmd)
 	uninstallCmd.AddCommand(uninstallSlipstreamCmd)
+	uninstallCmd.AddCommand(uninstallShadowsocksCmd)
 }
 
 func runUninstallDnstt(cmd *cobra.Command, args []string) error {
@@ -44,6 +53,10 @@ func runUninstallDnstt(cmd *cobra.Command, args []string) error {
 
 func runUninstallSlipstream(cmd *cobra.Command, args []string) error {
 	return runUninstallProvider(cmd, tunnel.ProviderSlipstream)
+}
+
+func runUninstallShadowsocks(cmd *cobra.Command, args []string) error {
+	return runUninstallProvider(cmd, tunnel.ProviderShadowsocks)
 }
 
 func runUninstallProvider(cmd *cobra.Command, pt tunnel.ProviderType) error {
