@@ -5,7 +5,7 @@ go 1.23.0
 require (
 	github.com/charmbracelet/huh v0.8.0
 	github.com/net2share/go-corelib v0.1.1
-	github.com/net2share/sshtun-user v0.3.2
+	github.com/net2share/sshtun-user v0.3.3
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.18.0
 )

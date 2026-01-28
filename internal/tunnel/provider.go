@@ -5,8 +5,9 @@ package tunnel
 type ProviderType string
 
 const (
-	ProviderDNSTT      ProviderType = "dnstt"
-	ProviderSlipstream ProviderType = "slipstream"
+	ProviderDNSTT       ProviderType = "dnstt"
+	ProviderSlipstream  ProviderType = "slipstream"
+	ProviderShadowsocks ProviderType = "shadowsocks"
 )
 
 // ProviderStatus represents the installation and runtime status of a provider.

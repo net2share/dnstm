@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/net2share/dnstm/internal/system"
 )
 
 const (
@@ -15,7 +17,7 @@ const (
 	ReleaseURL  = "https://github.com/net2share/slipstream-rust-build/releases/download/latest"
 	BinaryName  = "slipstream-server"
 	ServiceName = "slipstream-server"
-	ServiceUser = "slipstream"
+	ServiceUser = system.DnstmUser
 )
 
 // Config holds the Slipstream server configuration.

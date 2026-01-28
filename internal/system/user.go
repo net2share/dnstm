@@ -7,8 +7,13 @@ import (
 )
 
 const (
-	DnsttUser      = "dnstt"
-	SlipstreamUser = "slipstream"
+	// DnstmUser is the shared system user for all dnstm services.
+	DnstmUser = "dnstm"
+
+	// Legacy user constants for backward compatibility
+	DnsttUser       = DnstmUser
+	SlipstreamUser  = DnstmUser
+	ShadowsocksUser = DnstmUser
 )
 
 // CreateSystemUser creates a system user with no home directory and nologin shell.
@@ -46,6 +51,31 @@ func RemoveSystemUser(username string) {
 	exec.Command("userdel", username).Run()
 }
 
+// CreateDnstmUser creates the shared dnstm system user.
+func CreateDnstmUser() error {
+	return CreateSystemUser(DnstmUser)
+}
+
+// DnstmUserExists checks if the dnstm user exists.
+func DnstmUserExists() bool {
+	return UserExists(DnstmUser)
+}
+
+// RemoveDnstmUserIfOrphaned removes the dnstm user only if no providers are installed.
+// This should be called during uninstall instead of provider-specific remove functions.
+func RemoveDnstmUserIfOrphaned(checkInstalled func() bool) {
+	if checkInstalled() {
+		// At least one provider is still installed, keep the user
+		return
+	}
+	RemoveSystemUser(DnstmUser)
+}
+
+// RemoveDnstmUser removes the dnstm user unconditionally.
+func RemoveDnstmUser() {
+	RemoveSystemUser(DnstmUser)
+}
+
 // CreateDnsttUser creates the dnstt system user (backward compatible wrapper).
 func CreateDnsttUser() error {
 	return CreateSystemUser(DnsttUser)
@@ -74,4 +104,19 @@ func SlipstreamUserExists() bool {
 // RemoveSlipstreamUser removes the slipstream user.
 func RemoveSlipstreamUser() {
 	RemoveSystemUser(SlipstreamUser)
+}
+
+// CreateShadowsocksUser creates the shadowsocks system user.
+func CreateShadowsocksUser() error {
+	return CreateSystemUser(ShadowsocksUser)
+}
+
+// ShadowsocksUserExists checks if the shadowsocks user exists.
+func ShadowsocksUserExists() bool {
+	return UserExists(ShadowsocksUser)
+}
+
+// RemoveShadowsocksUser removes the shadowsocks user.
+func RemoveShadowsocksUser() {
+	RemoveSystemUser(ShadowsocksUser)
 }

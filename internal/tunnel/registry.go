@@ -52,9 +52,14 @@ func GetInstalled() []Provider {
 	return providers
 }
 
+// AnyInstalled returns true if any provider is installed.
+func AnyInstalled() bool {
+	return len(GetInstalled()) > 0
+}
+
 // Types returns all available provider types.
 func Types() []ProviderType {
-	return []ProviderType{ProviderSlipstream, ProviderDNSTT}
+	return []ProviderType{ProviderShadowsocks, ProviderSlipstream, ProviderDNSTT}
 }
 
 // ParseProviderType parses a string into a ProviderType.
@@ -64,7 +69,9 @@ func ParseProviderType(s string) (ProviderType, error) {
 		return ProviderDNSTT, nil
 	case "slipstream":
 		return ProviderSlipstream, nil
+	case "shadowsocks":
+		return ProviderShadowsocks, nil
 	default:
-		return "", fmt.Errorf("unknown provider: %s (valid: dnstt, slipstream)", s)
+		return "", fmt.Errorf("unknown provider: %s (valid: dnstt, slipstream, shadowsocks)", s)
 	}
 }

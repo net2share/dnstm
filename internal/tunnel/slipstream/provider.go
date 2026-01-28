@@ -114,11 +114,11 @@ func (p *Provider) performInstallation(cfg *Config) (*tunnel.InstallResult, erro
 
 	// Step 2: Create slipstream user
 	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Creating slipstream user...")
+	tui.PrintStep(currentStep, totalSteps, "Creating dnstm user...")
 	if err := system.CreateSlipstreamUser(); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
-	tui.PrintStatus("User 'slipstream' created")
+	tui.PrintStatus("User 'dnstm' created")
 
 	// Step 3: Generate TLS certificate
 	currentStep++
@@ -187,7 +187,8 @@ func (p *Provider) performInstallation(cfg *Config) (*tunnel.InstallResult, erro
 		return nil, fmt.Errorf("failed to enable service: %w", err)
 	}
 
-	if err := Start(); err != nil {
+	// Use Restart instead of Start to apply config changes if service is already running
+	if err := Restart(); err != nil {
 		return nil, fmt.Errorf("failed to start service: %w", err)
 	}
 	tui.PrintStatus("Service started")
@@ -238,11 +239,15 @@ func (p *Provider) Uninstall() error {
 	network.RemoveFirewallRulesForPort(Port)
 	tui.PrintStatus("Firewall rules removed")
 
-	// Step 5: Remove slipstream user
+	// Step 5: Clean up dnstm user (only if no other providers installed)
 	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Removing slipstream user...")
-	system.RemoveSlipstreamUser()
-	tui.PrintStatus("User removed")
+	tui.PrintStep(currentStep, totalSteps, "Cleaning up dnstm user...")
+	system.RemoveDnstmUserIfOrphaned(tunnel.AnyInstalled)
+	if system.DnstmUserExists() {
+		tui.PrintStatus("User kept (other providers installed)")
+	} else {
+		tui.PrintStatus("User removed")
+	}
 
 	return nil
 }

@@ -42,6 +42,7 @@ func init() {
 	rootCmd.AddCommand(sshUsersCmd)
 	rootCmd.AddCommand(socksCmd)
 	rootCmd.AddCommand(mtproxyCmd)
+	rootCmd.AddCommand(shadowsocksCmd)
 }
 
 // Execute runs the root command.

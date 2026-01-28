@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/net2share/dnstm/internal/system"
 )
 
 const (
@@ -15,7 +17,7 @@ const (
 	ReleaseURL  = "https://github.com/net2share/dnstt/releases/download/latest"
 	BinaryName  = "dnstt-server"
 	ServiceName = "dnstt-server"
-	ServiceUser = "dnstt"
+	ServiceUser = system.DnstmUser
 )
 
 // Config holds the DNSTT server configuration.

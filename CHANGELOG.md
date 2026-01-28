@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.1](https://github.com/net2share/dnstm/compare/v0.4.0...v0.4.1) (2026-01-27)
+
+
+### Bug Fixes
+
+* prefer glibc microsocks build and restart services on reconfig ([#30](https://github.com/net2share/dnstm/issues/30)) ([f8d8138](https://github.com/net2share/dnstm/commit/f8d8138f19d6d13d0404216953d171cd377cb423))
+
+## [0.4.0](https://github.com/net2share/dnstm/compare/v0.3.0...v0.4.0) (2026-01-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* add Shadowsocks provider and consolidate user management ([#28](https://github.com/net2share/dnstm/issues/28))
+
+### Features
+
+* add Shadowsocks provider and consolidate user management ([#28](https://github.com/net2share/dnstm/issues/28)) ([fec1b1e](https://github.com/net2share/dnstm/commit/fec1b1e512ea0c2eb4b121cd985975aad2819b39))
+
 ## [0.3.0](https://github.com/net2share/dnstm/compare/v0.2.0...v0.3.0) (2026-01-25)
 
 
