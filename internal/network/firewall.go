@@ -8,9 +8,8 @@ import (
 )
 
 const (
-	DnsttPort       = "5300"
-	SlipstreamPort  = "5301"
-	ShadowsocksPort = "5302"
+	DnsttPort      = "5300"
+	SlipstreamPort = "5301"
 )
 
 type FirewallType int
@@ -331,18 +330,14 @@ func RemoveAllFirewallRules() {
 	case FirewallFirewalld:
 		removeFirewalldRulesForPort(DnsttPort)
 		removeFirewalldRulesForPort(SlipstreamPort)
-		removeFirewalldRulesForPort(ShadowsocksPort)
 	case FirewallUFW:
 		removeUFWRulesForPort(DnsttPort)
 		removeUFWRulesForPort(SlipstreamPort)
-		removeUFWRulesForPort(ShadowsocksPort)
 	case FirewallIptables, FirewallNone:
 		clearIptablesRulesForPort(DnsttPort)
 		clearIptablesRulesForPort(SlipstreamPort)
-		clearIptablesRulesForPort(ShadowsocksPort)
 		clearIp6tablesRulesForPort(DnsttPort)
 		clearIp6tablesRulesForPort(SlipstreamPort)
-		clearIp6tablesRulesForPort(ShadowsocksPort)
 		saveIptablesRules()
 	}
 }
