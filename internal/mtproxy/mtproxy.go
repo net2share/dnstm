@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	MTPRoxyBinaryName      = "mtproto-proxy"
+	MTProxyBinaryName      = "mtproto-proxy"
 	MTProxyServiceName     = "mtproxy"
 	MTProxyPort            = "8443"
 	MTProxyStatsPort       = "8888"
@@ -30,11 +30,6 @@ const (
 	ProxyConfigURL = "https://core.telegram.org/getProxyConfig"
 )
 
-type Config struct {
-	Secret string
-	Port   string
-}
-
 func GenerateSecret() (string, error) {
 	bytes := make([]byte, 16)
 	if _, err := rand.Read(bytes); err != nil {
@@ -43,12 +38,12 @@ func GenerateSecret() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 func IsMTProxyInstalled() bool {
-	_, err := os.Stat(filepath.Join(MTProxyInstallationDir, MTPRoxyBinaryName))
+	_, err := os.Stat(filepath.Join(MTProxyInstallationDir, MTProxyBinaryName))
 	return err == nil
 }
 
 func InstallMTProxy(secret string, progressFn func(downloaded, total int64)) error {
-	binaryPath := filepath.Join(MTProxyInstallationDir, MTPRoxyBinaryName)
+	binaryPath := filepath.Join(MTProxyInstallationDir, MTProxyBinaryName)
 
 	// Check if binary exists and build if needed
 	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
@@ -126,7 +121,7 @@ func healthCheckPorts(ports []string) error {
 
 func ConfigureMTProxy(secret string) error {
 	configPath := filepath.Join(MTProxyConfigDir, "proxy-multi.conf")
-	binaryPath := filepath.Join(MTProxyInstallationDir, MTPRoxyBinaryName)
+	binaryPath := filepath.Join(MTProxyInstallationDir, MTProxyBinaryName)
 
 	if err := registerConfigCronJob(configPath); err != nil {
 		tui.PrintWarning("Failed to register config update cron job: " + err.Error())
@@ -364,13 +359,13 @@ func UninstallMTProxy() error {
 	}
 	service.RemoveService(MTProxyServiceName)
 
-	if err := os.Remove(filepath.Join(MTProxyInstallationDir, MTPRoxyBinaryName)); err != nil {
-		return fmt.Errorf("failed to remove installation dir: %w", err)
+	if err := os.Remove(filepath.Join(MTProxyInstallationDir, MTProxyBinaryName)); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove MTProxy binary: %w", err)
 	}
 	if err := os.RemoveAll(MTProxyConfigDir); err != nil {
 		return fmt.Errorf("failed to remove config dir: %w", err)
 	}
-	if err := os.Remove("/etc/cron.daily/mtproxy-update-config"); err != nil {
+	if err := os.Remove("/etc/cron.daily/mtproxy-update-config"); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove cron job: %w", err)
 	}
 

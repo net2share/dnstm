@@ -68,6 +68,9 @@ func runMTProxyInstall(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to generate secret: %w", err)
 		}
 		tui.PrintSuccess(fmt.Sprintf("Generated new MTProxy secret: %s", secret))
+		if err := setConfigSecret(secret); err != nil {
+			return fmt.Errorf("failed to set MTProxy secret in provider config: %w", err)
+		}
 	}
 
 	progressFn := func(downloaded, total int64) {
@@ -123,6 +126,39 @@ func getProviderInfo() (domain, secret string) {
 	}
 
 	return domain, secret
+}
+
+func setConfigSecret(secret string) error {
+	globalCfg, err := tunnel.LoadGlobalConfig()
+	if err != nil || globalCfg == nil {
+		return fmt.Errorf("failed to load global config")
+	}
+
+	switch globalCfg.ActiveProvider {
+	case tunnel.ProviderDNSTT:
+		cfg, err := dnstt.Load()
+		if err != nil {
+			return fmt.Errorf("failed to load DNSTT config: %w", err)
+		}
+		cfg.MTProxySecret = secret
+		if err := cfg.Save(); err != nil {
+			return fmt.Errorf("failed to save DNSTT config: %w", err)
+		}
+
+	case tunnel.ProviderSlipstream:
+		cfg, err := slipstream.Load()
+		if err != nil {
+			return fmt.Errorf("failed to load Slipstream config: %w", err)
+		}
+		cfg.MTProxySecret = secret
+		if err := cfg.Save(); err != nil {
+			return fmt.Errorf("failed to save Slipstream config: %w", err)
+		}
+	default:
+		return fmt.Errorf("no active provider to set secret for")
+	}
+
+	return nil
 }
 
 func runMTProxyUninstall(cmd *cobra.Command, args []string) error {

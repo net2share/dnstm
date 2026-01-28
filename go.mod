@@ -46,8 +46,4 @@ require (
 	moul.io/banner v1.0.1 // indirect
 	moul.io/climan v1.0.0 // indirect
 	moul.io/golang-repo-template v1.37.2 // indirect
-	moul.io/motd v1.0.0 // indirect
-	moul.io/srand v1.6.1 // indirect
-	moul.io/u v1.27.0 // indirect
-	moul.io/zapconfig v1.4.0 // indirect
 )
