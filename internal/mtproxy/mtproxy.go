@@ -59,7 +59,7 @@ func InstallMTProxy(secret string, progressFn func(downloaded, total int64)) err
 			return fmt.Errorf("failed to build MTProxy from source: %w", err)
 		}
 
-		if err := os.Chmod(tmpFile, 0755); err != nil {
+		if err := os.Chmod(tmpFile, 0644); err != nil {
 			return fmt.Errorf("failed to set executable permission: %w", err)
 		}
 
@@ -72,7 +72,7 @@ func InstallMTProxy(secret string, progressFn func(downloaded, total int64)) err
 	}
 
 	// Always ensure config directory and files exist
-	if err := os.MkdirAll(MTProxyConfigDir, 0755); err != nil {
+	if err := os.MkdirAll(MTProxyConfigDir, 0644); err != nil {
 		return fmt.Errorf("failed to create MTProxy config directory: %w", err)
 	}
 
@@ -175,17 +175,12 @@ func ConfigureMTProxy(secret string) error {
 }
 
 func FormatProxyURL(secret, nsSubdomain string) string {
-	return fmt.Sprintf("https://t.me/proxy?server=%s&port=%s&secret=%s", nsSubdomain, MTProxyPort, secret)
+	return fmt.Sprintf("https://t.me/proxy?server=%s&port=%s&secret=dd%s", nsSubdomain, MTProxyPort, secret)
 }
 
 func buildFromSource(progressFn func(downloaded, total int64), tmpDir string) error {
 	if err := installBuildDeps(); err != nil {
 		return fmt.Errorf("failed to install build dependencies: %w", err)
-	}
-
-	// remove the tmp dir if exists
-	if _, err := os.Stat(tmpDir); err == nil {
-		os.RemoveAll(tmpDir)
 	}
 
 	tui.PrintStatus("Cloning MTProxy repository...")
@@ -280,7 +275,7 @@ systemctl restart mtproxy
 
 	cronPath := "/etc/cron.daily/mtproxy-update-config"
 	if _, err := os.Stat(cronPath); os.IsNotExist(err) {
-		if err := os.WriteFile(cronPath, []byte(cronContent), 0755); err != nil {
+		if err := os.WriteFile(cronPath, []byte(cronContent), 0644); err != nil {
 			return fmt.Errorf("failed to write cron file: %w", err)
 		}
 		tui.PrintSuccess("MTProxy config update cron job created")
