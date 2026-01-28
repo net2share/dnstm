@@ -25,7 +25,7 @@ const (
 	MTProxyInstallationDir = "/usr/local/bin"
 	MTProxyConfigDir       = "/etc/mtproxy"
 	MTProxyUser            = "mtproxy"
-	MTProxyRepo            = "TelegramMessenger/MTProxy"
+	MTProxyRepo            = "GetPageSpeed/MTProxy" // community fork of Telegram/MTProxy
 	ProxySecretURL         = "https://core.telegram.org/getProxySecret"
 	ProxyConfigURL         = "https://core.telegram.org/getProxyConfig"
 )
@@ -199,6 +199,7 @@ func buildFromSource(progressFn func(downloaded, total int64), tmpDir string) er
 		return fmt.Errorf("failed to clone repository: %w\n%s", err, output)
 	}
 	tui.PrintSuccess("Repository cloned, building MTProxy...")
+
 	cmd = exec.Command("make")
 	cmd.Dir = tmpDir
 	if output, err := cmd.CombinedOutput(); err != nil {
