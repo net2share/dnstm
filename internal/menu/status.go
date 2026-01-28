@@ -119,7 +119,7 @@ func buildMicrosocksStatusString() string {
 func buildMTProxyStatusString() string {
 	boldName := bold + "MTProxy:" + reset
 
-	if !mtproxy.IsMtProxyInstalled() {
+	if !mtproxy.IsMTProxyInstalled() {
 		return fmt.Sprintf("  %s Not installed", boldName)
 	}
 

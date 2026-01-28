@@ -16,7 +16,7 @@ func RunMTProxyMenu() error {
 	for {
 		fmt.Println()
 
-		installed := mtproxy.IsMtProxyInstalled()
+		installed := mtproxy.IsMTProxyInstalled()
 		running := mtproxy.IsMTProxyRunning()
 
 		tui.PrintInfo(fmt.Sprintf("Status: %s", getMTProxyStatusLine(installed, running)))
@@ -88,7 +88,7 @@ func handleMTProxyChoice(choice string) error {
 func installMTProxy() error {
 	fmt.Println()
 
-	isReinstall := mtproxy.IsMtProxyInstalled()
+	isReinstall := mtproxy.IsMTProxyInstalled()
 	domainName, existingSecret := getProviderInfo()
 
 	var secret string
@@ -214,7 +214,7 @@ func restartMTProxy() error {
 func showMTProxyStatus() {
 	fmt.Println()
 
-	installed := mtproxy.IsMtProxyInstalled()
+	installed := mtproxy.IsMTProxyInstalled()
 	running := mtproxy.IsMTProxyRunning()
 
 	tui.PrintInfo("MTProxy Status:")

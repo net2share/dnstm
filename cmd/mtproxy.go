@@ -136,7 +136,7 @@ func runMTProxyUninstall(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 
-	if !mtproxy.IsMtProxyInstalled() {
+	if !mtproxy.IsMTProxyInstalled() {
 		tui.PrintInfo("MTProxy is not installed")
 		return nil
 	}
@@ -161,7 +161,7 @@ func runMTProxyStatus(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 
-	installed := mtproxy.IsMtProxyInstalled()
+	installed := mtproxy.IsMTProxyInstalled()
 	running := mtproxy.IsMTProxyRunning()
 
 	lines := []string{

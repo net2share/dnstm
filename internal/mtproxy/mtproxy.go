@@ -24,10 +24,10 @@ const (
 	MTProxyStatsPort       = "8888"
 	MTProxyInstallationDir = "/usr/local/bin"
 	MTProxyConfigDir       = "/etc/mtproxy"
-	MTProxyUser            = "mtproxy"
-	MTProxyRepo            = "GetPageSpeed/MTProxy" // community fork of Telegram/MTProxy
-	ProxySecretURL         = "https://core.telegram.org/getProxySecret"
-	ProxyConfigURL         = "https://core.telegram.org/getProxyConfig"
+
+	MTProxyRepo    = "GetPageSpeed/MTProxy" // community fork of Telegram/MTProxy
+	ProxySecretURL = "https://core.telegram.org/getProxySecret"
+	ProxyConfigURL = "https://core.telegram.org/getProxyConfig"
 )
 
 type Config struct {
@@ -42,7 +42,7 @@ func GenerateSecret() (string, error) {
 	}
 	return hex.EncodeToString(bytes), nil
 }
-func IsMtProxyInstalled() bool {
+func IsMTProxyInstalled() bool {
 	_, err := os.Stat(filepath.Join(MTProxyInstallationDir, MTPRoxyBinaryName))
 	return err == nil
 }
@@ -364,12 +364,15 @@ func UninstallMTProxy() error {
 	}
 	service.RemoveService(MTProxyServiceName)
 
-	os.Remove(filepath.Join(MTProxyInstallationDir, MTPRoxyBinaryName))
-	os.RemoveAll(MTProxyConfigDir)
-	os.Remove("/etc/cron.daily/mtproxy-update-config")
-
-	cmd := exec.Command("userdel", MTProxyUser)
-	cmd.Run()
+	if err := os.Remove(filepath.Join(MTProxyInstallationDir, MTPRoxyBinaryName)); err != nil {
+		return fmt.Errorf("failed to remove installation dir: %w", err)
+	}
+	if err := os.RemoveAll(MTProxyConfigDir); err != nil {
+		return fmt.Errorf("failed to remove config dir: %w", err)
+	}
+	if err := os.Remove("/etc/cron.daily/mtproxy-update-config"); err != nil {
+		return fmt.Errorf("failed to remove cron job: %w", err)
+	}
 
 	return nil
 }
