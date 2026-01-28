@@ -180,7 +180,7 @@ func ConfigureMTProxy(secret string) error {
 }
 
 func FormatProxyURL(secret, nsSubdomain string) string {
-	return fmt.Sprintf("tg://proxy?server=%s&port=%s&secret=%s", nsSubdomain, MTProxyPort, secret)
+	return fmt.Sprintf("https://t.me/proxy?server=%s&port=%s&secret=%s", nsSubdomain, MTProxyPort, secret)
 }
 
 func buildFromSource(progressFn func(downloaded, total int64), tmpDir string) error {
