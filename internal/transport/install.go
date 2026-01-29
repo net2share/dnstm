@@ -25,8 +25,12 @@ const (
 
 	// GitHub release API URLs (official repos)
 	shadowsocksReleaseAPI = "https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases/latest"
+	sshtunUserReleaseAPI  = "https://api.github.com/repos/net2share/sshtun-user/releases/latest"
 
 	installDir = "/usr/local/bin"
+
+	// SSHTunUserBinary is the path to the sshtun-user binary.
+	SSHTunUserBinary = "/usr/local/bin/sshtun-user"
 )
 
 type githubRelease struct {
@@ -43,17 +47,43 @@ type githubAsset struct {
 func EnsureBinariesInstalled(t types.TransportType) error {
 	switch t {
 	case types.TypeSlipstreamShadowsocks:
-		if err := ensureSlipstreamInstalled(); err != nil {
+		if err := EnsureSlipstreamInstalled(); err != nil {
 			return err
 		}
-		return ensureShadowsocksInstalled()
+		return EnsureShadowsocksInstalled()
 	case types.TypeSlipstreamSocks, types.TypeSlipstreamSSH:
-		return ensureSlipstreamInstalled()
+		return EnsureSlipstreamInstalled()
 	case types.TypeDNSTTSocks, types.TypeDNSTTSSH:
-		return ensureDnsttInstalled()
+		return EnsureDnsttInstalled()
 	default:
 		return nil
 	}
+}
+
+// EnsureDnsttInstalled installs dnstt-server if not present.
+func EnsureDnsttInstalled() error {
+	return ensureDnsttInstalled()
+}
+
+// EnsureSlipstreamInstalled installs slipstream-server if not present.
+func EnsureSlipstreamInstalled() error {
+	return ensureSlipstreamInstalled()
+}
+
+// EnsureShadowsocksInstalled installs ssserver if not present.
+func EnsureShadowsocksInstalled() error {
+	return ensureShadowsocksInstalled()
+}
+
+// EnsureSSHTunUserInstalled installs sshtun-user if not present.
+func EnsureSSHTunUserInstalled() error {
+	return ensureSSHTunUserInstalled()
+}
+
+// IsSSHTunUserInstalled checks if sshtun-user binary is installed.
+func IsSSHTunUserInstalled() bool {
+	_, err := os.Stat(SSHTunUserBinary)
+	return err == nil
 }
 
 func ensureDnsttInstalled() error {
@@ -162,6 +192,59 @@ func ensureShadowsocksInstalled() error {
 
 	tui.PrintStatus("ssserver installed")
 	return nil
+}
+
+func ensureSSHTunUserInstalled() error {
+	if _, err := os.Stat(SSHTunUserBinary); err == nil {
+		tui.PrintStatus("sshtun-user already installed")
+		return nil
+	}
+
+	tui.PrintInfo("Installing sshtun-user...")
+
+	release, err := fetchGithubRelease(sshtunUserReleaseAPI)
+	if err != nil {
+		return fmt.Errorf("failed to fetch sshtun-user release: %w", err)
+	}
+
+	// sshtun-user releases are binaries like: sshtun-user-linux-amd64
+	assetName := getSSHTunUserAssetName()
+	var binaryURL string
+
+	for _, asset := range release.Assets {
+		if asset.Name == assetName {
+			binaryURL = asset.BrowserDownloadURL
+			break
+		}
+	}
+
+	if binaryURL == "" {
+		return fmt.Errorf("no sshtun-user binary found for: %s", assetName)
+	}
+
+	tmpPath, err := downloadFile(binaryURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to download sshtun-user: %w", err)
+	}
+
+	if err := installBinary(tmpPath, "sshtun-user"); err != nil {
+		return err
+	}
+
+	tui.PrintStatus("sshtun-user installed")
+	return nil
+}
+
+func getSSHTunUserAssetName() string {
+	arch := osdetect.GetArch()
+	switch arch {
+	case "amd64":
+		return "sshtun-user-linux-amd64"
+	case "arm64":
+		return "sshtun-user-linux-arm64"
+	default:
+		return "sshtun-user-linux-amd64"
+	}
 }
 
 func fetchGithubRelease(apiURL string) (*githubRelease, error) {

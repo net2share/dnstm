@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	"github.com/net2share/dnstm/internal/certs"
 	"github.com/net2share/dnstm/internal/keys"
 	"github.com/net2share/dnstm/internal/router"
-	"github.com/net2share/dnstm/internal/system"
 	"github.com/net2share/dnstm/internal/transport"
 	"github.com/net2share/dnstm/internal/types"
 	"github.com/net2share/go-corelib/osdetect"
@@ -122,6 +120,29 @@ func addInstanceInteractive(args []string, cfg *router.Config) error {
 	tui.PrintInfo("Adding new transport instance...")
 	fmt.Println()
 
+	// Select transport type (ask first)
+	transportType, err := tui.RunMenu(tui.MenuConfig{
+		Title: "Transport Type",
+		Options: []tui.MenuOption{
+			{Label: "Slipstream + Shadowsocks (Recommended)", Value: string(types.TypeSlipstreamShadowsocks)},
+			{Label: "Slipstream SOCKS", Value: string(types.TypeSlipstreamSocks)},
+			{Label: "Slipstream SSH", Value: string(types.TypeSlipstreamSSH)},
+			{Label: "DNSTT SOCKS", Value: string(types.TypeDNSTTSocks)},
+			{Label: "DNSTT SSH", Value: string(types.TypeDNSTTSSH)},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if transportType == "" {
+		return nil
+	}
+
+	// Install required binaries if needed
+	if err := transport.EnsureBinariesInstalled(types.TransportType(transportType)); err != nil {
+		return fmt.Errorf("failed to install required binaries: %w", err)
+	}
+
 	// Get or generate name
 	var name string
 	if len(args) > 0 {
@@ -130,14 +151,17 @@ func addInstanceInteractive(args []string, cfg *router.Config) error {
 
 	suggestedName := router.GenerateUniqueName(cfg.Transports)
 	if name == "" {
-		err := huh.NewInput().
-			Title("Instance Name").
-			Description(fmt.Sprintf("Leave empty for auto-generated name (%s)", suggestedName)).
-			Placeholder(suggestedName).
-			Value(&name).
-			Run()
+		var confirmed bool
+		name, confirmed, err = tui.RunInput(tui.InputConfig{
+			Title:       "Instance Name",
+			Description: fmt.Sprintf("Leave empty for auto-generated name (%s)", suggestedName),
+			Placeholder: suggestedName,
+		})
 		if err != nil {
 			return err
+		}
+		if !confirmed {
+			return nil
 		}
 		if name == "" {
 			name = suggestedName
@@ -153,38 +177,19 @@ func addInstanceInteractive(args []string, cfg *router.Config) error {
 		return fmt.Errorf("instance %s already exists", name)
 	}
 
-	// Select transport type
-	var transportType string
-	err := huh.NewSelect[string]().
-		Title("Transport Type").
-		Options(
-			huh.NewOption("Slipstream + Shadowsocks (Recommended)", string(types.TypeSlipstreamShadowsocks)),
-			huh.NewOption("Slipstream SOCKS", string(types.TypeSlipstreamSocks)),
-			huh.NewOption("Slipstream SSH", string(types.TypeSlipstreamSSH)),
-			huh.NewOption("DNSTT SOCKS", string(types.TypeDNSTTSocks)),
-			huh.NewOption("DNSTT SSH", string(types.TypeDNSTTSSH)),
-		).
-		Value(&transportType).
-		Run()
-	if err != nil {
-		return err
-	}
-
-	// Install required binaries if needed
-	if err := transport.EnsureBinariesInstalled(types.TransportType(transportType)); err != nil {
-		return fmt.Errorf("failed to install required binaries: %w", err)
-	}
-
 	// Get domain
 	var domain string
 	for {
-		err = huh.NewInput().
-			Title("Domain").
-			Description("e.g., t1.example.com").
-			Value(&domain).
-			Run()
+		var confirmed bool
+		domain, confirmed, err = tui.RunInput(tui.InputConfig{
+			Title:       "Domain",
+			Description: "e.g., t1.example.com",
+		})
 		if err != nil {
 			return err
+		}
+		if !confirmed {
+			return nil
 		}
 		if domain == "" {
 			tui.PrintError("Domain is required")
@@ -200,13 +205,14 @@ func addInstanceInteractive(args []string, cfg *router.Config) error {
 	}
 
 	// Type-specific configuration
+	microsocksAddr := cfg.GetMicrosocksAddress()
 	switch types.TransportType(transportType) {
 	case types.TypeSlipstreamShadowsocks:
 		if err := configureSlipstreamShadowsocks(transportCfg); err != nil {
 			return err
 		}
 	case types.TypeSlipstreamSocks:
-		if err := configureSlipstreamSocks(transportCfg); err != nil {
+		if err := configureSlipstreamSocks(transportCfg, microsocksAddr); err != nil {
 			return err
 		}
 	case types.TypeSlipstreamSSH:
@@ -214,7 +220,7 @@ func addInstanceInteractive(args []string, cfg *router.Config) error {
 			return err
 		}
 	case types.TypeDNSTTSocks:
-		if err := configureDNSTTSocks(transportCfg); err != nil {
+		if err := configureDNSTTSocks(transportCfg, microsocksAddr); err != nil {
 			return err
 		}
 	case types.TypeDNSTTSSH:
@@ -232,35 +238,6 @@ func addInstanceInteractive(args []string, cfg *router.Config) error {
 		return fmt.Errorf("failed to allocate port: %w", err)
 	}
 	transportCfg.Port = port
-
-	// Show summary
-	summaryLines := []string{
-		tui.KV("Name:     ", name),
-		tui.KV("Type:     ", types.GetTransportTypeDisplayName(transportCfg.Type)),
-		tui.KV("Domain:   ", transportCfg.Domain),
-		tui.KV("Port:     ", fmt.Sprintf("%d", transportCfg.Port)),
-	}
-	if transportCfg.Shadowsocks != nil {
-		summaryLines = append(summaryLines, tui.KV("Method:   ", transportCfg.Shadowsocks.Method))
-	}
-	if transportCfg.Target != nil {
-		summaryLines = append(summaryLines, tui.KV("Target:   ", transportCfg.Target.Address))
-	}
-	tui.PrintBox("Instance Summary", summaryLines)
-
-	// Confirm
-	confirm := true
-	err = huh.NewConfirm().
-		Title("Create instance?").
-		Value(&confirm).
-		Run()
-	if err != nil {
-		return err
-	}
-	if !confirm {
-		tui.PrintInfo("Cancelled")
-		return nil
-	}
 
 	// Create the instance
 	return createInstance(name, transportCfg, cfg)
@@ -301,6 +278,7 @@ func addInstanceNonInteractive(cmd *cobra.Command, args []string, cfg *router.Co
 		Domain: domain,
 	}
 
+	microsocksAddr := cfg.GetMicrosocksAddress()
 	switch types.TransportType(transportType) {
 	case types.TypeSlipstreamShadowsocks:
 		if password == "" {
@@ -313,22 +291,33 @@ func addInstanceNonInteractive(cmd *cobra.Command, args []string, cfg *router.Co
 			Password: password,
 			Method:   method,
 		}
-	case types.TypeSlipstreamSocks, types.TypeSlipstreamSSH:
+	case types.TypeSlipstreamSocks:
+		// Auto-use microsocks unless explicitly specified
 		if targetAddr == "" {
-			if types.TransportType(transportType) == types.TypeSlipstreamSSH {
-				targetAddr = "127.0.0.1:" + osdetect.DetectSSHPort()
-			} else {
-				targetAddr = "127.0.0.1:1080"
+			if microsocksAddr == "" {
+				return fmt.Errorf("microsocks not configured. Run 'dnstm install' first")
 			}
+			targetAddr = microsocksAddr
 		}
 		transportCfg.Target = &types.TargetConfig{Address: targetAddr}
-	case types.TypeDNSTTSocks, types.TypeDNSTTSSH:
+	case types.TypeSlipstreamSSH:
 		if targetAddr == "" {
-			if types.TransportType(transportType) == types.TypeDNSTTSSH {
-				targetAddr = "127.0.0.1:" + osdetect.DetectSSHPort()
-			} else {
-				targetAddr = "127.0.0.1:1080"
+			targetAddr = "127.0.0.1:" + osdetect.DetectSSHPort()
+		}
+		transportCfg.Target = &types.TargetConfig{Address: targetAddr}
+	case types.TypeDNSTTSocks:
+		// Auto-use microsocks unless explicitly specified
+		if targetAddr == "" {
+			if microsocksAddr == "" {
+				return fmt.Errorf("microsocks not configured. Run 'dnstm install' first")
 			}
+			targetAddr = microsocksAddr
+		}
+		transportCfg.Target = &types.TargetConfig{Address: targetAddr}
+		transportCfg.DNSTT = &types.DNSTTConfig{MTU: 1232}
+	case types.TypeDNSTTSSH:
+		if targetAddr == "" {
+			targetAddr = "127.0.0.1:" + osdetect.DetectSSHPort()
 		}
 		transportCfg.Target = &types.TargetConfig{Address: targetAddr}
 		transportCfg.DNSTT = &types.DNSTTConfig{MTU: 1232}
@@ -352,18 +341,10 @@ func addInstanceNonInteractive(cmd *cobra.Command, args []string, cfg *router.Co
 func createInstance(name string, transportCfg *types.TransportConfig, cfg *router.Config) error {
 	fmt.Println()
 
-	totalSteps := 5
+	totalSteps := 4
 	currentStep := 0
 
-	// Step 1: Create dnstm user
-	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Creating dnstm user...")
-	if err := system.CreateDnstmUser(); err != nil {
-		return fmt.Errorf("failed to create user: %w", err)
-	}
-	tui.PrintStatus("User 'dnstm' created")
-
-	// Step 2: Generate certificates/keys
+	// Step 1: Generate certificates/keys
 	currentStep++
 	tui.PrintStep(currentStep, totalSteps, "Generating cryptographic material...")
 	var fingerprint string
@@ -386,7 +367,7 @@ func createInstance(name string, transportCfg *types.TransportConfig, cfg *route
 		tui.PrintStatus("Curve25519 keys ready")
 	}
 
-	// Step 3: Create instance and service
+	// Step 2: Create instance and service
 	currentStep++
 	tui.PrintStep(currentStep, totalSteps, "Creating systemd service...")
 	instance := router.NewInstance(name, transportCfg)
@@ -395,7 +376,7 @@ func createInstance(name string, transportCfg *types.TransportConfig, cfg *route
 	}
 	tui.PrintStatus("Service created")
 
-	// Step 4: Set permissions
+	// Step 3: Set permissions
 	currentStep++
 	tui.PrintStep(currentStep, totalSteps, "Setting permissions...")
 	if err := instance.SetPermissions(); err != nil {
@@ -404,7 +385,7 @@ func createInstance(name string, transportCfg *types.TransportConfig, cfg *route
 		tui.PrintStatus("Permissions set")
 	}
 
-	// Step 5: Save config
+	// Step 4: Save config
 	currentStep++
 	tui.PrintStep(currentStep, totalSteps, "Saving configuration...")
 	if cfg.Transports == nil {
@@ -430,8 +411,18 @@ func createInstance(name string, transportCfg *types.TransportConfig, cfg *route
 	}
 	tui.PrintStatus("Configuration saved")
 
+	// Start the instance
+	if err := instance.Enable(); err != nil {
+		tui.PrintWarning("Failed to enable service: " + err.Error())
+	}
+	if err := instance.Start(); err != nil {
+		tui.PrintWarning("Failed to start instance: " + err.Error())
+	} else {
+		tui.PrintStatus("Instance started")
+	}
+
 	fmt.Println()
-	tui.PrintSuccess(fmt.Sprintf("Instance '%s' created successfully!", name))
+	tui.PrintSuccess(fmt.Sprintf("Instance '%s' created and started!", name))
 	fmt.Println()
 
 	// Show connection info
@@ -454,37 +445,36 @@ func createInstance(name string, transportCfg *types.TransportConfig, cfg *route
 	tui.PrintBox("Connection Info", infoLines)
 	fmt.Println()
 
-	tui.PrintInfo("To start the instance: dnstm instance start " + name)
-	fmt.Println()
-
 	return nil
 }
 
 func configureSlipstreamShadowsocks(cfg *types.TransportConfig) error {
-	var password string
-	err := huh.NewInput().
-		Title("Shadowsocks Password").
-		Description("Leave empty to auto-generate").
-		Value(&password).
-		Run()
+	password, confirmed, err := tui.RunInput(tui.InputConfig{
+		Title:       "Shadowsocks Password",
+		Description: "Leave empty to auto-generate",
+	})
 	if err != nil {
 		return err
+	}
+	if !confirmed {
+		return fmt.Errorf("cancelled")
 	}
 	if password == "" {
 		password = generatePassword()
 	}
 
-	var method string
-	err = huh.NewSelect[string]().
-		Title("Encryption Method").
-		Options(
-			huh.NewOption("AES-256-GCM (Recommended)", "aes-256-gcm"),
-			huh.NewOption("ChaCha20-IETF-Poly1305", "chacha20-ietf-poly1305"),
-		).
-		Value(&method).
-		Run()
+	method, err := tui.RunMenu(tui.MenuConfig{
+		Title: "Encryption Method",
+		Options: []tui.MenuOption{
+			{Label: "AES-256-GCM (Recommended)", Value: "aes-256-gcm"},
+			{Label: "ChaCha20-IETF-Poly1305", Value: "chacha20-ietf-poly1305"},
+		},
+	})
 	if err != nil {
 		return err
+	}
+	if method == "" {
+		return fmt.Errorf("cancelled")
 	}
 
 	cfg.Shadowsocks = &types.ShadowsocksConfig{
@@ -495,23 +485,11 @@ func configureSlipstreamShadowsocks(cfg *types.TransportConfig) error {
 	return nil
 }
 
-func configureSlipstreamSocks(cfg *types.TransportConfig) error {
-	var targetAddr string
-	defaultAddr := "127.0.0.1:1080"
-	err := huh.NewInput().
-		Title("Target Address").
-		Description(fmt.Sprintf("SOCKS proxy address (default: %s)", defaultAddr)).
-		Placeholder(defaultAddr).
-		Value(&targetAddr).
-		Run()
-	if err != nil {
-		return err
+func configureSlipstreamSocks(cfg *types.TransportConfig, microsocksAddr string) error {
+	if microsocksAddr == "" {
+		return fmt.Errorf("microsocks not configured. Run install first")
 	}
-	if targetAddr == "" {
-		targetAddr = defaultAddr
-	}
-
-	cfg.Target = &types.TargetConfig{Address: targetAddr}
+	cfg.Target = &types.TargetConfig{Address: microsocksAddr}
 	return nil
 }
 
@@ -519,15 +497,16 @@ func configureSlipstreamSSH(cfg *types.TransportConfig) error {
 	sshPort := osdetect.DetectSSHPort()
 	defaultAddr := "127.0.0.1:" + sshPort
 
-	var targetAddr string
-	err := huh.NewInput().
-		Title("Target Address").
-		Description(fmt.Sprintf("SSH server address (default: %s)", defaultAddr)).
-		Placeholder(defaultAddr).
-		Value(&targetAddr).
-		Run()
+	targetAddr, confirmed, err := tui.RunInput(tui.InputConfig{
+		Title:       "Target Address",
+		Description: fmt.Sprintf("SSH server address (default: %s)", defaultAddr),
+		Placeholder: defaultAddr,
+	})
 	if err != nil {
 		return err
+	}
+	if !confirmed {
+		return fmt.Errorf("cancelled")
 	}
 	if targetAddr == "" {
 		targetAddr = defaultAddr
@@ -537,23 +516,11 @@ func configureSlipstreamSSH(cfg *types.TransportConfig) error {
 	return nil
 }
 
-func configureDNSTTSocks(cfg *types.TransportConfig) error {
-	var targetAddr string
-	defaultAddr := "127.0.0.1:1080"
-	err := huh.NewInput().
-		Title("Target Address").
-		Description(fmt.Sprintf("SOCKS proxy address (default: %s)", defaultAddr)).
-		Placeholder(defaultAddr).
-		Value(&targetAddr).
-		Run()
-	if err != nil {
-		return err
+func configureDNSTTSocks(cfg *types.TransportConfig, microsocksAddr string) error {
+	if microsocksAddr == "" {
+		return fmt.Errorf("microsocks not configured. Run install first")
 	}
-	if targetAddr == "" {
-		targetAddr = defaultAddr
-	}
-
-	cfg.Target = &types.TargetConfig{Address: targetAddr}
+	cfg.Target = &types.TargetConfig{Address: microsocksAddr}
 	cfg.DNSTT = &types.DNSTTConfig{MTU: 1232}
 	return nil
 }
@@ -562,15 +529,16 @@ func configureDNSTTSSH(cfg *types.TransportConfig) error {
 	sshPort := osdetect.DetectSSHPort()
 	defaultAddr := "127.0.0.1:" + sshPort
 
-	var targetAddr string
-	err := huh.NewInput().
-		Title("Target Address").
-		Description(fmt.Sprintf("SSH server address (default: %s)", defaultAddr)).
-		Placeholder(defaultAddr).
-		Value(&targetAddr).
-		Run()
+	targetAddr, confirmed, err := tui.RunInput(tui.InputConfig{
+		Title:       "Target Address",
+		Description: fmt.Sprintf("SSH server address (default: %s)", defaultAddr),
+		Placeholder: defaultAddr,
+	})
 	if err != nil {
 		return err
+	}
+	if !confirmed {
+		return fmt.Errorf("cancelled")
 	}
 	if targetAddr == "" {
 		targetAddr = defaultAddr
@@ -628,12 +596,10 @@ var instanceRemoveCmd = &cobra.Command{
 		// Confirm
 		force, _ := cmd.Flags().GetBool("force")
 		if !force {
-			confirm := false
-			err := huh.NewConfirm().
-				Title(fmt.Sprintf("Remove instance '%s'?", name)).
-				Description("This will stop the service and remove all configuration").
-				Value(&confirm).
-				Run()
+			confirm, err := tui.RunConfirm(tui.ConfirmConfig{
+				Title:       fmt.Sprintf("Remove instance '%s'?", name),
+				Description: "This will stop the service and remove all configuration",
+			})
 			if err != nil {
 				return err
 			}
@@ -708,7 +674,7 @@ var instanceRemoveCmd = &cobra.Command{
 var instanceStartCmd = &cobra.Command{
 	Use:   "start <name>",
 	Short: "Start an instance",
-	Long:  "Start a transport instance",
+	Long:  "Start or restart a transport instance. If already running, restarts to pick up changes.",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := osdetect.RequireRoot(); err != nil {
@@ -733,11 +699,18 @@ var instanceStartCmd = &cobra.Command{
 			tui.PrintWarning("Failed to enable service: " + err.Error())
 		}
 
-		if err := instance.Start(); err != nil {
-			return fmt.Errorf("failed to start instance: %w", err)
+		isRunning := instance.IsActive()
+		if isRunning {
+			if err := instance.Restart(); err != nil {
+				return fmt.Errorf("failed to restart instance: %w", err)
+			}
+			tui.PrintSuccess(fmt.Sprintf("Instance '%s' restarted", name))
+		} else {
+			if err := instance.Start(); err != nil {
+				return fmt.Errorf("failed to start instance: %w", err)
+			}
+			tui.PrintSuccess(fmt.Sprintf("Instance '%s' started", name))
 		}
-
-		tui.PrintSuccess(fmt.Sprintf("Instance '%s' started", name))
 		return nil
 	},
 }
@@ -771,39 +744,6 @@ var instanceStopCmd = &cobra.Command{
 		}
 
 		tui.PrintSuccess(fmt.Sprintf("Instance '%s' stopped", name))
-		return nil
-	},
-}
-
-var instanceRestartCmd = &cobra.Command{
-	Use:   "restart <name>",
-	Short: "Restart an instance",
-	Long:  "Restart a transport instance",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := osdetect.RequireRoot(); err != nil {
-			return err
-		}
-
-		name := args[0]
-
-		cfg, err := router.Load()
-		if err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
-		}
-
-		transportCfg, exists := cfg.Transports[name]
-		if !exists {
-			return fmt.Errorf("instance %s not found", name)
-		}
-
-		instance := router.NewInstance(name, transportCfg)
-
-		if err := instance.Restart(); err != nil {
-			return fmt.Errorf("failed to restart instance: %w", err)
-		}
-
-		tui.PrintSuccess(fmt.Sprintf("Instance '%s' restarted", name))
 		return nil
 	},
 }
@@ -843,10 +783,10 @@ var instanceLogsCmd = &cobra.Command{
 	},
 }
 
-var instanceConfigCmd = &cobra.Command{
-	Use:   "config <name>",
-	Short: "Show instance configuration",
-	Long:  "Show the configuration for a transport instance",
+var instanceStatusCmd = &cobra.Command{
+	Use:   "status <name>",
+	Short: "Show instance status",
+	Long:  "Show status and configuration for a transport instance",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := osdetect.RequireRoot(); err != nil {
@@ -891,10 +831,10 @@ var instanceConfigCmd = &cobra.Command{
 	},
 }
 
-var instanceStatusCmd = &cobra.Command{
-	Use:   "status <name>",
-	Short: "Show instance status",
-	Long:  "Show detailed status for a transport instance",
+var instanceReconfigureCmd = &cobra.Command{
+	Use:   "reconfigure <name>",
+	Short: "Reconfigure an instance",
+	Long:  "Reconfigure an existing transport instance interactively (including rename)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := osdetect.RequireRoot(); err != nil {
@@ -913,14 +853,215 @@ var instanceStatusCmd = &cobra.Command{
 			return fmt.Errorf("instance %s not found", name)
 		}
 
-		instance := router.NewInstance(name, transportCfg)
+		fmt.Println()
+		tui.PrintInfo(fmt.Sprintf("Reconfiguring '%s'...", name))
+		tui.PrintInfo("Press Enter to keep current value, or type a new value.")
+		fmt.Println()
 
-		status, err := instance.GetStatus()
+		changed := false
+		renamed := false
+		newName := name
+
+		// Check if instance is running before we start
+		oldInstance := router.NewInstance(name, transportCfg)
+		wasRunning := oldInstance.IsActive()
+
+		// Name (rename)
+		inputName, confirmed, err := tui.RunInput(tui.InputConfig{
+			Title:       "Instance Name",
+			Description: fmt.Sprintf("Current: %s", name),
+			Value:       name,
+		})
 		if err != nil {
-			return fmt.Errorf("failed to get status: %w", err)
+			return err
+		}
+		if !confirmed {
+			tui.PrintInfo("Cancelled")
+			return nil
+		}
+		if inputName != "" && inputName != name {
+			inputName = router.NormalizeName(inputName)
+			if err := router.ValidateName(inputName); err != nil {
+				return fmt.Errorf("invalid name: %w", err)
+			}
+			if _, exists := cfg.Transports[inputName]; exists {
+				return fmt.Errorf("instance with name '%s' already exists", inputName)
+			}
+			newName = inputName
+			renamed = true
+			changed = true
 		}
 
-		fmt.Println(status)
+		// Domain
+		newDomain, confirmed, err := tui.RunInput(tui.InputConfig{
+			Title:       "Domain",
+			Description: fmt.Sprintf("Current: %s", transportCfg.Domain),
+			Value:       transportCfg.Domain,
+		})
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			tui.PrintInfo("Cancelled")
+			return nil
+		}
+		if newDomain != "" && newDomain != transportCfg.Domain {
+			transportCfg.Domain = newDomain
+			changed = true
+		}
+
+		// Type-specific configuration
+		switch transportCfg.Type {
+		case types.TypeSlipstreamShadowsocks:
+			// Password
+			newPassword, confirmed, err := tui.RunInput(tui.InputConfig{
+				Title:       "Password",
+				Description: "Current: (hidden) - Leave empty to keep current",
+			})
+			if err != nil {
+				return err
+			}
+			if !confirmed {
+				tui.PrintInfo("Cancelled")
+				return nil
+			}
+			if newPassword != "" {
+				if transportCfg.Shadowsocks == nil {
+					transportCfg.Shadowsocks = &types.ShadowsocksConfig{}
+				}
+				transportCfg.Shadowsocks.Password = newPassword
+				changed = true
+			}
+
+			// Method
+			currentMethod := "aes-256-gcm"
+			if transportCfg.Shadowsocks != nil && transportCfg.Shadowsocks.Method != "" {
+				currentMethod = transportCfg.Shadowsocks.Method
+			}
+			methodOptions := []tui.MenuOption{
+				{Label: "AES-256-GCM", Value: "aes-256-gcm"},
+				{Label: "ChaCha20-IETF-Poly1305", Value: "chacha20-ietf-poly1305"},
+			}
+			selected := 0
+			if currentMethod == "chacha20-ietf-poly1305" {
+				selected = 1
+			}
+			newMethod, err := tui.RunMenu(tui.MenuConfig{
+				Title:       "Method",
+				Description: fmt.Sprintf("Current: %s", currentMethod),
+				Options:     methodOptions,
+				Selected:    selected,
+			})
+			if err != nil {
+				return err
+			}
+			if newMethod == "" {
+				tui.PrintInfo("Cancelled")
+				return nil
+			}
+			if newMethod != currentMethod {
+				if transportCfg.Shadowsocks == nil {
+					transportCfg.Shadowsocks = &types.ShadowsocksConfig{}
+				}
+				transportCfg.Shadowsocks.Method = newMethod
+				changed = true
+			}
+
+		case types.TypeSlipstreamSocks, types.TypeDNSTTSocks:
+			// SOCKS modes auto-use microsocks
+			microsocksAddr := cfg.GetMicrosocksAddress()
+			if microsocksAddr != "" && (transportCfg.Target == nil || transportCfg.Target.Address != microsocksAddr) {
+				if transportCfg.Target == nil {
+					transportCfg.Target = &types.TargetConfig{}
+				}
+				transportCfg.Target.Address = microsocksAddr
+				changed = true
+			}
+
+		case types.TypeSlipstreamSSH, types.TypeDNSTTSSH:
+			// SSH modes - allow changing target
+			currentTarget := "127.0.0.1:" + osdetect.DetectSSHPort()
+			if transportCfg.Target != nil && transportCfg.Target.Address != "" {
+				currentTarget = transportCfg.Target.Address
+			}
+			newTarget, confirmed, err := tui.RunInput(tui.InputConfig{
+				Title:       "Target Address",
+				Description: fmt.Sprintf("Current: %s", currentTarget),
+				Value:       currentTarget,
+			})
+			if err != nil {
+				return err
+			}
+			if !confirmed {
+				tui.PrintInfo("Cancelled")
+				return nil
+			}
+			if newTarget != "" && newTarget != currentTarget {
+				if transportCfg.Target == nil {
+					transportCfg.Target = &types.TargetConfig{}
+				}
+				transportCfg.Target.Address = newTarget
+				changed = true
+			}
+		}
+
+		if !changed {
+			tui.PrintInfo("No changes made")
+			return nil
+		}
+
+		// Handle rename
+		if renamed {
+			// Stop and remove old service
+			oldInstance.Stop()
+			oldInstance.RemoveService()
+			oldInstance.RemoveConfigDir()
+
+			// Update config map
+			delete(cfg.Transports, name)
+			cfg.Transports[newName] = transportCfg
+
+			// Update Single.Active if it referenced the old name
+			if cfg.Single.Active == name {
+				cfg.Single.Active = newName
+			}
+			// Update Routing.Default if it referenced the old name
+			if cfg.Routing.Default == name {
+				cfg.Routing.Default = newName
+			}
+		}
+
+		// Save config
+		if err := cfg.Save(); err != nil {
+			return fmt.Errorf("failed to save config: %w", err)
+		}
+
+		// Create new service
+		newInstance := router.NewInstance(newName, transportCfg)
+		if err := newInstance.CreateService(); err != nil {
+			return fmt.Errorf("failed to create service: %w", err)
+		}
+		newInstance.SetPermissions()
+
+		// Start if it was running before
+		if wasRunning {
+			newInstance.Enable()
+			if err := newInstance.Start(); err != nil {
+				return fmt.Errorf("failed to start: %w", err)
+			}
+			if renamed {
+				tui.PrintSuccess(fmt.Sprintf("Instance renamed to '%s' and restarted!", newName))
+			} else {
+				tui.PrintSuccess(fmt.Sprintf("Instance '%s' reconfigured and restarted!", newName))
+			}
+		} else {
+			if renamed {
+				tui.PrintSuccess(fmt.Sprintf("Instance renamed to '%s'!", newName))
+			} else {
+				tui.PrintSuccess(fmt.Sprintf("Instance '%s' reconfigured!", newName))
+			}
+		}
+
 		return nil
 	},
 }
@@ -931,10 +1072,9 @@ func init() {
 	instanceCmd.AddCommand(instanceRemoveCmd)
 	instanceCmd.AddCommand(instanceStartCmd)
 	instanceCmd.AddCommand(instanceStopCmd)
-	instanceCmd.AddCommand(instanceRestartCmd)
 	instanceCmd.AddCommand(instanceLogsCmd)
-	instanceCmd.AddCommand(instanceConfigCmd)
 	instanceCmd.AddCommand(instanceStatusCmd)
+	instanceCmd.AddCommand(instanceReconfigureCmd)
 
 	// Flags for instance add
 	instanceAddCmd.Flags().StringP("type", "t", "", "Transport type (slipstream-shadowsocks, slipstream-socks, slipstream-ssh, dnstt-socks, dnstt-ssh)")

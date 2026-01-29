@@ -3,6 +3,16 @@ name: Release Please
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: 'Force create a release PR even without conventional commits'
+        type: boolean
+        default: false
+      release_as:
+        description: 'Force release as specific version (e.g., 1.0.0). Leave empty for auto.'
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -20,6 +30,7 @@ jobs:
         uses: googleapis/release-please-action@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          release-as: ${{ inputs.release_as || '' }}
 
   build:
     needs: release-please

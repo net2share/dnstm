@@ -1,11 +1,10 @@
 package cmd
 
 import (
-	"fmt"
+	"os"
+	"syscall"
 
-	"github.com/charmbracelet/huh"
-	"github.com/net2share/dnstm/internal/menu"
-	"github.com/net2share/dnstm/internal/sshtunnel"
+	"github.com/net2share/dnstm/internal/transport"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"
 	"github.com/spf13/cobra"
@@ -14,18 +13,8 @@ import (
 var sshUsersCmd = &cobra.Command{
 	Use:   "ssh-users",
 	Short: "Manage SSH tunnel users",
+	Long:  "Launch sshtun-user for managing SSH tunnel users and hardening",
 	RunE:  runSSHUsers,
-}
-
-var sshUsersUninstallCmd = &cobra.Command{
-	Use:   "uninstall",
-	Short: "Uninstall SSH tunnel hardening and users",
-	Long:  "Remove all SSH tunnel users, groups, and sshd hardening configuration",
-	RunE:  runSSHUsersUninstall,
-}
-
-func init() {
-	sshUsersCmd.AddCommand(sshUsersUninstallCmd)
 }
 
 func runSSHUsers(cmd *cobra.Command, args []string) error {
@@ -33,59 +22,20 @@ func runSSHUsers(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	menu.Version = Version
-	menu.BuildTime = BuildTime
-	menu.PrintBanner()
-	sshtunnel.ShowMenu()
-	return nil
-}
-
-func runSSHUsersUninstall(cmd *cobra.Command, args []string) error {
-	if err := osdetect.RequireRoot(); err != nil {
-		return err
-	}
-
-	menu.Version = Version
-	menu.BuildTime = BuildTime
-	menu.PrintBanner()
-
-	if !sshtunnel.IsConfigured() {
-		tui.PrintInfo("SSH tunnel hardening is not configured")
+	if !transport.IsSSHTunUserInstalled() {
+		tui.PrintError("sshtun-user is not installed. Run 'dnstm install' first.")
 		return nil
 	}
 
-	status := sshtunnel.GetStatus()
+	// Get the binary path
+	binary := transport.SSHTunUserBinary
 
-	fmt.Println()
-	tui.PrintWarning("This will completely remove SSH tunnel configuration:")
-	if status.UserCount > 0 {
-		fmt.Printf("  - Delete %d tunnel user(s)\n", status.UserCount)
-	}
-	fmt.Println("  - Remove tunnel groups")
-	fmt.Println("  - Remove sshd hardening configuration")
-	fmt.Println("  - Clean up authorized keys and deny files")
-	fmt.Println()
-
-	var confirm bool
-	err := huh.NewConfirm().
-		Title("Proceed with complete uninstall?").
-		Value(&confirm).
-		Run()
-	if err != nil {
+	// Use syscall.Exec to replace the current process with sshtun-user
+	// This allows sshtun-user to run in fully interactive mode
+	if err := syscall.Exec(binary, []string{binary}, os.Environ()); err != nil {
 		return err
 	}
 
-	if !confirm {
-		tui.PrintInfo("Uninstall cancelled")
-		return nil
-	}
-
-	fmt.Println()
-	if err := sshtunnel.UninstallAll(); err != nil {
-		return err
-	}
-
-	fmt.Println()
-	tui.PrintSuccess("SSH tunnel configuration has been removed")
+	// This line is never reached as Exec replaces the process
 	return nil
 }
