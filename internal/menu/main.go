@@ -163,9 +163,6 @@ func handleMainMenuChoice(choice string) error {
 	case "mtproxy":
 		RunMTProxyMenu()
 		return errCancelled
-	case "mtproxy":
-		RunMTProxyMenu()
-		return errCancelled
 	case "uninstall":
 		return runUninstallMenu()
 	}
@@ -948,30 +945,6 @@ func runInstanceAdd() {
 		return
 	}
 
-<<<<<<< HEAD
-=======
-	// Transport type
-	var transportType string
-	huh.NewSelect[string]().
-		Title("Transport Type").
-		Options(
-			huh.NewOption("Slipstream + Shadowsocks (Recommended)", string(types.TypeSlipstreamShadowsocks)),
-			huh.NewOption("Slipstream SOCKS", string(types.TypeSlipstreamSocks)),
-			huh.NewOption("Slipstream SSH", string(types.TypeSlipstreamSSH)),
-			huh.NewOption("Slipstream + MTProxy (Telegram)", string(types.TypeSlipstreamMTProxy)),
-			huh.NewOption("DNSTT SOCKS", string(types.TypeDNSTTSocks)),
-			huh.NewOption("DNSTT SSH", string(types.TypeDNSTTSSH)),
-			huh.NewOption("DNSTT + MTProxy (Telegram, via socat)", string(types.TypeDNSTTMTProxy)),
-		).
-		Value(&transportType).
-		Run()
-
-	if missing, ok := transport.RequiresBinary(types.TransportType(transportType)); !ok {
-		tui.PrintError(fmt.Sprintf("Required binary '%s' is not installed", missing))
-		return
-	}
-
->>>>>>> 9a0a006ed4332a5eef00f2e07c0f861b9c8405db
 	// Domain
 	var domain string
 	for domain == "" {
@@ -1062,7 +1035,6 @@ func runInstanceAdd() {
 			proxyUrl,
 		})
 
-<<<<<<< HEAD
 	case types.TypeDNSTTSocks:
 		// Auto-use configured microsocks
 		microsocksAddr := cfg.GetMicrosocksAddress()
@@ -1081,12 +1053,6 @@ func runInstanceAdd() {
 		})
 		if err != nil || !confirmed {
 			return
-=======
-	case types.TypeDNSTTSocks, types.TypeDNSTTSSH:
-		defaultAddr := "127.0.0.1:1080"
-		if transportType == string(types.TypeDNSTTSSH) {
-			defaultAddr = "127.0.0.1:" + osdetect.DetectSSHPort()
->>>>>>> 9a0a006ed4332a5eef00f2e07c0f861b9c8405db
 		}
 		if target == "" {
 			target = defaultAddr

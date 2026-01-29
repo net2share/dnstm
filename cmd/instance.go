@@ -341,11 +341,6 @@ func addInstanceNonInteractive(cmd *cobra.Command, args []string, cfg *router.Co
 	case types.TypeDNSTTMTProxy:
 		transportCfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyBridgePort)}
 		transportCfg.DNSTT = &types.DNSTTConfig{MTU: 1232}
-	case types.TypeSlipstreamMTProxy:
-		transportCfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyPort)}
-	case types.TypeDNSTTMTProxy:
-		transportCfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyBridgePort)}
-		transportCfg.DNSTT = &types.DNSTTConfig{MTU: 1232}
 	default:
 		return fmt.Errorf("unknown transport type: %s", transportType)
 	}
@@ -542,44 +537,6 @@ func configureSlipstreamSSH(cfg *types.TransportConfig) error {
 }
 func configureSlipstreamMTProxy(cfg *types.TransportConfig) error {
 	proxyUrl, err := installMtProxy(cfg)
-<<<<<<< HEAD
-=======
-	if err != nil {
-		return fmt.Errorf("failed to configure MTProxy: %w", err)
-	}
-	// Target is the local MTProxy endpoint that the tunnel forwards to
-	// Slipstream client supports raw TCP, so no bridge needed
-	cfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyPort)}
-
-	// Show connection URL to user
-	fmt.Println()
-	tui.PrintBox("Slipstream + MTProxy (direct)", []string{
-		"Slipstream client supports raw TCP tunnel (no bridge needed)",
-		"",
-		"Client-side Telegram config:",
-		"  Type:   MTProto Proxy",
-		"  Server: 127.0.0.1 (via slipstream-client)",
-		"  Port:   " + mtproxy.MTProxyPort,
-		"  Secret: dd<your-secret>",
-		"",
-		"Or for direct connection (without DNS tunnel):",
-		proxyUrl,
-	})
-	fmt.Println()
-
-	return nil
-}
-
-func configureDNSTTSocks(cfg *types.TransportConfig) error {
-	var targetAddr string
-	defaultAddr := "127.0.0.1:1080"
-	err := huh.NewInput().
-		Title("Target Address").
-		Description(fmt.Sprintf("SOCKS proxy address (default: %s)", defaultAddr)).
-		Placeholder(defaultAddr).
-		Value(&targetAddr).
-		Run()
->>>>>>> 9a0a006ed4332a5eef00f2e07c0f861b9c8405db
 	if err != nil {
 		return fmt.Errorf("failed to configure MTProxy: %w", err)
 	}
@@ -698,11 +655,7 @@ func installMtProxy(cfg *types.TransportConfig) (string, error) {
 		}
 	}
 
-<<<<<<< HEAD
 	if err := mtproxy.InstallMTProxy(progressFn); err != nil {
-=======
-	if err := mtproxy.InstallMTProxy(secret, progressFn); err != nil {
->>>>>>> 9a0a006ed4332a5eef00f2e07c0f861b9c8405db
 		return "", fmt.Errorf("failed to install MTProxy: %w", err)
 	}
 

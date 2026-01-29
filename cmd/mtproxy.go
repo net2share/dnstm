@@ -229,6 +229,12 @@ func runMTProxyStatus(cmd *cobra.Command, args []string) error {
 
 	return nil
 }
+func boolToYesNo(b bool) string {
+	if b {
+		return "Yes"
+	}
+	return "No"
+}
 
 func runMTProxyRestart(cmd *cobra.Command, args []string) error {
 	if err := osdetect.RequireRoot(); err != nil {
