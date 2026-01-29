@@ -7,8 +7,10 @@ const (
 	TypeSlipstreamShadowsocks TransportType = "slipstream-shadowsocks"
 	TypeSlipstreamSocks       TransportType = "slipstream-socks"
 	TypeSlipstreamSSH         TransportType = "slipstream-ssh"
+	TypeSlipstreamMTProxy     TransportType = "slipstream-mtproxy"
 	TypeDNSTTSocks            TransportType = "dnstt-socks"
 	TypeDNSTTSSH              TransportType = "dnstt-ssh"
+	TypeDNSTTMTProxy          TransportType = "dnstt-mtproxy"
 )
 
 // TransportConfig configures a transport instance.
@@ -39,12 +41,12 @@ type TargetConfig struct {
 
 // IsSlipstreamType returns true if the transport type uses Slipstream.
 func IsSlipstreamType(t TransportType) bool {
-	return t == TypeSlipstreamShadowsocks || t == TypeSlipstreamSocks || t == TypeSlipstreamSSH
+	return t == TypeSlipstreamShadowsocks || t == TypeSlipstreamSocks || t == TypeSlipstreamMTProxy
 }
 
 // IsDNSTTType returns true if the transport type uses DNSTT.
 func IsDNSTTType(t TransportType) bool {
-	return t == TypeDNSTTSocks || t == TypeDNSTTSSH
+	return t == TypeDNSTTSocks || t == TypeDNSTTSSH || t == TypeDNSTTMTProxy
 }
 
 // GetTransportTypeDisplayName returns a human-readable name for a transport type.
@@ -56,10 +58,14 @@ func GetTransportTypeDisplayName(t TransportType) string {
 		return "Slipstream SOCKS"
 	case TypeSlipstreamSSH:
 		return "Slipstream SSH"
+	case TypeSlipstreamMTProxy:
+		return "Slipstream + MTProxy"
 	case TypeDNSTTSocks:
 		return "DNSTT SOCKS"
 	case TypeDNSTTSSH:
 		return "DNSTT SSH"
+	case TypeDNSTTMTProxy:
+		return "DNSTT + MTProxy (socat)"
 	default:
 		return string(t)
 	}

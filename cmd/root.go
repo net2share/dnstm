@@ -51,6 +51,7 @@ func init() {
 	rootCmd.AddCommand(routerCmd)
 	rootCmd.AddCommand(sshUsersCmd)
 	rootCmd.AddCommand(uninstallCmd)
+	rootCmd.AddCommand(mtproxyCmd)
 
 	// Utilities
 	rootCmd.AddCommand(installCmd)

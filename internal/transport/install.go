@@ -51,9 +51,9 @@ func EnsureBinariesInstalled(t types.TransportType) error {
 			return err
 		}
 		return EnsureShadowsocksInstalled()
-	case types.TypeSlipstreamSocks, types.TypeSlipstreamSSH:
+	case types.TypeSlipstreamSocks, types.TypeSlipstreamSSH, types.TypeSlipstreamMTProxy:
 		return EnsureSlipstreamInstalled()
-	case types.TypeDNSTTSocks, types.TypeDNSTTSSH:
+	case types.TypeDNSTTSocks, types.TypeDNSTTSSH, types.TypeDNSTTMTProxy:
 		return EnsureDnsttInstalled()
 	default:
 		return nil
@@ -436,6 +436,7 @@ func extractSsserverFromTarball(tarballPath string) (string, error) {
 	}
 
 	// Extract using tar command (xz compressed)
+	// TODO: we should ensure that xz-utils is installed on the system(the current implementation wont work on minimal servers and test containers)
 	cmd := fmt.Sprintf("tar -xJf %s -C %s ssserver 2>/dev/null || tar -xf %s -C %s ssserver", tarballPath, tmpDir, tarballPath, tmpDir)
 	if err := runCmd(cmd); err != nil {
 		os.RemoveAll(tmpDir)

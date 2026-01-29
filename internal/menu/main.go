@@ -13,6 +13,7 @@ import (
 	"github.com/net2share/dnstm/internal/dnsrouter"
 	"github.com/net2share/dnstm/internal/installer"
 	"github.com/net2share/dnstm/internal/keys"
+	"github.com/net2share/dnstm/internal/mtproxy"
 	"github.com/net2share/dnstm/internal/network"
 	"github.com/net2share/dnstm/internal/proxy"
 	"github.com/net2share/dnstm/internal/router"
@@ -118,10 +119,11 @@ func runMainMenu() error {
 			// Build instance summary for header
 			header = buildInstanceSummary()
 
-			// Fully installed - show all options (no Install, has Uninstall)
+			// Fully installed - show all options
 			options = append(options, tui.MenuOption{Label: "Instances →", Value: "instance"})
 			options = append(options, tui.MenuOption{Label: "Router →", Value: "router"})
 			options = append(options, tui.MenuOption{Label: "SSH Users →", Value: "ssh-users"})
+			options = append(options, tui.MenuOption{Label: "MTProxy →", Value: "mtproxy"})
 			options = append(options, tui.MenuOption{Label: "Uninstall", Value: "uninstall"})
 			options = append(options, tui.MenuOption{Label: "Exit", Value: "exit"})
 		}
@@ -131,9 +133,6 @@ func runMainMenu() error {
 			Title:   "DNS Tunnel Manager",
 			Options: options,
 		})
-		if err != nil {
-			return err
-		}
 
 		if choice == "" || choice == "exit" {
 			tui.PrintInfo("Goodbye!")
@@ -161,6 +160,9 @@ func handleMainMenuChoice(choice string) error {
 		return runSSHUsersMenu()
 	case "install":
 		return runInstallBinaries()
+	case "mtproxy":
+		RunMTProxyMenu()
+		return errCancelled
 	case "uninstall":
 		return runUninstallMenu()
 	}
@@ -904,8 +906,10 @@ func runInstanceAdd() {
 			{Label: "Slipstream + Shadowsocks (Recommended)", Value: string(types.TypeSlipstreamShadowsocks)},
 			{Label: "Slipstream SOCKS", Value: string(types.TypeSlipstreamSocks)},
 			{Label: "Slipstream SSH", Value: string(types.TypeSlipstreamSSH)},
+			{Label: "Slipstream + MTProxy (Telegram)", Value: string(types.TypeSlipstreamMTProxy)},
 			{Label: "DNSTT SOCKS", Value: string(types.TypeDNSTTSocks)},
 			{Label: "DNSTT SSH", Value: string(types.TypeDNSTTSSH)},
+			{Label: "DNSTT + MTProxy (Telegram, via socat)", Value: string(types.TypeDNSTTMTProxy)},
 		},
 	})
 	if err != nil || transportType == "" {
@@ -1008,6 +1012,28 @@ func runInstanceAdd() {
 			target = defaultAddr
 		}
 		transportCfg.Target = &types.TargetConfig{Address: target}
+	case types.TypeSlipstreamMTProxy:
+		proxyUrl, err := configureAndInstallMTProxy(transportCfg)
+		if err != nil {
+			tui.PrintError("Failed to configure MTProxy: " + err.Error())
+			return
+		}
+		// Target is the local MTProxy endpoint - Slipstream supports raw TCP, no bridge needed
+		transportCfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyPort)}
+		// Show connection URL
+		fmt.Println()
+		tui.PrintBox("Slipstream + MTProxy (direct)", []string{
+			"Slipstream client supports raw TCP tunnel (no bridge needed)",
+			"",
+			"Client-side Telegram config:",
+			"  Type:   MTProto Proxy",
+			"  Server: 127.0.0.1 (via slipstream-client)",
+			"  Port:   " + mtproxy.MTProxyPort,
+			"  Secret: dd<your-secret>",
+			"",
+			"Or for direct connection (without DNS tunnel):",
+			proxyUrl,
+		})
 
 	case types.TypeDNSTTSocks:
 		// Auto-use configured microsocks
@@ -1033,6 +1059,29 @@ func runInstanceAdd() {
 		}
 		transportCfg.Target = &types.TargetConfig{Address: target}
 		transportCfg.DNSTT = &types.DNSTTConfig{MTU: 1232}
+	case types.TypeDNSTTMTProxy:
+		proxyUrl, err := configureAndInstallMTProxyWithBridge(transportCfg)
+		if err != nil {
+			tui.PrintError("Failed to configure MTProxy: " + err.Error())
+			return
+		}
+		// Target is the bridge port which forwards to MTProxy
+		transportCfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyBridgePort)}
+		transportCfg.DNSTT = &types.DNSTTConfig{MTU: 1232}
+		// Show connection URL
+		fmt.Println()
+		tui.PrintBox("DNSTT + MTProxy (via socat bridge)", []string{
+			"Server-side: socat bridge (port " + mtproxy.MTProxyBridgePort + ") → MTProxy (port " + mtproxy.MTProxyPort + ")",
+			"",
+			"Client-side Telegram config:",
+			"  Type:   MTProto Proxy",
+			"  Server: 127.0.0.1 (via dnstt-client)",
+			"  Port:   " + mtproxy.MTProxyBridgePort,
+			"  Secret: dd<your-secret>",
+			"",
+			"Or for direct connection (without DNS tunnel):",
+			proxyUrl,
+		})
 	}
 
 	// Port
@@ -1091,7 +1140,6 @@ func runInstanceAdd() {
 		fmt.Println(publicKey)
 	}
 }
-
 
 // ============================================================================
 // Mode Menu (matches: dnstm mode)
@@ -1398,4 +1446,53 @@ func generatePassword() string {
 	bytes := make([]byte, 32)
 	rand.Read(bytes)
 	return base64.StdEncoding.EncodeToString(bytes)
+}
+
+func configureAndInstallMTProxy(cfg *types.TransportConfig) (string, error) {
+	secret, err := mtproxy.GenerateSecret()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate secret: %w", err)
+	}
+
+	tui.PrintStatus(fmt.Sprintf("Using MTProxy secret: %s", secret))
+
+	progressFn := func(downloaded, total int64) {
+		if total > 0 {
+			percent := float64(downloaded) / float64(total) * 100
+			fmt.Printf("\rDownloading: %.1f%%", percent)
+		}
+	}
+
+	if err := mtproxy.InstallMTProxy(secret, progressFn); err != nil {
+		return "", fmt.Errorf("failed to install MTProxy: %w", err)
+	}
+
+	if err := mtproxy.ConfigureMTProxy(secret); err != nil {
+		return "", fmt.Errorf("failed to configure MTProxy: %w", err)
+	}
+
+	domain := "your-domain.com"
+	if cfg != nil && cfg.Domain != "" {
+		domain = cfg.Domain
+	}
+
+	proxyUrl := mtproxy.FormatProxyURL(secret, domain)
+	return proxyUrl, nil
+}
+
+// configureAndInstallMTProxyWithBridge installs MTProxy and the socat bridge for DNSTT
+func configureAndInstallMTProxyWithBridge(cfg *types.TransportConfig) (string, error) {
+	// First install MTProxy
+	proxyUrl, err := configureAndInstallMTProxy(cfg)
+	if err != nil {
+		return "", err
+	}
+
+	// Then install the socat bridge
+	tui.PrintStatus("Installing socat bridge for DNSTT...")
+	if err := mtproxy.InstallBridge(); err != nil {
+		return "", fmt.Errorf("failed to install MTProxy bridge: %w", err)
+	}
+
+	return proxyUrl, nil
 }

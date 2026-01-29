@@ -8,6 +8,7 @@ import (
 
 	"github.com/net2share/dnstm/internal/certs"
 	"github.com/net2share/dnstm/internal/keys"
+	"github.com/net2share/dnstm/internal/mtproxy"
 	"github.com/net2share/dnstm/internal/router"
 	"github.com/net2share/dnstm/internal/transport"
 	"github.com/net2share/dnstm/internal/types"
@@ -127,8 +128,10 @@ func addInstanceInteractive(args []string, cfg *router.Config) error {
 			{Label: "Slipstream + Shadowsocks (Recommended)", Value: string(types.TypeSlipstreamShadowsocks)},
 			{Label: "Slipstream SOCKS", Value: string(types.TypeSlipstreamSocks)},
 			{Label: "Slipstream SSH", Value: string(types.TypeSlipstreamSSH)},
+			{Label: "Slipstream + MTProxy (Telegram)", Value: string(types.TypeSlipstreamMTProxy)},
 			{Label: "DNSTT SOCKS", Value: string(types.TypeDNSTTSocks)},
 			{Label: "DNSTT SSH", Value: string(types.TypeDNSTTSSH)},
+			{Label: "DNSTT + MTProxy (Telegram, via socat)", Value: string(types.TypeDNSTTMTProxy)},
 		},
 	})
 	if err != nil {
@@ -219,12 +222,20 @@ func addInstanceInteractive(args []string, cfg *router.Config) error {
 		if err := configureSlipstreamSSH(transportCfg); err != nil {
 			return err
 		}
+	case types.TypeSlipstreamMTProxy:
+		if err := configureSlipstreamMTProxy(transportCfg); err != nil {
+			return err
+		}
 	case types.TypeDNSTTSocks:
 		if err := configureDNSTTSocks(transportCfg, microsocksAddr); err != nil {
 			return err
 		}
 	case types.TypeDNSTTSSH:
 		if err := configureDNSTTSSH(transportCfg); err != nil {
+			return err
+		}
+	case types.TypeDNSTTMTProxy:
+		if err := configureDNSTTMTProxy(transportCfg); err != nil {
 			return err
 		}
 	}
@@ -320,6 +331,11 @@ func addInstanceNonInteractive(cmd *cobra.Command, args []string, cfg *router.Co
 			targetAddr = "127.0.0.1:" + osdetect.DetectSSHPort()
 		}
 		transportCfg.Target = &types.TargetConfig{Address: targetAddr}
+		transportCfg.DNSTT = &types.DNSTTConfig{MTU: 1232}
+	case types.TypeSlipstreamMTProxy:
+		transportCfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyPort)}
+	case types.TypeDNSTTMTProxy:
+		transportCfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyPort)}
 		transportCfg.DNSTT = &types.DNSTTConfig{MTU: 1232}
 	default:
 		return fmt.Errorf("unknown transport type: %s", transportType)
@@ -515,6 +531,33 @@ func configureSlipstreamSSH(cfg *types.TransportConfig) error {
 	cfg.Target = &types.TargetConfig{Address: targetAddr}
 	return nil
 }
+func configureSlipstreamMTProxy(cfg *types.TransportConfig) error {
+	proxyUrl, err := installMtProxy(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to configure MTProxy: %w", err)
+	}
+	// Target is the local MTProxy endpoint that the tunnel forwards to
+	// Slipstream client supports raw TCP, so no bridge needed
+	cfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyPort)}
+
+	// Show connection URL to user
+	fmt.Println()
+	tui.PrintBox("Slipstream + MTProxy (direct)", []string{
+		"Slipstream client supports raw TCP tunnel (no bridge needed)",
+		"",
+		"Client-side Telegram config:",
+		"  Type:   MTProto Proxy",
+		"  Server: 127.0.0.1 (via slipstream-client)",
+		"  Port:   " + mtproxy.MTProxyPort,
+		"  Secret: dd<your-secret>",
+		"",
+		"Or for direct connection (without DNS tunnel):",
+		proxyUrl,
+	})
+	fmt.Println()
+
+	return nil
+}
 
 func configureDNSTTSocks(cfg *types.TransportConfig, microsocksAddr string) error {
 	if microsocksAddr == "" {
@@ -548,6 +591,40 @@ func configureDNSTTSSH(cfg *types.TransportConfig) error {
 	cfg.DNSTT = &types.DNSTTConfig{MTU: 1232}
 	return nil
 }
+func configureDNSTTMTProxy(cfg *types.TransportConfig) error {
+	proxyUrl, err := installMtProxy(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to configure MTProxy: %w", err)
+	}
+
+	// Install socat bridge for DNSTT (required because dnstt-client provides SOCKS5, not raw TCP)
+	tui.PrintStatus("Installing socat bridge for DNSTT...")
+	if err := mtproxy.InstallBridge(); err != nil {
+		return fmt.Errorf("failed to install MTProxy bridge: %w", err)
+	}
+
+	// Target is the bridge port, which forwards to MTProxy
+	cfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyBridgePort)}
+	cfg.DNSTT = &types.DNSTTConfig{MTU: 1232}
+
+	// Show connection URL to user
+	fmt.Println()
+	tui.PrintBox("DNSTT + MTProxy (via socat bridge)", []string{
+		"Server-side: socat bridge (port " + mtproxy.MTProxyBridgePort + ") → MTProxy (port " + mtproxy.MTProxyPort + ")",
+		"",
+		"Client-side Telegram config:",
+		"  Type:   MTProto Proxy",
+		"  Server: 127.0.0.1 (via dnstt-client)",
+		"  Port:   " + mtproxy.MTProxyBridgePort,
+		"  Secret: dd<your-secret>",
+		"",
+		"Or for direct connection (without DNS tunnel):",
+		proxyUrl,
+	})
+	fmt.Println()
+
+	return nil
+}
 
 func generatePassword() string {
 	bytes := make([]byte, 32)
@@ -557,6 +634,39 @@ func generatePassword() string {
 		panic("crypto/rand failed: " + err.Error())
 	}
 	return base64.StdEncoding.EncodeToString(bytes)
+}
+
+func installMtProxy(cfg *types.TransportConfig) (string, error) {
+	secret, err := mtproxy.GenerateSecret()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate secret: %w", err)
+	}
+
+	tui.PrintStatus(fmt.Sprintf("Using MTProxy secret: %s", secret))
+
+	progressFn := func(downloaded, total int64) {
+		if total > 0 {
+			percent := float64(downloaded) / float64(total) * 100
+			fmt.Printf("\rDownloading: %.1f%%", percent)
+		}
+	}
+
+	if err := mtproxy.InstallMTProxy(secret, progressFn); err != nil {
+		return "", fmt.Errorf("failed to install MTProxy: %w", err)
+	}
+
+	if err := mtproxy.ConfigureMTProxy(secret); err != nil {
+		return "", fmt.Errorf("failed to configure MTProxy: %w", err)
+	}
+
+	// Format proxy URL with domain from config
+	domain := "your-domain.com"
+	if cfg != nil && cfg.Domain != "" {
+		domain = cfg.Domain
+	}
+
+	proxyUrl := mtproxy.FormatProxyURL(secret, domain)
+	return proxyUrl, nil
 }
 
 var instanceRemoveCmd = &cobra.Command{

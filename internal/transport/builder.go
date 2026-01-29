@@ -70,6 +70,10 @@ func (b *Builder) Build(name string, cfg *types.TransportConfig, opts *BuildOpti
 		return b.buildDNSTTSocks(name, cfg, opts)
 	case types.TypeDNSTTSSH:
 		return b.buildDNSTTSSH(name, cfg, opts)
+	case types.TypeSlipstreamMTProxy:
+		return b.buildSlipstreamMTProxy(name, cfg, opts)
+	case types.TypeDNSTTMTProxy:
+		return b.buildDNSTTMTProxy(name, cfg, opts)
 	default:
 		return nil, fmt.Errorf("unknown transport type: %s", cfg.Type)
 	}
@@ -226,6 +230,102 @@ func (b *Builder) buildDNSTTSocks(name string, cfg *types.TransportConfig, opts 
 func (b *Builder) buildDNSTTSSH(name string, cfg *types.TransportConfig, opts *BuildOptions) (*BuildResult, error) {
 	// Same as SOCKS mode but pointing to SSH port
 	return b.buildDNSTTSocks(name, cfg, opts)
+}
+
+// buildSlipstreamMTProxy builds the command for Slipstream MTProxy mode.
+// Slipstream client supports raw TCP tunneling, so no bridge is needed.
+// The tunnel forwards directly to MTProxy.
+func (b *Builder) buildSlipstreamMTProxy(name string, cfg *types.TransportConfig, opts *BuildOptions) (*BuildResult, error) {
+	// Uses TCP forwarding to MTProxy target
+	return b.buildSlipstreamTCP(name, cfg, opts)
+}
+
+// buildSlipstreamTCP builds the command for Slipstream with raw TCP forwarding.
+// Used for backends that need direct TCP connections (MTProxy, etc.)
+func (b *Builder) buildSlipstreamTCP(name string, cfg *types.TransportConfig, opts *BuildOptions) (*BuildResult, error) {
+	certInfo, err := b.certMgr.GetOrCreate(cfg.Domain)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get certificate: %w", err)
+	}
+
+	configDir := filepath.Join(ConfigDir, "instances", name)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create config directory: %w", err)
+	}
+	if err := system.ChownDirToDnstm(configDir); err != nil {
+		return nil, fmt.Errorf("failed to set config directory ownership: %w", err)
+	}
+
+	// slipstream-server with target-address for TCP forwarding
+	args := []string{
+		"--dns-listen-host", opts.BindHost,
+		"--domain", cfg.Domain,
+		"--dns-listen-port", fmt.Sprintf("%d", opts.BindPort),
+		"--target-address", cfg.Target.Address,
+		"--cert", certInfo.CertPath,
+		"--key", certInfo.KeyPath,
+	}
+
+	execStart := fmt.Sprintf("%s %s", SlipstreamBinary, formatArgs(args))
+
+	return &BuildResult{
+		Binary:    SlipstreamBinary,
+		Args:      args,
+		ConfigDir: configDir,
+		ExecStart: execStart,
+	}, nil
+}
+
+// buildDNSTTMTProxy builds the command for DNSTT MTProxy mode.
+// DNSTT client only provides a SOCKS5 interface, so a socat bridge is installed
+// on the server to forward TCP from the bridge port to MTProxy.
+// The dnstt-server target is the bridge port (8444), which forwards to MTProxy (8443).
+func (b *Builder) buildDNSTTMTProxy(name string, cfg *types.TransportConfig, opts *BuildOptions) (*BuildResult, error) {
+	// Uses TCP forwarding to MTProxy bridge target
+	return b.buildDNSTTTCP(name, cfg, opts)
+}
+
+// buildDNSTTTCP builds the command for DNSTT with raw TCP forwarding.
+// Used for backends that need direct TCP connections (MTProxy, etc.)
+// Unlike SOCKS mode where dnstt-client creates a SOCKS5 interface,
+// TCP mode expects the client to use a TCP tunnel directly.
+func (b *Builder) buildDNSTTTCP(name string, cfg *types.TransportConfig, opts *BuildOptions) (*BuildResult, error) {
+	keyInfo, err := b.keyMgr.GetOrCreate(cfg.Domain)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get keys: %w", err)
+	}
+
+	configDir := filepath.Join(ConfigDir, "instances", name)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create config directory: %w", err)
+	}
+	if err := system.ChownDirToDnstm(configDir); err != nil {
+		return nil, fmt.Errorf("failed to set config directory ownership: %w", err)
+	}
+
+	mtu := "1232"
+	if cfg.DNSTT != nil && cfg.DNSTT.MTU > 0 {
+		mtu = fmt.Sprintf("%d", cfg.DNSTT.MTU)
+	}
+
+	// dnstt-server with target for TCP forwarding
+	// The target receives raw TCP connections, not SOCKS protocol
+	args := []string{
+		"-udp", fmt.Sprintf("%s:%d", opts.BindHost, opts.BindPort),
+		"-privkey-file", keyInfo.PrivateKeyPath,
+		"-mtu", mtu,
+		cfg.Domain,
+		cfg.Target.Address,
+	}
+
+	execStart := fmt.Sprintf("%s %s", DNSTTBinary, formatArgs(args))
+
+	return &BuildResult{
+		Binary:    DNSTTBinary,
+		Args:      args,
+		ConfigDir: configDir,
+		ExecStart: execStart,
+	}, nil
 }
 
 // GetCertInfo returns certificate info for a domain.
