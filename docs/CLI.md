@@ -17,7 +17,9 @@ The menu structure mirrors the CLI commands exactly.
 Install all components and configure the system.
 
 ```bash
-dnstm install                              # Install all components
+dnstm install                              # Install all (interactive mode selection)
+dnstm install --mode single                # Install with single-tunnel mode
+dnstm install --mode multi                 # Install with multi-tunnel mode
 dnstm install --dnstt                      # Install dnstt-server only
 dnstm install --slipstream                 # Install slipstream-server only
 dnstm install --shadowsocks                # Install ssserver only
@@ -26,6 +28,9 @@ dnstm install --microsocks                 # Install microsocks only
 
 This command:
 - Creates the dnstm system user
+- Initializes router configuration and directories
+- Sets operating mode (single or multi)
+- Creates DNS router service
 - Downloads and installs transport binaries
 - Installs and starts the microsocks SOCKS5 proxy
 - Configures firewall rules (port 53 UDP/TCP)
@@ -37,14 +42,12 @@ This command:
 Manage the DNS tunnel router.
 
 ```bash
-dnstm router init [--mode single|multi]   # Initialize router
 dnstm router status                        # Show router status
 dnstm router start                         # Start all tunnels
 dnstm router stop                          # Stop all tunnels
-dnstm router restart                       # Restart all tunnels
 dnstm router logs [-n lines]               # Show DNS router logs
-dnstm router config                        # Show configuration
-dnstm router reset [--force]               # Reset to initial state
+dnstm router mode [single|multi]           # Show or switch mode
+dnstm router switch [name]                 # Switch active instance (single mode)
 ```
 
 ## Instance Commands
@@ -88,43 +91,31 @@ Transport types:
 - `dnstt-socks` - DNSTT with SOCKS target
 - `dnstt-ssh` - DNSTT with SSH target
 
-## Mode Commands
+## Mode Command
 
-Show or switch operating mode.
+Show or switch operating mode (subcommand of `router`).
 
 ```bash
-dnstm mode              # Show current mode
-dnstm mode single       # Switch to single-tunnel mode
-dnstm mode multi        # Switch to multi-tunnel mode
+dnstm router mode              # Show current mode
+dnstm router mode single       # Switch to single-tunnel mode
+dnstm router mode multi        # Switch to multi-tunnel mode
 ```
 
 ## Switch Command
 
-Switch active instance in single-tunnel mode.
+Switch active instance in single-tunnel mode (subcommand of `router`).
 
 ```bash
-dnstm switch            # Interactive picker
-dnstm switch <name>     # Switch to named instance
-dnstm switch list       # List available instances
+dnstm router switch            # Interactive picker
+dnstm router switch <name>     # Switch to named instance
 ```
 
 ## SSH Users
 
-Manage SSH tunnel users.
+Manage SSH tunnel users. Launches the standalone sshtun-user tool.
 
 ```bash
-dnstm ssh-users            # Open management menu
-dnstm ssh-users uninstall  # Remove all users and hardening
-```
-
-## SOCKS Proxy
-
-Manage microsocks SOCKS5 proxy. Automatically installed by `dnstm install`.
-
-```bash
-dnstm socks status     # Show proxy status
-dnstm socks install    # Reinstall proxy
-dnstm socks uninstall  # Remove proxy
+dnstm ssh-users            # Launch sshtun-user management tool
 ```
 
 ## Uninstall
@@ -148,8 +139,8 @@ This removes:
 ### Quick Setup
 
 ```bash
-# Initialize
-sudo dnstm router init --mode single
+# Install and initialize
+sudo dnstm install --mode single
 
 # Add Shadowsocks instance
 sudo dnstm instance add ss1 \
@@ -166,8 +157,8 @@ sudo dnstm router status
 ### Multiple Instances
 
 ```bash
-# Initialize in multi mode
-sudo dnstm router init --mode multi
+# Install in multi mode
+sudo dnstm install --mode multi
 
 # Add instances
 sudo dnstm instance add ss1 --type slipstream-shadowsocks --domain t1.example.com
@@ -181,8 +172,8 @@ sudo dnstm router start
 
 ```bash
 # Switch to single mode
-sudo dnstm mode single
+sudo dnstm router mode single
 
 # Switch active instance
-sudo dnstm switch ss1
+sudo dnstm router switch ss1
 ```

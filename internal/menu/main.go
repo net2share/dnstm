@@ -213,10 +213,6 @@ func runRouterMenu() error {
 		}
 
 		options := []tui.MenuOption{
-			{Label: "Status", Value: "status"},
-			{Label: "Start/Restart", Value: "start"},
-			{Label: "Stop", Value: "stop"},
-			{Label: "Logs", Value: "logs"},
 			{Label: fmt.Sprintf("Mode: %s", modeName), Value: "mode"},
 		}
 
@@ -229,7 +225,13 @@ func runRouterMenu() error {
 			options = append(options, tui.MenuOption{Label: activeLabel, Value: "switch"})
 		}
 
-		options = append(options, tui.MenuOption{Label: "Back", Value: "back"})
+		options = append(options,
+			tui.MenuOption{Label: "Status", Value: "status"},
+			tui.MenuOption{Label: "Start/Restart", Value: "start"},
+			tui.MenuOption{Label: "Stop", Value: "stop"},
+			tui.MenuOption{Label: "Logs", Value: "logs"},
+			tui.MenuOption{Label: "Back", Value: "back"},
+		)
 
 		choice, err := tui.RunMenu(tui.MenuConfig{
 			Title:   "Router",
