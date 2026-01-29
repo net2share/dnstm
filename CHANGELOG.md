@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/net2share/dnstm/compare/v0.4.1...v0.5.0) (2026-01-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* restructure architecture with router, transport instances, and standalone sshtun-user ([#35](https://github.com/net2share/dnstm/issues/35))
+* rewrite architecture with router and transport instances ([#33](https://github.com/net2share/dnstm/issues/33))
+
+### Features
+
+* restructure architecture with router, transport instances, and standalone sshtun-user ([#35](https://github.com/net2share/dnstm/issues/35)) ([37e609e](https://github.com/net2share/dnstm/commit/37e609ecc01ef788fa3c9e8eade2da36bfdcc56a))
+* rewrite architecture with router and transport instances ([#33](https://github.com/net2share/dnstm/issues/33)) ([dd923bf](https://github.com/net2share/dnstm/commit/dd923bfcfe187004f8a57876f43912fae2394461))
+
 ## [0.4.1](https://github.com/net2share/dnstm/compare/v0.4.0...v0.4.1) (2026-01-27)
 
 
