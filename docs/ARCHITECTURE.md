@@ -38,7 +38,7 @@ dnstm manages DNS tunnel services on Linux servers. It supports two transport pr
 
 ### Multi-Tunnel Mode
 
-> **Note:** Slipstream transports may have ~20% lower throughput in multi-mode due to DNS router overhead.
+> **Note:** Multi-mode overhead is typically minimal. Performance varies by transport and connection method. See [Benchmarks](BENCHMARKS-v0.5.0.md) for details.
 
 ```
 ┌─────────────────────────────────────────────────┐

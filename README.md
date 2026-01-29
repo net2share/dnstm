@@ -59,9 +59,7 @@ flowchart TB
     DR --> T3
     DR --> T4
 
-    T1 --> SSH
     T1 --> SOCKS
-    T1 --> SS
     T2 --> SS
     T3 --> SSH
     T4 --> SOCKS
@@ -122,7 +120,7 @@ sudo dnstm router switch <instance-name>
 
 All tunnels run simultaneously. DNS router handles domain-based routing.
 
-> **Note:** Slipstream transports may have ~20% lower throughput in multi-mode due to DNS router overhead.
+> **Note:** Multi-mode overhead is typically minimal. Performance varies by transport and connection method. See [Benchmarks](docs/BENCHMARKS-v0.5.0.md) for details.
 
 ```bash
 sudo dnstm router mode multi
