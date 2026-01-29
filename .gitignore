@@ -21,5 +21,12 @@ coverage.html
 # Vendor (if not using go modules)
 vendor/
 
+
+# AI agents
+.claude/
 CLAUDE.md
 claude.md
+
+# Temp directory and files
+temp/
+test-certs/

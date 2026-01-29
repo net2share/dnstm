@@ -2,9 +2,11 @@ package network
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 const (
@@ -96,6 +98,9 @@ func configureUFW() error {
 }
 
 func configureUFWForPort(port string) error {
+	// Enable route_localnet to allow DNAT to 127.0.0.1
+	enableRouteLocalnet()
+
 	// Allow port 53 for external DNS queries
 	// Allow the target port because after NAT PREROUTING redirects 53->port,
 	// packets arrive at INPUT chain with dport port
@@ -111,13 +116,16 @@ func configureUFWForPort(port string) error {
 		cmd.Run()
 	}
 
+	// Clear existing NAT PREROUTING rules first to avoid duplicates
+	clearAllNatPrerouting()
+
 	// Add NAT rules to /etc/ufw/before.rules for persistence
 	if err := addUFWNatRulesForPort(port); err != nil {
 		// Fall back to direct iptables if UFW config fails
 		return configureIptablesForPort(port)
 	}
 
-	// Reload UFW to apply the NAT rules
+	// Reload UFW to apply the NAT rules from before.rules
 	exec.Command("ufw", "reload").Run()
 
 	return nil
@@ -132,6 +140,9 @@ func addUFWNatRules() error {
 }
 
 func addUFWNatRulesForPort(port string) error {
+	// Enable route_localnet for DNAT to 127.0.0.1
+	enableRouteLocalnet()
+
 	content, err := os.ReadFile(ufwBeforeRulesPath)
 	if err != nil {
 		return err
@@ -145,11 +156,12 @@ func addUFWNatRulesForPort(port string) error {
 	}
 
 	// NAT rules to prepend before the *filter section
-	natRules := fmt.Sprintf(`%s - redirect port 53 to %s
+	// Use DNAT instead of REDIRECT to work with services bound to 127.0.0.1
+	natRules := fmt.Sprintf(`%s - DNAT port 53 to 127.0.0.1:%s
 *nat
 :PREROUTING ACCEPT [0:0]
--A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports %s
--A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports %s
+-A PREROUTING -p udp --dport 53 -j DNAT --to-destination 127.0.0.1:%s
+-A PREROUTING -p tcp --dport 53 -j DNAT --to-destination 127.0.0.1:%s
 COMMIT
 
 `, dnstmNatMarker, port, port, port)
@@ -169,13 +181,15 @@ func configureIptables() error {
 }
 
 func configureIptablesForPort(port string) error {
-	// Clear any existing rules for both ports
-	clearIptablesRulesForPort(DnsttPort)
-	clearIptablesRulesForPort(SlipstreamPort)
+	// Enable route_localnet to allow DNAT to 127.0.0.1
+	enableRouteLocalnet()
+
+	// Clear any existing NAT rules first to avoid duplicates
+	clearAllNatPrerouting()
 
 	rules := [][]string{
-		{"-t", "nat", "-A", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
-		{"-t", "nat", "-A", "PREROUTING", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
+		{"-t", "nat", "-A", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", "127.0.0.1:" + port},
+		{"-t", "nat", "-A", "PREROUTING", "-p", "tcp", "--dport", "53", "-j", "DNAT", "--to-destination", "127.0.0.1:" + port},
 	}
 
 	for _, args := range rules {
@@ -188,12 +202,38 @@ func configureIptablesForPort(port string) error {
 	return saveIptablesRules()
 }
 
+// enableRouteLocalnet enables the route_localnet sysctl setting
+// which is required for DNAT to 127.0.0.1 to work.
+func enableRouteLocalnet() {
+	// Enable for all interfaces
+	exec.Command("sysctl", "-w", "net.ipv4.conf.all.route_localnet=1").Run()
+	// Also try to enable for common interface names
+	for _, iface := range []string{"eth0", "enp1s0", "ens3", "ens192"} {
+		exec.Command("sysctl", "-w", fmt.Sprintf("net.ipv4.conf.%s.route_localnet=1", iface)).Run()
+	}
+}
+
+// clearAllNatPrerouting clears all NAT PREROUTING rules.
+func clearAllNatPrerouting() {
+	exec.Command("iptables", "-t", "nat", "-F", "PREROUTING").Run()
+}
+
+// clearAllNatOutput clears all NAT OUTPUT rules.
+// This is needed because some legacy setups may have OUTPUT rules redirecting DNS.
+func clearAllNatOutput() {
+	exec.Command("iptables", "-t", "nat", "-F", "OUTPUT").Run()
+	exec.Command("ip6tables", "-t", "nat", "-F", "OUTPUT").Run()
+}
+
 func clearIptablesRules() {
 	clearIptablesRulesForPort(DnsttPort)
 }
 
 func clearIptablesRulesForPort(port string) {
+	// Try to delete both DNAT and REDIRECT rules (for backward compatibility)
 	rules := [][]string{
+		{"-t", "nat", "-D", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", "127.0.0.1:" + port},
+		{"-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", "53", "-j", "DNAT", "--to-destination", "127.0.0.1:" + port},
 		{"-t", "nat", "-D", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
 		{"-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
 	}
@@ -240,17 +280,19 @@ func ConfigureIPv6ForPort(port string) error {
 	fwType := DetectFirewall()
 
 	if fwType == FirewallUFW {
+		// Just update the before6.rules file, don't reload
+		// The IPv4 config already did the reload
 		return addUFWNatRulesIPv6ForPort(port)
 	}
 
+	// Enable route_localnet equivalent for IPv6 (not needed, but keep for consistency)
 	// Direct ip6tables for non-UFW systems
 	// Clear any existing rules first
-	clearIp6tablesRulesForPort(DnsttPort)
-	clearIp6tablesRulesForPort(SlipstreamPort)
+	exec.Command("ip6tables", "-t", "nat", "-F", "PREROUTING").Run()
 
 	rules := [][]string{
-		{"-t", "nat", "-A", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
-		{"-t", "nat", "-A", "PREROUTING", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port},
+		{"-t", "nat", "-A", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", "[::1]:" + port},
+		{"-t", "nat", "-A", "PREROUTING", "-p", "tcp", "--dport", "53", "-j", "DNAT", "--to-destination", "[::1]:" + port},
 	}
 
 	for _, args := range rules {
@@ -280,11 +322,12 @@ func addUFWNatRulesIPv6ForPort(port string) error {
 	}
 
 	// NAT rules to prepend before the *filter section
-	natRules := fmt.Sprintf(`%s - redirect port 53 to %s (IPv6)
+	// Use DNAT for IPv6 as well
+	natRules := fmt.Sprintf(`%s - DNAT port 53 to [::1]:%s (IPv6)
 *nat
 :PREROUTING ACCEPT [0:0]
--A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports %s
--A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports %s
+-A PREROUTING -p udp --dport 53 -j DNAT --to-destination [::1]:%s
+-A PREROUTING -p tcp --dport 53 -j DNAT --to-destination [::1]:%s
 COMMIT
 
 `, dnstmNatMarker, port, port, port)
@@ -296,9 +339,8 @@ COMMIT
 		return err
 	}
 
-	// Reload UFW to apply
-	exec.Command("ufw", "reload").Run()
-
+	// Don't reload here - the caller should reload once after all configs are done
+	// to avoid duplicating IPv4 rules
 	return nil
 }
 
@@ -406,6 +448,7 @@ func removeUFWNatRules(filePath string) {
 	lines := strings.Split(contentStr, "\n")
 	var newLines []string
 	inNatBlock := false
+	skipEmptyLine := false
 
 	for _, line := range lines {
 		if strings.Contains(line, dnstmNatMarker) || strings.Contains(line, dnsttNatMarker) {
@@ -415,6 +458,7 @@ func removeUFWNatRules(filePath string) {
 		if inNatBlock {
 			if line == "COMMIT" {
 				inNatBlock = false
+				skipEmptyLine = true
 				continue
 			}
 			if strings.HasPrefix(line, "*nat") ||
@@ -422,10 +466,11 @@ func removeUFWNatRules(filePath string) {
 				strings.HasPrefix(line, "-A PREROUTING") {
 				continue
 			}
-			// Empty line after COMMIT
-			if line == "" {
-				continue
-			}
+		}
+		// Skip one empty line after COMMIT
+		if skipEmptyLine && line == "" {
+			skipEmptyLine = false
+			continue
 		}
 		newLines = append(newLines, line)
 	}
@@ -462,5 +507,209 @@ func SwitchDNSRouting(fromPort, toPort string) error {
 	// Configure IPv6 if available
 	ConfigureIPv6ForPort(toPort)
 
+	return nil
+}
+
+// AllowPort53 ensures port 53 is open in the firewall without setting up NAT.
+// This is used in multi-mode where the DNS router listens directly on port 53.
+func AllowPort53() error {
+	fwType := DetectFirewall()
+
+	switch fwType {
+	case FirewallFirewalld:
+		cmds := [][]string{
+			{"firewall-cmd", "--permanent", "--add-port=53/udp"},
+			{"firewall-cmd", "--permanent", "--add-port=53/tcp"},
+			{"firewall-cmd", "--reload"},
+		}
+		for _, args := range cmds {
+			exec.Command(args[0], args[1:]...).Run()
+		}
+	case FirewallUFW:
+		cmds := [][]string{
+			{"ufw", "allow", "53/udp"},
+			{"ufw", "allow", "53/tcp"},
+		}
+		for _, args := range cmds {
+			exec.Command(args[0], args[1:]...).Run()
+		}
+	case FirewallIptables, FirewallNone:
+		// For iptables-only systems, ensure the input chain allows port 53
+		cmds := [][]string{
+			{"-A", "INPUT", "-p", "udp", "--dport", "53", "-j", "ACCEPT"},
+			{"-A", "INPUT", "-p", "tcp", "--dport", "53", "-j", "ACCEPT"},
+		}
+		for _, args := range cmds {
+			exec.Command("iptables", args...).Run()
+		}
+	}
+
+	return nil
+}
+
+// ClearNATOnly removes NAT rules without removing UFW allow rules.
+// This is used when switching to multi-mode where we want to keep port 53 open
+// but remove the DNAT redirect. Also clears OUTPUT NAT rules that may interfere
+// with the server's own DNS resolution.
+func ClearNATOnly() {
+	fwType := DetectFirewall()
+
+	switch fwType {
+	case FirewallUFW:
+		// Remove NAT rules from before.rules but keep UFW allow rules
+		removeUFWNatRules(ufwBeforeRulesPath)
+		removeUFWNatRules(ufwBefore6RulesPath)
+		// Clear iptables NAT rules (PREROUTING and OUTPUT)
+		clearAllNatPrerouting()
+		clearAllNatOutput()
+		exec.Command("ip6tables", "-t", "nat", "-F", "PREROUTING").Run()
+		exec.Command("ufw", "reload").Run()
+	case FirewallIptables, FirewallNone:
+		clearAllNatPrerouting()
+		clearAllNatOutput()
+		exec.Command("ip6tables", "-t", "nat", "-F", "PREROUTING").Run()
+	case FirewallFirewalld:
+		// For firewalld, just remove the direct rules
+		cmds := [][]string{
+			{"firewall-cmd", "--permanent", "--direct", "--remove-rule", "ipv4", "nat", "PREROUTING", "0", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", DnsttPort},
+			{"firewall-cmd", "--permanent", "--direct", "--remove-rule", "ipv4", "nat", "PREROUTING", "0", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", SlipstreamPort},
+			{"firewall-cmd", "--permanent", "--direct", "--remove-rule", "ipv4", "nat", "PREROUTING", "0", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", ShadowsocksPort},
+			{"firewall-cmd", "--reload"},
+		}
+		for _, args := range cmds {
+			exec.Command(args[0], args[1:]...).Run()
+		}
+	}
+}
+
+// GetExternalIP returns the external (non-loopback, non-private) IP address.
+// Falls back to the first non-loopback IP if no external IP is found.
+func GetExternalIP() (string, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "", fmt.Errorf("failed to get interfaces: %w", err)
+	}
+
+	var fallbackIP string
+
+	for _, iface := range ifaces {
+		// Skip loopback and down interfaces
+		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+
+			// Skip loopback and IPv6 for now
+			if ip == nil || ip.IsLoopback() || ip.To4() == nil {
+				continue
+			}
+
+			// Check if it's a private IP
+			if isPrivateIP(ip) {
+				// Use as fallback if we don't find an external IP
+				if fallbackIP == "" {
+					fallbackIP = ip.String()
+				}
+				continue
+			}
+
+			// Found an external IP
+			return ip.String(), nil
+		}
+	}
+
+	// If no external IP found, use the fallback (first non-loopback IP)
+	if fallbackIP != "" {
+		return fallbackIP, nil
+	}
+
+	return "", fmt.Errorf("no suitable IP address found")
+}
+
+// isPrivateIP checks if an IP is in a private range.
+func isPrivateIP(ip net.IP) bool {
+	privateRanges := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"169.254.0.0/16", // Link-local
+	}
+
+	for _, cidr := range privateRanges {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsUDPPortAvailable checks if a UDP port is available for binding on the external IP.
+func IsUDPPortAvailable(port int) bool {
+	// Try to bind on external IP first (for single mode)
+	externalIP, err := GetExternalIP()
+	if err == nil {
+		addr := fmt.Sprintf("%s:%d", externalIP, port)
+		conn, err := net.ListenPacket("udp", addr)
+		if err != nil {
+			return false
+		}
+		conn.Close()
+		return true
+	}
+
+	// Fall back to checking 0.0.0.0
+	addr := fmt.Sprintf(":%d", port)
+	conn, err := net.ListenPacket("udp", addr)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
+
+// WaitForPortAvailable waits for a UDP port to become available.
+// Returns true if port becomes available within timeout, false otherwise.
+func WaitForPortAvailable(port int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if IsUDPPortAvailable(port) {
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return false
+}
+
+// KillProcessOnPort kills any process using the specified port.
+// Returns nil if the port becomes available after killing, error otherwise.
+func KillProcessOnPort(port int) error {
+	// Use fuser to kill processes on the port
+	exec.Command("fuser", "-k", fmt.Sprintf("%d/udp", port)).Run()
+	exec.Command("fuser", "-k", fmt.Sprintf("%d/tcp", port)).Run()
+
+	// Wait for processes to terminate
+	time.Sleep(500 * time.Millisecond)
+
+	// Check if port is now available
+	if !IsUDPPortAvailable(port) {
+		return fmt.Errorf("port %d still in use after killing processes", port)
+	}
 	return nil
 }

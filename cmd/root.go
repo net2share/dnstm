@@ -2,12 +2,24 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/net2share/dnstm/internal/menu"
+	"github.com/net2share/dnstm/internal/transport"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/spf13/cobra"
 )
+
+// requireInstalled checks if transport binaries are installed.
+func requireInstalled() error {
+	if !transport.IsInstalled() {
+		missing := transport.GetMissingBinaries()
+		return fmt.Errorf("transport binaries not installed. Missing: %s\nRun 'dnstm install' first", strings.Join(missing, ", "))
+	}
+	return nil
+}
 
 // Version and BuildTime are set at build time.
 var (
@@ -32,16 +44,17 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.Version = Version
 
-	rootCmd.AddCommand(installCmd)
-	rootCmd.AddCommand(uninstallCmd)
+	// Router commands
+	rootCmd.AddCommand(routerCmd)
+	rootCmd.AddCommand(instanceCmd)
+	rootCmd.AddCommand(modeCmd)
 	rootCmd.AddCommand(switchCmd)
-	rootCmd.AddCommand(statusCmd)
-	rootCmd.AddCommand(logsCmd)
-	rootCmd.AddCommand(configCmd)
-	rootCmd.AddCommand(restartCmd)
+	rootCmd.AddCommand(uninstallCmd)
+
+	// Utilities
+	rootCmd.AddCommand(installCmd)
 	rootCmd.AddCommand(sshUsersCmd)
 	rootCmd.AddCommand(socksCmd)
-	rootCmd.AddCommand(shadowsocksCmd)
 }
 
 // Execute runs the root command.

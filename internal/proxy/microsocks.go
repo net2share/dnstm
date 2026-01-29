@@ -285,12 +285,13 @@ func detectLibc() string {
 // ConfigureMicrosocks creates the systemd service for microsocks.
 func ConfigureMicrosocks() error {
 	return service.CreateGenericService(&service.ServiceConfig{
-		Name:        MicrosocksServiceName,
-		Description: "Microsocks SOCKS5 Proxy",
-		User:        "nobody",
-		Group:       "nogroup",
-		ExecStart:   "/usr/local/bin/microsocks -i " + MicrosocksBindAddr + " -p " + MicrosocksPort + " -q",
-		ConfigDir:   "/usr/local/bin",
+		Name:             MicrosocksServiceName,
+		Description:      "Microsocks SOCKS5 Proxy",
+		User:             "nobody",
+		Group:            "nogroup",
+		ExecStart:        "/usr/local/bin/microsocks -i " + MicrosocksBindAddr + " -p " + MicrosocksPort + " -q",
+		ReadOnlyPaths:    []string{"/usr/local/bin"},
+		BindToPrivileged: false,
 	})
 }
 
