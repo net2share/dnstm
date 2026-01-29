@@ -41,6 +41,9 @@ transports:
 
 routing:
   default: instance1
+
+proxy:
+  port: 1080  # Microsocks SOCKS5 proxy port
 ```
 
 ## Transport Types
@@ -173,3 +176,4 @@ Transport binaries are stored in `/usr/local/bin/`:
 - `dnstt-server` - DNSTT transport
 - `ssserver` - Shadowsocks server
 - `microsocks` - SOCKS5 proxy
+- `sshtun-user` - SSH user management tool

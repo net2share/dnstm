@@ -90,12 +90,9 @@ t.example.com.   IN  NS  ns.example.com.
 # Interactive menu
 sudo dnstm
 
-# Install (required first time)
+# Install (required first time) - sets up system, selects mode
 sudo dnstm install
-
-# Initialize router (interactive)
-sudo dnstm router init
-# CLI: sudo dnstm router init --mode single
+# CLI: sudo dnstm install --mode single
 
 # Add a transport instance (interactive)
 sudo dnstm instance add
@@ -117,8 +114,8 @@ See [CLI Reference](docs/CLI.md) for all available flags and options.
 One tunnel active at a time. The active transport binds directly to port 53.
 
 ```bash
-sudo dnstm mode single
-sudo dnstm switch <instance-name>
+sudo dnstm router mode single
+sudo dnstm router switch <instance-name>
 ```
 
 ### Multi-Tunnel Mode
@@ -128,7 +125,7 @@ All tunnels run simultaneously. DNS router handles domain-based routing.
 > **Note:** Slipstream transports may have ~20% lower throughput in multi-mode due to DNS router overhead.
 
 ```bash
-sudo dnstm mode multi
+sudo dnstm router mode multi
 sudo dnstm router start
 ```
 

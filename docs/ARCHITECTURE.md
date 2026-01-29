@@ -108,7 +108,8 @@ Manages Curve25519 key pairs for DNSTT transports:
 ├── slipstream-server     # Slipstream binary
 ├── dnstt-server          # DNSTT binary
 ├── ssserver              # Shadowsocks binary
-└── microsocks            # SOCKS proxy binary
+├── microsocks            # SOCKS proxy binary
+└── sshtun-user           # SSH user management tool
 ```
 
 ## Service Management

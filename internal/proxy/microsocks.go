@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,7 +23,6 @@ const (
 	MicrosocksBinaryName  = "microsocks"
 	MicrosocksServiceName = "microsocks"
 	MicrosocksBindAddr    = "127.0.0.1"
-	MicrosocksPort        = "1080"
 	MicrosocksInstallDir  = "/usr/local/bin"
 )
 
@@ -282,17 +283,40 @@ func detectLibc() string {
 	return "glibc"
 }
 
-// ConfigureMicrosocks creates the systemd service for microsocks.
-func ConfigureMicrosocks() error {
+// ConfigureMicrosocks creates the systemd service for microsocks with the specified port.
+func ConfigureMicrosocks(port int) error {
 	return service.CreateGenericService(&service.ServiceConfig{
 		Name:             MicrosocksServiceName,
 		Description:      "Microsocks SOCKS5 Proxy",
 		User:             "nobody",
 		Group:            "nogroup",
-		ExecStart:        "/usr/local/bin/microsocks -i " + MicrosocksBindAddr + " -p " + MicrosocksPort + " -q",
+		ExecStart:        fmt.Sprintf("/usr/local/bin/microsocks -i %s -p %d -q", MicrosocksBindAddr, port),
 		ReadOnlyPaths:    []string{"/usr/local/bin"},
 		BindToPrivileged: false,
 	})
+}
+
+// FindAvailablePort finds an available port in the range 10000-60000.
+func FindAvailablePort() (int, error) {
+	// Try random ports in the high range to avoid conflicts
+	for i := 0; i < 100; i++ {
+		port := 10000 + rand.Intn(50000) // Range: 10000-60000
+		if isPortAvailable(port) {
+			return port, nil
+		}
+	}
+	return 0, fmt.Errorf("could not find available port")
+}
+
+// isPortAvailable checks if a port is available for binding.
+func isPortAvailable(port int) bool {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return false
+	}
+	listener.Close()
+	return true
 }
 
 // StartMicrosocks enables and starts the microsocks service.

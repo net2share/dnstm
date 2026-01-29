@@ -2,14 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-	"strings"
 
-	"github.com/charmbracelet/huh"
 	"github.com/net2share/dnstm/internal/dnsrouter"
-	"github.com/net2share/dnstm/internal/network"
 	"github.com/net2share/dnstm/internal/router"
-	"github.com/net2share/dnstm/internal/system"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"
 	"github.com/spf13/cobra"
@@ -20,92 +15,7 @@ var routerCmd = &cobra.Command{
 	Short: "Manage DNS tunnel router",
 	Long:  "Manage the multi-transport DNS router",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Allow init command without installation check
-		if cmd.Name() == "init" {
-			return nil
-		}
 		return requireInstalled()
-	},
-}
-
-var routerInitCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initialize the router",
-	Long: `Initialize the router by creating default configuration.
-
-Use --mode to set the initial operating mode:
-  single  Single-tunnel mode (default) - one tunnel at a time with NAT redirect
-  multi   Multi-tunnel mode - multiple tunnels with DNS router`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := osdetect.RequireRoot(); err != nil {
-			return err
-		}
-
-		modeStr, _ := cmd.Flags().GetString("mode")
-
-		fmt.Println()
-		tui.PrintInfo("Initializing DNS tunnel router...")
-		fmt.Println()
-
-		totalSteps := 3
-		currentStep := 0
-
-		// Step 1: Create dnstm user (needed before directory ownership)
-		currentStep++
-		tui.PrintStep(currentStep, totalSteps, "Creating dnstm user...")
-		if err := system.CreateDnstmUser(); err != nil {
-			return fmt.Errorf("failed to create user: %w", err)
-		}
-		tui.PrintStatus("User 'dnstm' created")
-
-		// Step 2: Create directories and default config
-		currentStep++
-		tui.PrintStep(currentStep, totalSteps, "Creating configuration directories...")
-		if err := router.Initialize(); err != nil {
-			return fmt.Errorf("failed to initialize: %w", err)
-		}
-		tui.PrintStatus("Configuration directories created")
-
-		// Step 3: Set mode and create services
-		currentStep++
-		if modeStr != "" {
-			mode := router.Mode(modeStr)
-			if mode != router.ModeSingle && mode != router.ModeMulti {
-				return fmt.Errorf("invalid mode '%s'. Use 'single' or 'multi'", modeStr)
-			}
-
-			cfg, err := router.Load()
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-			cfg.Mode = mode
-			if err := cfg.Save(); err != nil {
-				return fmt.Errorf("failed to save config: %w", err)
-			}
-			tui.PrintStep(currentStep, totalSteps, fmt.Sprintf("Mode set to %s...", router.GetModeDisplayName(mode)))
-		} else {
-			tui.PrintStep(currentStep, totalSteps, "Using default single-tunnel mode...")
-		}
-
-		// Create DNS router service (needed for multi mode, optional for single)
-		svc := dnsrouter.NewService()
-		if err := svc.CreateService(); err != nil {
-			tui.PrintWarning("DNS router service: " + err.Error())
-		} else {
-			tui.PrintStatus("DNS router service created")
-		}
-
-		fmt.Println()
-		tui.PrintSuccess("Router initialized successfully!")
-		fmt.Println()
-		tui.PrintInfo("Next steps:")
-		fmt.Println("  1. Add transport instances: dnstm instance add")
-		fmt.Println("  2. Start the router: dnstm router start")
-		fmt.Println()
-		tui.PrintInfo("To change mode later: dnstm mode [single|multi]")
-		fmt.Println()
-
-		return nil
 	},
 }
 
@@ -217,7 +127,9 @@ var routerStatusCmd = &cobra.Command{
 var routerStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the router",
-	Long: `Start tunnels based on current mode.
+	Long: `Start or restart tunnels based on current mode.
+
+If already running, restarts to pick up any configuration changes.
 
 In single-tunnel mode: starts the active instance.
 In multi-tunnel mode: starts DNS router and all instances.`,
@@ -227,7 +139,7 @@ In multi-tunnel mode: starts DNS router and all instances.`,
 		}
 
 		if !router.IsInitialized() {
-			return fmt.Errorf("router not initialized. Run 'dnstm router init' first")
+			return fmt.Errorf("router not initialized. Run 'dnstm install' first")
 		}
 
 		cfg, err := router.Load()
@@ -242,15 +154,25 @@ In multi-tunnel mode: starts DNS router and all instances.`,
 
 		fmt.Println()
 		modeName := router.GetModeDisplayName(cfg.Mode)
-		tui.PrintInfo(fmt.Sprintf("Starting in %s mode...", modeName))
+		isRunning := r.IsRunning()
+
+		if isRunning {
+			tui.PrintInfo(fmt.Sprintf("Restarting in %s mode...", modeName))
+		} else {
+			tui.PrintInfo(fmt.Sprintf("Starting in %s mode...", modeName))
+		}
 		fmt.Println()
 
-		if err := r.Start(); err != nil {
+		if err := r.Restart(); err != nil {
 			return fmt.Errorf("failed to start: %w", err)
 		}
 
 		fmt.Println()
-		tui.PrintSuccess("Started!")
+		if isRunning {
+			tui.PrintSuccess("Restarted!")
+		} else {
+			tui.PrintSuccess("Started!")
+		}
 		fmt.Println()
 
 		return nil
@@ -299,45 +221,6 @@ In multi-tunnel mode: stops DNS router and all instances.`,
 	},
 }
 
-var routerRestartCmd = &cobra.Command{
-	Use:   "restart",
-	Short: "Restart the router",
-	Long:  "Restart tunnels based on current mode",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := osdetect.RequireRoot(); err != nil {
-			return err
-		}
-
-		if !router.IsInitialized() {
-			return fmt.Errorf("router not initialized")
-		}
-
-		cfg, err := router.Load()
-		if err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
-		}
-
-		r, err := router.New(cfg)
-		if err != nil {
-			return fmt.Errorf("failed to create router: %w", err)
-		}
-
-		fmt.Println()
-		tui.PrintInfo("Restarting...")
-		fmt.Println()
-
-		if err := r.Restart(); err != nil {
-			return fmt.Errorf("failed to restart: %w", err)
-		}
-
-		fmt.Println()
-		tui.PrintSuccess("Restarted!")
-		fmt.Println()
-
-		return nil
-	},
-}
-
 var routerLogsCmd = &cobra.Command{
 	Use:   "logs",
 	Short: "Show router logs",
@@ -360,194 +243,13 @@ var routerLogsCmd = &cobra.Command{
 	},
 }
 
-var routerConfigCmd = &cobra.Command{
-	Use:   "config",
-	Short: "Show router configuration",
-	Long:  "Show the current router configuration",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := osdetect.RequireRoot(); err != nil {
-			return err
-		}
-
-		if !router.IsInitialized() {
-			return fmt.Errorf("router not initialized")
-		}
-
-		// Read and display the config file
-		configPath := router.GetConfigPath()
-		data, err := os.ReadFile(configPath)
-		if err != nil {
-			return fmt.Errorf("failed to read config: %w", err)
-		}
-
-		fmt.Println("# Configuration file:", configPath)
-		fmt.Println(strings.TrimSpace(string(data)))
-
-		return nil
-	},
-}
-
-var routerResetCmd = &cobra.Command{
-	Use:   "reset",
-	Short: "Reset router to initial state",
-	Long: `Reset the router by removing all instances and services.
-
-This will:
-  - Stop all services (instances + DNS router)
-  - Remove all instance service files
-  - Remove DNS router service file
-  - Delete instance configurations
-  - Reset config.yaml to default state
-  - Remove firewall rules`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := osdetect.RequireRoot(); err != nil {
-			return err
-		}
-
-		if !router.IsInitialized() {
-			return fmt.Errorf("router not initialized")
-		}
-
-		force, _ := cmd.Flags().GetBool("force")
-		if !force {
-			fmt.Println()
-			tui.PrintWarning("This will reset the router to its initial state:")
-			fmt.Println("  - Stop and remove all instance services")
-			fmt.Println("  - Stop and remove DNS router service")
-			fmt.Println("  - Delete all instance configurations")
-			fmt.Println("  - Reset config.yaml to defaults")
-			fmt.Println("  - Remove firewall rules")
-			fmt.Println()
-
-			var confirm bool
-			err := huh.NewConfirm().
-				Title("Are you sure you want to reset?").
-				Value(&confirm).
-				Run()
-			if err != nil {
-				return err
-			}
-			if !confirm {
-				tui.PrintInfo("Cancelled")
-				return nil
-			}
-		}
-
-		return performRouterReset()
-	},
-}
-
-func performRouterReset() error {
-	fmt.Println()
-	tui.PrintInfo("Resetting router...")
-	fmt.Println()
-
-	totalSteps := 6
-	currentStep := 0
-
-	// Step 1: Load config and stop all services
-	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Stopping all services...")
-
-	cfg, err := router.Load()
-	if err != nil {
-		tui.PrintWarning("Could not load config: " + err.Error())
-	} else {
-		// Stop all instances
-		for name, transport := range cfg.Transports {
-			instance := router.NewInstance(name, transport)
-			if instance.IsActive() {
-				instance.Stop()
-			}
-		}
-	}
-
-	// Stop DNS router
-	svc := dnsrouter.NewService()
-	if svc.IsActive() {
-		svc.Stop()
-	}
-	tui.PrintStatus("Services stopped")
-
-	// Step 2: Remove instance services
-	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Removing instance services...")
-	if cfg != nil {
-		for name, transport := range cfg.Transports {
-			instance := router.NewInstance(name, transport)
-			if err := instance.RemoveService(); err != nil {
-				tui.PrintWarning(fmt.Sprintf("Failed to remove %s service: %v", name, err))
-			}
-		}
-	}
-	tui.PrintStatus("Instance services removed")
-
-	// Step 3: Remove DNS router service
-	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Removing DNS router service...")
-	if err := svc.Remove(); err != nil {
-		tui.PrintWarning("Failed to remove DNS router service: " + err.Error())
-	}
-	tui.PrintStatus("DNS router service removed")
-
-	// Step 4: Delete instance config directories
-	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Removing instance configurations...")
-	instancesDir := "/etc/dnstm/instances"
-	if err := os.RemoveAll(instancesDir); err != nil {
-		tui.PrintWarning("Failed to remove instances directory: " + err.Error())
-	}
-	// Recreate empty directory with proper ownership
-	os.MkdirAll(instancesDir, 0750)
-	system.ChownDirToDnstm(instancesDir)
-
-	// Remove dnsrouter.yaml
-	os.Remove("/etc/dnstm/dnsrouter.yaml")
-	tui.PrintStatus("Instance configurations removed")
-
-	// Step 5: Reset config.yaml
-	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Resetting configuration...")
-	defaultCfg := router.Default()
-	if err := defaultCfg.Save(); err != nil {
-		return fmt.Errorf("failed to save default config: %w", err)
-	}
-	tui.PrintStatus("Configuration reset")
-
-	// Step 6: Remove firewall rules
-	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Removing firewall rules...")
-	// Import network package via router - use ClearNATOnly which handles cleanup
-	// We need to call this directly
-	clearFirewallRules()
-	tui.PrintStatus("Firewall rules removed")
-
-	fmt.Println()
-	tui.PrintSuccess("Router reset complete!")
-	fmt.Println()
-	tui.PrintInfo("To start fresh: dnstm instance add")
-	fmt.Println()
-
-	return nil
-}
-
-func clearFirewallRules() {
-	// Clear NAT rules and remove port permissions
-	network.ClearNATOnly()
-	network.RemoveAllFirewallRules()
-}
-
 func init() {
-	routerCmd.AddCommand(routerInitCmd)
 	routerCmd.AddCommand(routerStatusCmd)
 	routerCmd.AddCommand(routerStartCmd)
 	routerCmd.AddCommand(routerStopCmd)
-	routerCmd.AddCommand(routerRestartCmd)
 	routerCmd.AddCommand(routerLogsCmd)
-	routerCmd.AddCommand(routerConfigCmd)
-	routerCmd.AddCommand(routerResetCmd)
+	routerCmd.AddCommand(modeCmd)
+	routerCmd.AddCommand(switchCmd)
 
-	routerInitCmd.Flags().StringP("mode", "m", "", "Operating mode: single or multi (default: single)")
 	routerLogsCmd.Flags().IntP("lines", "n", 50, "Number of log lines to show")
-	routerResetCmd.Flags().BoolP("force", "f", false, "Skip confirmation")
 }

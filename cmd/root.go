@@ -9,6 +9,7 @@ import (
 	"github.com/net2share/dnstm/internal/menu"
 	"github.com/net2share/dnstm/internal/transport"
 	"github.com/net2share/go-corelib/osdetect"
+	"github.com/net2share/go-corelib/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -37,6 +38,7 @@ var rootCmd = &cobra.Command{
 		}
 		menu.Version = Version
 		menu.BuildTime = BuildTime
+		tui.SetAppInfo("dnstm", Version, BuildTime)
 		return menu.RunInteractive()
 	},
 }
@@ -44,17 +46,14 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.Version = Version
 
-	// Router commands
-	rootCmd.AddCommand(routerCmd)
+	// Main commands (order matches menu)
 	rootCmd.AddCommand(instanceCmd)
-	rootCmd.AddCommand(modeCmd)
-	rootCmd.AddCommand(switchCmd)
+	rootCmd.AddCommand(routerCmd)
+	rootCmd.AddCommand(sshUsersCmd)
 	rootCmd.AddCommand(uninstallCmd)
 
 	// Utilities
 	rootCmd.AddCommand(installCmd)
-	rootCmd.AddCommand(sshUsersCmd)
-	rootCmd.AddCommand(socksCmd)
 }
 
 // Execute runs the root command.

@@ -48,9 +48,15 @@ type Config struct {
 	Mode         Mode                              `yaml:"mode"`
 	Single       SingleConfig                      `yaml:"single,omitempty"`
 	Listen       ListenConfig                      `yaml:"listen"`
+	Proxy        ProxyConfig                       `yaml:"proxy,omitempty"`
 	Certificates map[string]*CertConfig            `yaml:"certificates,omitempty"`
 	Transports   map[string]*types.TransportConfig `yaml:"transports,omitempty"`
 	Routing      RoutingConfig                     `yaml:"routing"`
+}
+
+// ProxyConfig holds settings for the local SOCKS proxy (microsocks).
+type ProxyConfig struct {
+	Port int `yaml:"port,omitempty"`
 }
 
 // SingleConfig holds settings for single-tunnel mode.
@@ -297,4 +303,13 @@ func IsDNSTTType(t TransportType) bool {
 // GetTransportTypeDisplayName returns a human-readable name for a transport type.
 func GetTransportTypeDisplayName(t TransportType) string {
 	return types.GetTransportTypeDisplayName(t)
+}
+
+// GetMicrosocksAddress returns the configured microsocks SOCKS proxy address.
+// Returns empty string if not configured.
+func (c *Config) GetMicrosocksAddress() string {
+	if c.Proxy.Port == 0 {
+		return ""
+	}
+	return fmt.Sprintf("127.0.0.1:%d", c.Proxy.Port)
 }

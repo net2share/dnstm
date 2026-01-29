@@ -174,6 +174,29 @@ func (r *Router) stopMultiMode() error {
 	return lastErr
 }
 
+// IsRunning returns true if any router services are currently active.
+func (r *Router) IsRunning() bool {
+	if r.config.IsSingleMode() {
+		active := r.config.Single.Active
+		if active != "" {
+			if instance, ok := r.instances[active]; ok {
+				return instance.IsActive()
+			}
+		}
+		return false
+	}
+	// Multi mode - check dnsrouter or any instance
+	if r.dnsrouter.IsActive() {
+		return true
+	}
+	for _, instance := range r.instances {
+		if instance.IsActive() {
+			return true
+		}
+	}
+	return false
+}
+
 // Restart restarts all services based on current mode.
 func (r *Router) Restart() error {
 	if err := r.Stop(); err != nil {

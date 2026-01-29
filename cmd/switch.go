@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	"github.com/net2share/dnstm/internal/router"
 	"github.com/net2share/dnstm/internal/types"
 	"github.com/net2share/go-corelib/osdetect"
@@ -126,23 +125,21 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 
 func selectInstance(cfg *router.Config) (string, error) {
 	// Build options
-	var options []huh.Option[string]
+	var options []tui.MenuOption
 	for name, transport := range cfg.Transports {
 		typeName := types.GetTransportTypeDisplayName(transport.Type)
 		label := fmt.Sprintf("%-16s %s", name, typeName)
 		if name == cfg.Single.Active {
 			label += " (current)"
 		}
-		options = append(options, huh.NewOption(label, name))
+		options = append(options, tui.MenuOption{Label: label, Value: name})
 	}
 
-	var selected string
-	err := huh.NewSelect[string]().
-		Title("Select Instance").
-		Description("Choose which tunnel to activate").
-		Options(options...).
-		Value(&selected).
-		Run()
+	selected, err := tui.RunMenu(tui.MenuConfig{
+		Title:       "Select Instance",
+		Description: "Choose which tunnel to activate",
+		Options:     options,
+	})
 	if err != nil {
 		return "", err
 	}

@@ -7,15 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"syscall"
 
-	"github.com/charmbracelet/huh"
 	"github.com/net2share/dnstm/internal/certs"
 	"github.com/net2share/dnstm/internal/dnsrouter"
+	"github.com/net2share/dnstm/internal/installer"
 	"github.com/net2share/dnstm/internal/keys"
 	"github.com/net2share/dnstm/internal/network"
 	"github.com/net2share/dnstm/internal/proxy"
 	"github.com/net2share/dnstm/internal/router"
-	"github.com/net2share/dnstm/internal/sshtunnel"
 	"github.com/net2share/dnstm/internal/system"
 	"github.com/net2share/dnstm/internal/transport"
 	"github.com/net2share/dnstm/internal/types"
@@ -67,6 +67,28 @@ func RunInteractive() error {
 	return runMainMenu()
 }
 
+// buildInstanceSummary builds a summary string for the main menu header.
+func buildInstanceSummary() string {
+	cfg, err := router.Load()
+	if err != nil || cfg == nil {
+		return ""
+	}
+
+	total := len(cfg.Transports)
+	running := 0
+	for name, transport := range cfg.Transports {
+		instance := router.NewInstance(name, transport)
+		if instance.IsActive() {
+			running++
+		}
+	}
+
+	if cfg.IsSingleMode() && cfg.Single.Active != "" {
+		return fmt.Sprintf("Instances: %d | Running: %d | Active: %s", total, running, cfg.Single.Active)
+	}
+	return fmt.Sprintf("Instances: %d | Running: %d", total, running)
+}
+
 func runMainMenu() error {
 	firstRun := true
 	for {
@@ -81,7 +103,8 @@ func runMainMenu() error {
 		// Check if transport binaries are installed
 		installed := transport.IsInstalled()
 
-		var options []huh.Option[string]
+		var options []tui.MenuOption
+		var header string
 
 		if !installed {
 			// Not installed - show install option first and limited menu
@@ -89,33 +112,30 @@ func runMainMenu() error {
 			tui.PrintWarning("dnstm not installed")
 			fmt.Printf("Missing: %v\n\n", missing)
 
-			options = append(options, huh.NewOption("Install (Required)", "install"))
-			options = append(options, huh.NewOption("Exit", "exit"))
+			options = append(options, tui.MenuOption{Label: "Install (Required)", Value: "install"})
+			options = append(options, tui.MenuOption{Label: "Exit", Value: "exit"})
 		} else {
-			// Fully installed - show all options
-			options = append(options, huh.NewOption("Router →", "router"))
-			options = append(options, huh.NewOption("Instance →", "instance"))
-			options = append(options, huh.NewOption("Mode →", "mode"))
-			options = append(options, huh.NewOption("Switch Active", "switch"))
-			options = append(options, huh.NewOption("Install", "install"))
-			options = append(options, huh.NewOption("SSH Users →", "ssh-users"))
-			options = append(options, huh.NewOption("SOCKS Proxy →", "socks"))
-			options = append(options, huh.NewOption("Uninstall", "uninstall"))
-			options = append(options, huh.NewOption("Exit", "exit"))
+			// Build instance summary for header
+			header = buildInstanceSummary()
+
+			// Fully installed - show all options (no Install, has Uninstall)
+			options = append(options, tui.MenuOption{Label: "Instances →", Value: "instance"})
+			options = append(options, tui.MenuOption{Label: "Router →", Value: "router"})
+			options = append(options, tui.MenuOption{Label: "SSH Users →", Value: "ssh-users"})
+			options = append(options, tui.MenuOption{Label: "Uninstall", Value: "uninstall"})
+			options = append(options, tui.MenuOption{Label: "Exit", Value: "exit"})
 		}
 
-		var choice string
-		err := huh.NewSelect[string]().
-			Title("DNS Tunnel Manager").
-			Options(options...).
-			Value(&choice).
-			Run()
-
+		choice, err := tui.RunMenu(tui.MenuConfig{
+			Header:  header,
+			Title:   "DNS Tunnel Manager",
+			Options: options,
+		})
 		if err != nil {
 			return err
 		}
 
-		if choice == "exit" {
+		if choice == "" || choice == "exit" {
 			tui.PrintInfo("Goodbye!")
 			return nil
 		}
@@ -137,21 +157,36 @@ func handleMainMenuChoice(choice string) error {
 		return runRouterMenu()
 	case "instance":
 		return runInstanceMenu()
-	case "mode":
-		return runModeMenu()
-	case "switch":
-		return runSwitchMenu()
 	case "ssh-users":
-		sshtunnel.ShowMenu()
-		return errCancelled
+		return runSSHUsersMenu()
 	case "install":
 		return runInstallBinaries()
-	case "socks":
-		RunSOCKSProxyMenu()
-		return errCancelled
 	case "uninstall":
 		return runUninstallMenu()
 	}
+	return nil
+}
+
+// runSSHUsersMenu launches the sshtun-user binary in interactive mode.
+func runSSHUsersMenu() error {
+	if !transport.IsSSHTunUserInstalled() {
+		tui.PrintError("sshtun-user is not installed. Run 'Install' first.")
+		tui.WaitForEnter()
+		return errCancelled
+	}
+
+	// Get the binary path
+	binary := transport.SSHTunUserBinary
+
+	// Use syscall.Exec to replace the current process with sshtun-user
+	// This allows sshtun-user to run in fully interactive mode
+	if err := syscall.Exec(binary, []string{binary}, os.Environ()); err != nil {
+		tui.PrintError("Failed to launch sshtun-user: " + err.Error())
+		tui.WaitForEnter()
+		return errCancelled
+	}
+
+	// This line is never reached as Exec replaces the process
 	return nil
 }
 
@@ -163,96 +198,75 @@ func runRouterMenu() error {
 	for {
 		fmt.Println()
 
-		var options []huh.Option[string]
 		if !router.IsInitialized() {
-			options = append(options, huh.NewOption("Init", "init"))
-		} else {
-			options = append(options, huh.NewOption("Status", "status"))
-			options = append(options, huh.NewOption("Start", "start"))
-			options = append(options, huh.NewOption("Stop", "stop"))
-			options = append(options, huh.NewOption("Restart", "restart"))
-			options = append(options, huh.NewOption("Logs", "logs"))
-			options = append(options, huh.NewOption("Config", "config"))
-			options = append(options, huh.NewOption("Reset", "reset"))
+			tui.PrintWarning("Router not initialized. Run 'Install' from the main menu first.")
+			tui.WaitForEnter()
+			return errCancelled
 		}
-		options = append(options, huh.NewOption("Back", "back"))
 
-		var choice string
-		err := huh.NewSelect[string]().
-			Title("Router").
-			Options(options...).
-			Value(&choice).
-			Run()
+		cfg, _ := router.Load()
+		modeName := "unknown"
+		isSingleMode := false
+		if cfg != nil {
+			modeName = router.GetModeDisplayName(cfg.Mode)
+			isSingleMode = cfg.IsSingleMode()
+		}
 
-		if err != nil || choice == "back" {
+		options := []tui.MenuOption{
+			{Label: fmt.Sprintf("Mode: %s", modeName), Value: "mode"},
+		}
+
+		// Switch Active is only relevant in single mode
+		if isSingleMode {
+			activeLabel := "Switch Active: (none)"
+			if cfg.Single.Active != "" {
+				activeLabel = fmt.Sprintf("Switch Active: %s", cfg.Single.Active)
+			}
+			options = append(options, tui.MenuOption{Label: activeLabel, Value: "switch"})
+		}
+
+		options = append(options,
+			tui.MenuOption{Label: "Status", Value: "status"},
+			tui.MenuOption{Label: "Start/Restart", Value: "start"},
+			tui.MenuOption{Label: "Stop", Value: "stop"},
+			tui.MenuOption{Label: "Logs", Value: "logs"},
+			tui.MenuOption{Label: "Back", Value: "back"},
+		)
+
+		choice, err := tui.RunMenu(tui.MenuConfig{
+			Title:   "Router",
+			Options: options,
+		})
+		if err != nil || choice == "" || choice == "back" {
 			return errCancelled
 		}
 
 		switch choice {
-		case "init":
-			runRouterInit()
 		case "status":
 			runRouterStatus()
+			tui.WaitForEnter()
 		case "start":
 			runRouterStart()
+			tui.WaitForEnter()
 		case "stop":
 			runRouterStop()
-		case "restart":
-			runRouterRestart()
+			tui.WaitForEnter()
 		case "logs":
 			runRouterLogs()
-		case "config":
-			runRouterConfig()
-		case "reset":
-			runRouterReset()
+			tui.WaitForEnter()
+		case "mode":
+			if err := runModeMenu(); err != errCancelled {
+				tui.WaitForEnter()
+			}
+		case "switch":
+			if err := runSwitchMenu(); err != errCancelled {
+				tui.WaitForEnter()
+			}
 		}
-		tui.WaitForEnter()
 	}
-}
-
-func runRouterInit() {
-	var modeStr string
-	err := huh.NewSelect[string]().
-		Title("Operating Mode").
-		Options(
-			huh.NewOption("Single-tunnel (Recommended)", "single"),
-			huh.NewOption("Multi-tunnel (Experimental)", "multi"),
-		).
-		Value(&modeStr).
-		Run()
-	if err != nil {
-		return
-	}
-
-	fmt.Println()
-	tui.PrintInfo("Initializing router...")
-
-	if err := router.Initialize(); err != nil {
-		tui.PrintError("Failed to initialize: " + err.Error())
-		return
-	}
-
-	if err := system.CreateDnstmUser(); err != nil {
-		tui.PrintError("Failed to create user: " + err.Error())
-		return
-	}
-
-	cfg, _ := router.Load()
-	cfg.Mode = router.Mode(modeStr)
-	cfg.Save()
-
-	svc := dnsrouter.NewService()
-	svc.CreateService()
-
-	tui.PrintSuccess("Router initialized!")
 }
 
 func runRouterStatus() {
-	if !router.IsInitialized() {
-		tui.PrintInfo("Router not initialized. Run 'Init' first.")
-		return
-	}
-
 	cfg, err := router.Load()
 	if err != nil {
 		tui.PrintError("Failed to load config: " + err.Error())
@@ -269,25 +283,59 @@ func runRouterStatus() {
 		if cfg.Single.Active != "" {
 			instance := r.GetInstance(cfg.Single.Active)
 			if instance != nil {
-				status := "Stopped"
+				status := "○ Stopped"
 				if instance.IsActive() {
-					status = "Running"
+					status = "● Running"
 				}
-				fmt.Printf("Active: %s (%s)\n", cfg.Single.Active, status)
+				typeName := router.GetTransportTypeDisplayName(instance.Type)
+				fmt.Printf("Active: %s (%s) %s\n", cfg.Single.Active, typeName, status)
+				fmt.Printf("  └─ %s → 127.0.0.1:%d\n", instance.Domain, instance.Port)
 			}
 		} else {
 			fmt.Println("Active: (none)")
 		}
+
+		// Show other instances
+		if len(cfg.Transports) > 1 {
+			fmt.Println()
+			fmt.Println("Other instances:")
+			for name, transport := range cfg.Transports {
+				if name == cfg.Single.Active {
+					continue
+				}
+				typeName := router.GetTransportTypeDisplayName(transport.Type)
+				fmt.Printf("  %-16s %s\n", name, typeName)
+			}
+		}
 	} else {
 		svc := r.GetDNSRouterService()
-		status := "Stopped"
+		status := "○ Stopped"
 		if svc.IsActive() {
-			status = "Running"
+			status = "● Running"
 		}
-		fmt.Printf("DNS Router: %s\n", status)
-	}
+		fmt.Printf("DNS Router: %s (port 53)\n", status)
+		fmt.Println()
+		fmt.Println("Instances:")
 
-	fmt.Printf("Instances: %d\n", len(cfg.Transports))
+		instances := r.GetAllInstances()
+		if len(instances) == 0 {
+			fmt.Println("  No instances configured")
+		} else {
+			for name, instance := range instances {
+				instStatus := "○ Stopped"
+				if instance.IsActive() {
+					instStatus = "● Running"
+				}
+				typeName := router.GetTransportTypeDisplayName(instance.Type)
+				defaultMarker := ""
+				if cfg.Routing.Default == name {
+					defaultMarker = " (default)"
+				}
+				fmt.Printf("  %-16s %-20s %s%s\n", name, typeName, instStatus, defaultMarker)
+				fmt.Printf("    └─ %s → 127.0.0.1:%d\n", instance.Domain, instance.Port)
+			}
+		}
+	}
 }
 
 func runRouterStart() {
@@ -299,14 +347,24 @@ func runRouterStart() {
 
 	r, _ := router.New(cfg)
 	fmt.Println()
-	tui.PrintInfo("Starting...")
 
-	if err := r.Start(); err != nil {
+	isRunning := r.IsRunning()
+	if isRunning {
+		tui.PrintInfo("Restarting...")
+	} else {
+		tui.PrintInfo("Starting...")
+	}
+
+	if err := r.Restart(); err != nil {
 		tui.PrintError("Failed to start: " + err.Error())
 		return
 	}
 
-	tui.PrintSuccess("Started!")
+	if isRunning {
+		tui.PrintSuccess("Restarted!")
+	} else {
+		tui.PrintSuccess("Started!")
+	}
 }
 
 func runRouterStop() {
@@ -328,25 +386,6 @@ func runRouterStop() {
 	tui.PrintSuccess("Stopped!")
 }
 
-func runRouterRestart() {
-	cfg, err := router.Load()
-	if err != nil {
-		tui.PrintError("Failed to load config: " + err.Error())
-		return
-	}
-
-	r, _ := router.New(cfg)
-	fmt.Println()
-	tui.PrintInfo("Restarting...")
-
-	if err := r.Restart(); err != nil {
-		tui.PrintError("Failed to restart: " + err.Error())
-		return
-	}
-
-	tui.PrintSuccess("Restarted!")
-}
-
 func runRouterLogs() {
 	svc := dnsrouter.NewService()
 	logs, err := svc.GetLogs(50)
@@ -358,60 +397,6 @@ func runRouterLogs() {
 	fmt.Println(logs)
 }
 
-func runRouterConfig() {
-	cfg, err := router.Load()
-	if err != nil {
-		tui.PrintError("Failed to load config: " + err.Error())
-		return
-	}
-
-	fmt.Println()
-	fmt.Printf("Mode: %s\n", router.GetModeDisplayName(cfg.Mode))
-	fmt.Printf("Listen: %s\n", cfg.Listen.Address)
-	if cfg.IsSingleMode() {
-		fmt.Printf("Active: %s\n", cfg.Single.Active)
-	}
-	if cfg.Routing.Default != "" {
-		fmt.Printf("Default Route: %s\n", cfg.Routing.Default)
-	}
-}
-
-func runRouterReset() {
-	fmt.Println()
-	tui.PrintWarning("This will reset the router to initial state:")
-	fmt.Println("  - Stop and remove all instance services")
-	fmt.Println("  - Remove DNS router service")
-	fmt.Println("  - Reset configuration")
-
-	var confirm bool
-	huh.NewConfirm().Title("Proceed?").Value(&confirm).Run()
-	if !confirm {
-		tui.PrintInfo("Cancelled")
-		return
-	}
-
-	cfg, _ := router.Load()
-	if cfg != nil {
-		for name, transport := range cfg.Transports {
-			instance := router.NewInstance(name, transport)
-			instance.Stop()
-			instance.RemoveService()
-		}
-	}
-
-	svc := dnsrouter.NewService()
-	svc.Stop()
-	svc.Remove()
-
-	network.ClearNATOnly()
-	network.RemoveAllFirewallRules()
-
-	defaultCfg := router.Default()
-	defaultCfg.Save()
-
-	tui.PrintSuccess("Router reset!")
-}
-
 // ============================================================================
 // Instance Menu (matches: dnstm instance)
 // ============================================================================
@@ -420,54 +405,152 @@ func runInstanceMenu() error {
 	for {
 		fmt.Println()
 
-		var options []huh.Option[string]
-		options = append(options, huh.NewOption("List", "list"))
-		options = append(options, huh.NewOption("Add", "add"))
-		options = append(options, huh.NewOption("Remove", "remove"))
-		options = append(options, huh.NewOption("Start", "start"))
-		options = append(options, huh.NewOption("Stop", "stop"))
-		options = append(options, huh.NewOption("Restart", "restart"))
-		options = append(options, huh.NewOption("Logs", "logs"))
-		options = append(options, huh.NewOption("Config", "config"))
-		options = append(options, huh.NewOption("Status", "status"))
-		options = append(options, huh.NewOption("Back", "back"))
+		options := []tui.MenuOption{
+			{Label: "Add", Value: "add"},
+			{Label: "List →", Value: "list"},
+			{Label: "Back", Value: "back"},
+		}
 
-		var choice string
-		err := huh.NewSelect[string]().
-			Title("Instance").
-			Options(options...).
-			Value(&choice).
-			Run()
-
-		if err != nil || choice == "back" {
+		choice, err := tui.RunMenu(tui.MenuConfig{
+			Title:   "Instances",
+			Options: options,
+		})
+		if err != nil || choice == "" || choice == "back" {
 			return errCancelled
 		}
 
 		switch choice {
-		case "list":
-			runInstanceList()
 		case "add":
 			runInstanceAdd()
-		case "remove":
-			runInstanceRemove()
-		case "start":
-			runInstanceStart()
-		case "stop":
-			runInstanceStop()
-		case "restart":
-			runInstanceRestart()
-		case "logs":
-			runInstanceLogs()
-		case "config":
-			runInstanceConfig()
-		case "status":
-			runInstanceStatus()
+			tui.WaitForEnter()
+		case "list":
+			if err := runInstanceListMenu(); err != errCancelled {
+				tui.WaitForEnter()
+			}
 		}
-		tui.WaitForEnter()
 	}
 }
 
-func runInstanceList() {
+// runInstanceListMenu shows all instances and allows selecting one to manage.
+func runInstanceListMenu() error {
+	for {
+		cfg, err := router.Load()
+		if err != nil {
+			tui.PrintError("Failed to load config: " + err.Error())
+			return nil
+		}
+
+		if len(cfg.Transports) == 0 {
+			tui.PrintInfo("No instances configured. Add one first.")
+			tui.WaitForEnter()
+			return errCancelled
+		}
+
+		var options []tui.MenuOption
+		for name, transport := range cfg.Transports {
+			instance := router.NewInstance(name, transport)
+			status := "○"
+			if instance.IsActive() {
+				status = "●"
+			}
+			typeName := types.GetTransportTypeDisplayName(transport.Type)
+			label := fmt.Sprintf("%s %s (%s)", status, name, typeName)
+			options = append(options, tui.MenuOption{Label: label, Value: name})
+		}
+		options = append(options, tui.MenuOption{Label: "Back", Value: "back"})
+
+		selected, err := tui.RunMenu(tui.MenuConfig{
+			Title:   "Select Instance",
+			Options: options,
+		})
+		if err != nil || selected == "" || selected == "back" {
+			return errCancelled
+		}
+
+		if err := runInstanceManageMenu(selected); err != errCancelled {
+			tui.WaitForEnter()
+		}
+	}
+}
+
+// runInstanceManageMenu shows management options for a specific instance.
+func runInstanceManageMenu(name string) error {
+	for {
+		cfg, err := router.Load()
+		if err != nil {
+			tui.PrintError("Failed to load config: " + err.Error())
+			return nil
+		}
+
+		transport, exists := cfg.Transports[name]
+		if !exists {
+			tui.PrintError(fmt.Sprintf("Instance '%s' not found", name))
+			return nil
+		}
+
+		instance := router.NewInstance(name, transport)
+		status := "Stopped"
+		if instance.IsActive() {
+			status = "Running"
+		}
+
+		options := []tui.MenuOption{
+			{Label: "Status", Value: "status"},
+			{Label: "Logs", Value: "logs"},
+			{Label: "Start/Restart", Value: "start"},
+			{Label: "Stop", Value: "stop"},
+			{Label: "Reconfigure", Value: "reconfigure"},
+			{Label: "Remove", Value: "remove"},
+			{Label: "Back", Value: "back"},
+		}
+
+		choice, err := tui.RunMenu(tui.MenuConfig{
+			Title:       fmt.Sprintf("%s (%s)", name, status),
+			Description: fmt.Sprintf("%s → %s:%d", types.GetTransportTypeDisplayName(transport.Type), transport.Domain, transport.Port),
+			Options:     options,
+		})
+		if err != nil || choice == "" || choice == "back" {
+			return errCancelled
+		}
+
+		switch choice {
+		case "status":
+			runInstanceStatusByName(name, transport)
+			tui.WaitForEnter()
+		case "logs":
+			runInstanceLogsByName(name, transport)
+			tui.WaitForEnter()
+		case "start":
+			runInstanceStartByName(name, transport)
+			tui.WaitForEnter()
+		case "stop":
+			runInstanceStopByName(name, transport)
+			tui.WaitForEnter()
+		case "reconfigure":
+			newName, changed := runInstanceReconfigure(name, transport, cfg)
+			if changed {
+				tui.WaitForEnter()
+				if newName != name {
+					// Instance was renamed, go back to list
+					return errCancelled
+				}
+			}
+		case "remove":
+			removed := runInstanceRemoveByName(name, transport, cfg)
+			if removed {
+				// Check if there are remaining instances
+				cfg, _ = router.Load()
+				if len(cfg.Transports) > 0 {
+					tui.WaitForEnter()
+				}
+				return errCancelled // Go back to list since instance was removed
+			}
+			tui.WaitForEnter()
+		}
+	}
+}
+
+func runInstanceListCLI() {
 	cfg, err := router.Load()
 	if err != nil {
 		tui.PrintError("Failed to load config: " + err.Error())
@@ -496,6 +579,307 @@ func runInstanceList() {
 	}
 }
 
+// runInstanceStartByName starts a specific instance by name.
+func runInstanceStartByName(name string, transport *types.TransportConfig) {
+	instance := router.NewInstance(name, transport)
+	instance.Enable()
+
+	isRunning := instance.IsActive()
+	if isRunning {
+		if err := instance.Restart(); err != nil {
+			tui.PrintError("Failed to restart: " + err.Error())
+			return
+		}
+		tui.PrintSuccess(fmt.Sprintf("Instance '%s' restarted!", name))
+	} else {
+		if err := instance.Start(); err != nil {
+			tui.PrintError("Failed to start: " + err.Error())
+			return
+		}
+		tui.PrintSuccess(fmt.Sprintf("Instance '%s' started!", name))
+	}
+}
+
+// runInstanceStopByName stops a specific instance by name.
+func runInstanceStopByName(name string, transport *types.TransportConfig) {
+	instance := router.NewInstance(name, transport)
+	if err := instance.Stop(); err != nil {
+		tui.PrintError("Failed to stop: " + err.Error())
+		return
+	}
+	tui.PrintSuccess(fmt.Sprintf("Instance '%s' stopped!", name))
+}
+
+// runInstanceLogsByName shows logs for a specific instance.
+func runInstanceLogsByName(name string, transport *types.TransportConfig) {
+	instance := router.NewInstance(name, transport)
+	logs, err := instance.GetLogs(50)
+	if err != nil {
+		tui.PrintError("Failed to get logs: " + err.Error())
+		return
+	}
+	fmt.Println()
+	fmt.Println(logs)
+}
+
+// runInstanceStatusByName shows status for a specific instance.
+func runInstanceStatusByName(name string, transport *types.TransportConfig) {
+	instance := router.NewInstance(name, transport)
+	fmt.Println()
+	fmt.Println(instance.GetFormattedInfo())
+
+	// Show certificate or key info
+	if types.IsSlipstreamType(transport.Type) {
+		certMgr := certs.NewManager()
+		if certInfo := certMgr.Get(transport.Domain); certInfo != nil {
+			fmt.Println("Certificate Fingerprint:")
+			fmt.Println(certs.FormatFingerprint(certInfo.Fingerprint))
+		}
+	} else if types.IsDNSTTType(transport.Type) {
+		keyMgr := keys.NewManager()
+		if keyInfo := keyMgr.Get(transport.Domain); keyInfo != nil {
+			fmt.Println("Public Key:")
+			fmt.Println(keyInfo.PublicKey)
+		}
+	}
+}
+
+// runInstanceRemoveByName removes a specific instance. Returns true if removed.
+func runInstanceRemoveByName(name string, transport *types.TransportConfig, cfg *router.Config) bool {
+	confirm, _ := tui.RunConfirm(tui.ConfirmConfig{Title: fmt.Sprintf("Remove '%s'?", name)})
+	if !confirm {
+		return false
+	}
+
+	instance := router.NewInstance(name, transport)
+	instance.Stop()
+	instance.RemoveService()
+	instance.RemoveConfigDir()
+
+	delete(cfg.Transports, name)
+	if cfg.Single.Active == name {
+		cfg.Single.Active = ""
+		for n := range cfg.Transports {
+			cfg.Single.Active = n
+			break
+		}
+	}
+	if cfg.Routing.Default == name {
+		cfg.Routing.Default = ""
+		for n := range cfg.Transports {
+			cfg.Routing.Default = n
+			break
+		}
+	}
+	cfg.Save()
+
+	tui.PrintSuccess(fmt.Sprintf("Instance '%s' removed!", name))
+	return true
+}
+
+// runInstanceReconfigure allows reconfiguring an existing instance.
+// Returns (newName, changed) - newName is the instance name after reconfigure (may be renamed),
+// changed indicates if any changes were made and WaitForEnter should be called.
+func runInstanceReconfigure(name string, transport *types.TransportConfig, cfg *router.Config) (string, bool) {
+	fmt.Println()
+	tui.PrintInfo(fmt.Sprintf("Reconfiguring '%s'...", name))
+	tui.PrintInfo("Press Enter to keep current value, or type a new value.")
+	fmt.Println()
+
+	changed := false
+	renamed := false
+	newName := name
+
+	// Check if instance is running before we start
+	oldInstance := router.NewInstance(name, transport)
+	wasRunning := oldInstance.IsActive()
+
+	// Name (rename)
+	inputName, confirmed, err := tui.RunInput(tui.InputConfig{
+		Title:       "Instance Name",
+		Description: fmt.Sprintf("Current: %s", name),
+		Value:       name,
+	})
+	if err != nil || !confirmed {
+		return "", false
+	}
+	if inputName != "" && inputName != name {
+		inputName = router.NormalizeName(inputName)
+		if err := router.ValidateName(inputName); err != nil {
+			tui.PrintError("Invalid name: " + err.Error())
+			return name, true
+		}
+		if _, exists := cfg.Transports[inputName]; exists {
+			tui.PrintError("Instance with that name already exists")
+			return name, true
+		}
+		newName = inputName
+		renamed = true
+		changed = true
+	}
+
+	// Domain
+	newDomain, confirmed, err := tui.RunInput(tui.InputConfig{
+		Title:       "Domain",
+		Description: fmt.Sprintf("Current: %s", transport.Domain),
+		Value:       transport.Domain,
+	})
+	if err != nil || !confirmed {
+		return "", false
+	}
+	if newDomain != "" && newDomain != transport.Domain {
+		transport.Domain = newDomain
+		changed = true
+	}
+
+	// Type-specific configuration
+	switch transport.Type {
+	case types.TypeSlipstreamShadowsocks:
+		// Password
+		currentPassword := ""
+		if transport.Shadowsocks != nil {
+			currentPassword = transport.Shadowsocks.Password
+		}
+		newPassword, confirmed, err := tui.RunInput(tui.InputConfig{
+			Title:       "Password",
+			Description: "Current: (hidden) - Leave empty to keep current",
+		})
+		if err != nil || !confirmed {
+			return "", false
+		}
+		if newPassword != "" && newPassword != currentPassword {
+			if transport.Shadowsocks == nil {
+				transport.Shadowsocks = &types.ShadowsocksConfig{}
+			}
+			transport.Shadowsocks.Password = newPassword
+			changed = true
+		}
+
+		// Method
+		currentMethod := "aes-256-gcm"
+		if transport.Shadowsocks != nil && transport.Shadowsocks.Method != "" {
+			currentMethod = transport.Shadowsocks.Method
+		}
+		methodOptions := []tui.MenuOption{
+			{Label: "AES-256-GCM", Value: "aes-256-gcm"},
+			{Label: "ChaCha20-IETF-Poly1305", Value: "chacha20-ietf-poly1305"},
+		}
+		// Set current as selected
+		selected := 0
+		if currentMethod == "chacha20-ietf-poly1305" {
+			selected = 1
+		}
+		newMethod, err := tui.RunMenu(tui.MenuConfig{
+			Title:       "Method",
+			Description: fmt.Sprintf("Current: %s", currentMethod),
+			Options:     methodOptions,
+			Selected:    selected,
+		})
+		if err != nil || newMethod == "" {
+			return "", false
+		}
+		if newMethod != currentMethod {
+			if transport.Shadowsocks == nil {
+				transport.Shadowsocks = &types.ShadowsocksConfig{}
+			}
+			transport.Shadowsocks.Method = newMethod
+			changed = true
+		}
+
+	case types.TypeSlipstreamSocks, types.TypeDNSTTSocks:
+		// SOCKS modes auto-use microsocks, update to current config
+		microsocksAddr := cfg.GetMicrosocksAddress()
+		if microsocksAddr != "" && (transport.Target == nil || transport.Target.Address != microsocksAddr) {
+			if transport.Target == nil {
+				transport.Target = &types.TargetConfig{}
+			}
+			transport.Target.Address = microsocksAddr
+			changed = true
+		}
+
+	case types.TypeSlipstreamSSH, types.TypeDNSTTSSH:
+		// SSH modes - allow changing target
+		currentTarget := "127.0.0.1:" + osdetect.DetectSSHPort()
+		if transport.Target != nil && transport.Target.Address != "" {
+			currentTarget = transport.Target.Address
+		}
+		newTarget, confirmed, err := tui.RunInput(tui.InputConfig{
+			Title:       "Target Address",
+			Description: fmt.Sprintf("Current: %s", currentTarget),
+			Value:       currentTarget,
+		})
+		if err != nil || !confirmed {
+			return "", false
+		}
+		if newTarget != "" && newTarget != currentTarget {
+			if transport.Target == nil {
+				transport.Target = &types.TargetConfig{}
+			}
+			transport.Target.Address = newTarget
+			changed = true
+		}
+	}
+
+	if !changed {
+		tui.PrintInfo("No changes made")
+		return name, true
+	}
+
+	// Handle rename
+	if renamed {
+		// Stop and remove old service
+		oldInstance.Stop()
+		oldInstance.RemoveService()
+		oldInstance.RemoveConfigDir()
+
+		// Update config map
+		delete(cfg.Transports, name)
+		cfg.Transports[newName] = transport
+
+		// Update Single.Active if it referenced the old name
+		if cfg.Single.Active == name {
+			cfg.Single.Active = newName
+		}
+		// Update Routing.Default if it referenced the old name
+		if cfg.Routing.Default == name {
+			cfg.Routing.Default = newName
+		}
+	}
+
+	// Save config
+	cfg.Save()
+
+	// Create new service
+	newInstance := router.NewInstance(newName, transport)
+	if err := newInstance.CreateService(); err != nil {
+		tui.PrintError("Failed to create service: " + err.Error())
+		return newName, true
+	}
+	newInstance.SetPermissions()
+
+	// Start if it was running before
+	if wasRunning {
+		newInstance.Enable()
+		if err := newInstance.Start(); err != nil {
+			tui.PrintError("Failed to start: " + err.Error())
+			return newName, true
+		}
+		if renamed {
+			tui.PrintSuccess(fmt.Sprintf("Instance renamed to '%s' and restarted!", newName))
+		} else {
+			tui.PrintSuccess(fmt.Sprintf("Instance '%s' reconfigured and restarted!", newName))
+		}
+	} else {
+		if renamed {
+			tui.PrintSuccess(fmt.Sprintf("Instance renamed to '%s'!", newName))
+		} else {
+			tui.PrintSuccess(fmt.Sprintf("Instance '%s' reconfigured!", newName))
+		}
+	}
+
+	return newName, true
+}
+
 func runInstanceAdd() {
 	if !router.IsInitialized() {
 		if err := router.Initialize(); err != nil {
@@ -513,15 +897,36 @@ func runInstanceAdd() {
 	fmt.Println()
 	tui.PrintInfo("Adding new instance...")
 
+	// Transport type (ask first)
+	transportType, err := tui.RunMenu(tui.MenuConfig{
+		Title: "Transport Type",
+		Options: []tui.MenuOption{
+			{Label: "Slipstream + Shadowsocks (Recommended)", Value: string(types.TypeSlipstreamShadowsocks)},
+			{Label: "Slipstream SOCKS", Value: string(types.TypeSlipstreamSocks)},
+			{Label: "Slipstream SSH", Value: string(types.TypeSlipstreamSSH)},
+			{Label: "DNSTT SOCKS", Value: string(types.TypeDNSTTSocks)},
+			{Label: "DNSTT SSH", Value: string(types.TypeDNSTTSSH)},
+		},
+	})
+	if err != nil || transportType == "" {
+		return
+	}
+
+	if missing, ok := transport.RequiresBinary(types.TransportType(transportType)); !ok {
+		tui.PrintError(fmt.Sprintf("Required binary '%s' is not installed", missing))
+		return
+	}
+
 	// Name
 	suggestedName := router.GenerateUniqueName(cfg.Transports)
-	var name string
-	huh.NewInput().
-		Title("Instance Name").
-		Description(fmt.Sprintf("Leave empty for: %s", suggestedName)).
-		Placeholder(suggestedName).
-		Value(&name).
-		Run()
+	name, confirmed, err := tui.RunInput(tui.InputConfig{
+		Title:       "Instance Name",
+		Description: fmt.Sprintf("Leave empty for: %s", suggestedName),
+		Placeholder: suggestedName,
+	})
+	if err != nil || !confirmed {
+		return
+	}
 	if name == "" {
 		name = suggestedName
 	}
@@ -536,29 +941,16 @@ func runInstanceAdd() {
 		return
 	}
 
-	// Transport type
-	var transportType string
-	huh.NewSelect[string]().
-		Title("Transport Type").
-		Options(
-			huh.NewOption("Slipstream + Shadowsocks (Recommended)", string(types.TypeSlipstreamShadowsocks)),
-			huh.NewOption("Slipstream SOCKS", string(types.TypeSlipstreamSocks)),
-			huh.NewOption("Slipstream SSH", string(types.TypeSlipstreamSSH)),
-			huh.NewOption("DNSTT SOCKS", string(types.TypeDNSTTSocks)),
-			huh.NewOption("DNSTT SSH", string(types.TypeDNSTTSSH)),
-		).
-		Value(&transportType).
-		Run()
-
-	if missing, ok := transport.RequiresBinary(types.TransportType(transportType)); !ok {
-		tui.PrintError(fmt.Sprintf("Required binary '%s' is not installed", missing))
-		return
-	}
-
 	// Domain
 	var domain string
 	for domain == "" {
-		huh.NewInput().Title("Domain").Description("e.g., t1.example.com").Value(&domain).Run()
+		domain, confirmed, err = tui.RunInput(tui.InputConfig{
+			Title:       "Domain",
+			Description: "e.g., t1.example.com",
+		})
+		if err != nil || !confirmed {
+			return
+		}
 		if domain == "" {
 			tui.PrintError("Domain is required")
 		}
@@ -572,37 +964,70 @@ func runInstanceAdd() {
 
 	switch types.TransportType(transportType) {
 	case types.TypeSlipstreamShadowsocks:
-		var password string
-		huh.NewInput().Title("Password").Description("Leave empty to auto-generate").Value(&password).Run()
+		password, confirmed, err := tui.RunInput(tui.InputConfig{
+			Title:       "Password",
+			Description: "Leave empty to auto-generate",
+		})
+		if err != nil || !confirmed {
+			return
+		}
 		if password == "" {
 			password = generatePassword()
 		}
-		var method string
-		huh.NewSelect[string]().Title("Method").Options(
-			huh.NewOption("AES-256-GCM", "aes-256-gcm"),
-			huh.NewOption("ChaCha20-IETF-Poly1305", "chacha20-ietf-poly1305"),
-		).Value(&method).Run()
+		method, err := tui.RunMenu(tui.MenuConfig{
+			Title: "Method",
+			Options: []tui.MenuOption{
+				{Label: "AES-256-GCM", Value: "aes-256-gcm"},
+				{Label: "ChaCha20-IETF-Poly1305", Value: "chacha20-ietf-poly1305"},
+			},
+		})
+		if err != nil || method == "" {
+			return
+		}
 		transportCfg.Shadowsocks = &types.ShadowsocksConfig{Password: password, Method: method}
 
-	case types.TypeSlipstreamSocks, types.TypeSlipstreamSSH:
-		defaultAddr := "127.0.0.1:1080"
-		if transportType == string(types.TypeSlipstreamSSH) {
-			defaultAddr = "127.0.0.1:" + osdetect.DetectSSHPort()
+	case types.TypeSlipstreamSocks:
+		// Auto-use configured microsocks
+		microsocksAddr := cfg.GetMicrosocksAddress()
+		if microsocksAddr == "" {
+			tui.PrintError("Microsocks not configured. Run install first.")
+			return
 		}
-		var target string
-		huh.NewInput().Title("Target Address").Placeholder(defaultAddr).Value(&target).Run()
+		transportCfg.Target = &types.TargetConfig{Address: microsocksAddr}
+
+	case types.TypeSlipstreamSSH:
+		defaultAddr := "127.0.0.1:" + osdetect.DetectSSHPort()
+		target, confirmed, err := tui.RunInput(tui.InputConfig{
+			Title:       "Target Address",
+			Placeholder: defaultAddr,
+		})
+		if err != nil || !confirmed {
+			return
+		}
 		if target == "" {
 			target = defaultAddr
 		}
 		transportCfg.Target = &types.TargetConfig{Address: target}
 
-	case types.TypeDNSTTSocks, types.TypeDNSTTSSH:
-		defaultAddr := "127.0.0.1:1080"
-		if transportType == string(types.TypeDNSTTSSH) {
-			defaultAddr = "127.0.0.1:" + osdetect.DetectSSHPort()
+	case types.TypeDNSTTSocks:
+		// Auto-use configured microsocks
+		microsocksAddr := cfg.GetMicrosocksAddress()
+		if microsocksAddr == "" {
+			tui.PrintError("Microsocks not configured. Run install first.")
+			return
 		}
-		var target string
-		huh.NewInput().Title("Target Address").Placeholder(defaultAddr).Value(&target).Run()
+		transportCfg.Target = &types.TargetConfig{Address: microsocksAddr}
+		transportCfg.DNSTT = &types.DNSTTConfig{MTU: 1232}
+
+	case types.TypeDNSTTSSH:
+		defaultAddr := "127.0.0.1:" + osdetect.DetectSSHPort()
+		target, confirmed, err := tui.RunInput(tui.InputConfig{
+			Title:       "Target Address",
+			Placeholder: defaultAddr,
+		})
+		if err != nil || !confirmed {
+			return
+		}
 		if target == "" {
 			target = defaultAddr
 		}
@@ -617,23 +1042,8 @@ func runInstanceAdd() {
 	port, _ := router.AllocatePort(cfg.Transports)
 	transportCfg.Port = port
 
-	// Confirm
-	fmt.Println()
-	fmt.Printf("Name:   %s\n", name)
-	fmt.Printf("Type:   %s\n", types.GetTransportTypeDisplayName(transportCfg.Type))
-	fmt.Printf("Domain: %s\n", transportCfg.Domain)
-	fmt.Printf("Port:   %d\n", transportCfg.Port)
-
-	var confirm bool
-	huh.NewConfirm().Title("Create instance?").Value(&confirm).Run()
-	if !confirm {
-		tui.PrintInfo("Cancelled")
-		return
-	}
-
 	// Create
 	fmt.Println()
-	system.CreateDnstmUser()
 
 	var fingerprint, publicKey string
 	if types.IsSlipstreamType(transportCfg.Type) {
@@ -663,6 +1073,15 @@ func runInstanceAdd() {
 	cfg.Save()
 
 	tui.PrintSuccess(fmt.Sprintf("Instance '%s' created!", name))
+
+	// Start the instance
+	instance.Enable()
+	if err := instance.Start(); err != nil {
+		tui.PrintWarning("Failed to start instance: " + err.Error())
+	} else {
+		tui.PrintSuccess(fmt.Sprintf("Instance '%s' started!", name))
+	}
+
 	if fingerprint != "" {
 		fmt.Println("\nCertificate Fingerprint:")
 		fmt.Println(certs.FormatFingerprint(fingerprint))
@@ -673,163 +1092,6 @@ func runInstanceAdd() {
 	}
 }
 
-func selectInstance(title string) (string, *types.TransportConfig, *router.Config) {
-	cfg, err := router.Load()
-	if err != nil || len(cfg.Transports) == 0 {
-		tui.PrintInfo("No instances configured")
-		return "", nil, nil
-	}
-
-	var options []huh.Option[string]
-	for name := range cfg.Transports {
-		options = append(options, huh.NewOption(name, name))
-	}
-
-	var selected string
-	huh.NewSelect[string]().Title(title).Options(options...).Value(&selected).Run()
-	if selected == "" {
-		return "", nil, nil
-	}
-
-	return selected, cfg.Transports[selected], cfg
-}
-
-func runInstanceRemove() {
-	name, transport, cfg := selectInstance("Select instance to remove")
-	if name == "" {
-		return
-	}
-
-	var confirm bool
-	huh.NewConfirm().Title(fmt.Sprintf("Remove '%s'?", name)).Value(&confirm).Run()
-	if !confirm {
-		return
-	}
-
-	instance := router.NewInstance(name, transport)
-	instance.Stop()
-	instance.RemoveService()
-	instance.RemoveConfigDir()
-
-	delete(cfg.Transports, name)
-	if cfg.Single.Active == name {
-		cfg.Single.Active = ""
-		for n := range cfg.Transports {
-			cfg.Single.Active = n
-			break
-		}
-	}
-	if cfg.Routing.Default == name {
-		cfg.Routing.Default = ""
-		for n := range cfg.Transports {
-			cfg.Routing.Default = n
-			break
-		}
-	}
-	cfg.Save()
-
-	tui.PrintSuccess(fmt.Sprintf("Instance '%s' removed!", name))
-}
-
-func runInstanceStart() {
-	name, transport, _ := selectInstance("Select instance to start")
-	if name == "" {
-		return
-	}
-
-	instance := router.NewInstance(name, transport)
-	instance.Enable()
-	if err := instance.Start(); err != nil {
-		tui.PrintError("Failed to start: " + err.Error())
-		return
-	}
-	tui.PrintSuccess(fmt.Sprintf("Instance '%s' started!", name))
-}
-
-func runInstanceStop() {
-	name, transport, _ := selectInstance("Select instance to stop")
-	if name == "" {
-		return
-	}
-
-	instance := router.NewInstance(name, transport)
-	if err := instance.Stop(); err != nil {
-		tui.PrintError("Failed to stop: " + err.Error())
-		return
-	}
-	tui.PrintSuccess(fmt.Sprintf("Instance '%s' stopped!", name))
-}
-
-func runInstanceRestart() {
-	name, transport, _ := selectInstance("Select instance to restart")
-	if name == "" {
-		return
-	}
-
-	instance := router.NewInstance(name, transport)
-	if err := instance.Restart(); err != nil {
-		tui.PrintError("Failed to restart: " + err.Error())
-		return
-	}
-	tui.PrintSuccess(fmt.Sprintf("Instance '%s' restarted!", name))
-}
-
-func runInstanceLogs() {
-	name, transport, _ := selectInstance("Select instance")
-	if name == "" {
-		return
-	}
-
-	instance := router.NewInstance(name, transport)
-	logs, err := instance.GetLogs(50)
-	if err != nil {
-		tui.PrintError("Failed to get logs: " + err.Error())
-		return
-	}
-	fmt.Println()
-	fmt.Println(logs)
-}
-
-func runInstanceConfig() {
-	name, transport, _ := selectInstance("Select instance")
-	if name == "" {
-		return
-	}
-
-	instance := router.NewInstance(name, transport)
-	fmt.Println()
-	fmt.Println(instance.GetFormattedInfo())
-
-	if types.IsSlipstreamType(transport.Type) {
-		certMgr := certs.NewManager()
-		if certInfo := certMgr.Get(transport.Domain); certInfo != nil {
-			fmt.Println("Certificate Fingerprint:")
-			fmt.Println(certs.FormatFingerprint(certInfo.Fingerprint))
-		}
-	} else if types.IsDNSTTType(transport.Type) {
-		keyMgr := keys.NewManager()
-		if keyInfo := keyMgr.Get(transport.Domain); keyInfo != nil {
-			fmt.Println("Public Key:")
-			fmt.Println(keyInfo.PublicKey)
-		}
-	}
-}
-
-func runInstanceStatus() {
-	name, transport, _ := selectInstance("Select instance")
-	if name == "" {
-		return
-	}
-
-	instance := router.NewInstance(name, transport)
-	status, err := instance.GetStatus()
-	if err != nil {
-		tui.PrintError("Failed to get status: " + err.Error())
-		return
-	}
-	fmt.Println()
-	fmt.Println(status)
-}
 
 // ============================================================================
 // Mode Menu (matches: dnstm mode)
@@ -838,37 +1100,37 @@ func runInstanceStatus() {
 func runModeMenu() error {
 	if !router.IsInitialized() {
 		tui.PrintInfo("Router not initialized. Initialize it first via Router → Init")
-		tui.WaitForEnter()
-		return errCancelled
+		return nil // needs WaitForEnter
 	}
 
 	cfg, err := router.Load()
 	if err != nil {
 		tui.PrintError("Failed to load config: " + err.Error())
-		tui.WaitForEnter()
-		return errCancelled
+		return nil // needs WaitForEnter
 	}
 
 	fmt.Println()
 	fmt.Printf("Current mode: %s\n\n", router.GetModeDisplayName(cfg.Mode))
 
-	var options []huh.Option[string]
-	options = append(options, huh.NewOption("Single-tunnel Mode", "single"))
-	options = append(options, huh.NewOption("Multi-tunnel Mode (Experimental)", "multi"))
-	options = append(options, huh.NewOption("Back", "back"))
+	options := []tui.MenuOption{
+		{Label: "Single-tunnel Mode", Value: "single"},
+		{Label: "Multi-tunnel Mode (Experimental)", Value: "multi"},
+		{Label: "Back", Value: "back"},
+	}
 
-	var choice string
-	huh.NewSelect[string]().Title("Select Mode").Options(options...).Value(&choice).Run()
+	choice, _ := tui.RunMenu(tui.MenuConfig{
+		Title:   "Select Mode",
+		Options: options,
+	})
 
-	if choice == "back" {
-		return errCancelled
+	if choice == "" || choice == "back" {
+		return errCancelled // no WaitForEnter needed
 	}
 
 	newMode := router.Mode(choice)
 	if cfg.Mode == newMode {
 		tui.PrintInfo(fmt.Sprintf("Already in %s mode", router.GetModeDisplayName(newMode)))
-		tui.WaitForEnter()
-		return errCancelled
+		return nil // needs WaitForEnter
 	}
 
 	r, _ := router.New(cfg)
@@ -877,13 +1139,11 @@ func runModeMenu() error {
 
 	if err := r.SwitchMode(newMode); err != nil {
 		tui.PrintError("Failed to switch mode: " + err.Error())
-		tui.WaitForEnter()
-		return errCancelled
+		return nil // needs WaitForEnter
 	}
 
 	tui.PrintSuccess(fmt.Sprintf("Switched to %s mode!", router.GetModeDisplayName(newMode)))
-	tui.WaitForEnter()
-	return errCancelled
+	return nil // needs WaitForEnter
 }
 
 // ============================================================================
@@ -893,27 +1153,23 @@ func runModeMenu() error {
 func runSwitchMenu() error {
 	if !router.IsInitialized() {
 		tui.PrintInfo("Router not initialized")
-		tui.WaitForEnter()
-		return errCancelled
+		return nil // needs WaitForEnter
 	}
 
 	cfg, err := router.Load()
 	if err != nil {
 		tui.PrintError("Failed to load config: " + err.Error())
-		tui.WaitForEnter()
-		return errCancelled
+		return nil // needs WaitForEnter
 	}
 
 	if !cfg.IsSingleMode() {
 		tui.PrintInfo("Switch is only available in single-tunnel mode")
-		tui.WaitForEnter()
-		return errCancelled
+		return nil // needs WaitForEnter
 	}
 
 	if len(cfg.Transports) == 0 {
 		tui.PrintInfo("No instances configured")
-		tui.WaitForEnter()
-		return errCancelled
+		return nil // needs WaitForEnter
 	}
 
 	fmt.Println()
@@ -921,22 +1177,24 @@ func runSwitchMenu() error {
 		fmt.Printf("Current active: %s\n\n", cfg.Single.Active)
 	}
 
-	var options []huh.Option[string]
+	var options []tui.MenuOption
 	for name, transport := range cfg.Transports {
 		typeName := types.GetTransportTypeDisplayName(transport.Type)
 		label := fmt.Sprintf("%s (%s)", name, typeName)
 		if name == cfg.Single.Active {
 			label += " [current]"
 		}
-		options = append(options, huh.NewOption(label, name))
+		options = append(options, tui.MenuOption{Label: label, Value: name})
 	}
-	options = append(options, huh.NewOption("Back", "back"))
+	options = append(options, tui.MenuOption{Label: "Back", Value: "back"})
 
-	var selected string
-	huh.NewSelect[string]().Title("Select Instance").Options(options...).Value(&selected).Run()
+	selected, _ := tui.RunMenu(tui.MenuConfig{
+		Title:   "Select Instance",
+		Options: options,
+	})
 
-	if selected == "back" || selected == cfg.Single.Active {
-		return errCancelled
+	if selected == "" || selected == "back" || selected == cfg.Single.Active {
+		return errCancelled // no WaitForEnter needed
 	}
 
 	r, _ := router.New(cfg)
@@ -945,13 +1203,11 @@ func runSwitchMenu() error {
 
 	if err := r.SwitchActiveInstance(selected); err != nil {
 		tui.PrintError("Failed to switch: " + err.Error())
-		tui.WaitForEnter()
-		return errCancelled
+		return nil // needs WaitForEnter
 	}
 
 	tui.PrintSuccess(fmt.Sprintf("Switched to '%s'!", selected))
-	tui.WaitForEnter()
-	return errCancelled
+	return nil // needs WaitForEnter
 }
 
 // ============================================================================
@@ -960,32 +1216,126 @@ func runSwitchMenu() error {
 
 func runInstallBinaries() error {
 	fmt.Println()
+	tui.PrintInfo("Installing dnstm...")
+	fmt.Println()
+
+	// Step 1: Create dnstm user
+	tui.PrintInfo("Creating dnstm user...")
+	if err := system.CreateDnstmUser(); err != nil {
+		tui.PrintError("Failed to create user: " + err.Error())
+		tui.WaitForEnter()
+		return errCancelled
+	}
+	tui.PrintStatus("dnstm user ready")
+
+	// Step 2: Initialize router (create directories)
+	tui.PrintInfo("Initializing router...")
+	if err := router.Initialize(); err != nil {
+		tui.PrintError("Failed to initialize router: " + err.Error())
+		tui.WaitForEnter()
+		return errCancelled
+	}
+	tui.PrintStatus("Router initialized")
+
+	// Step 3: Select operating mode
+	modeStr, err := tui.RunMenu(tui.MenuConfig{
+		Title: "Operating Mode",
+		Options: []tui.MenuOption{
+			{Label: "Single-tunnel (Recommended)", Value: "single"},
+			{Label: "Multi-tunnel (Experimental)", Value: "multi"},
+		},
+	})
+	if err != nil || modeStr == "" {
+		tui.PrintInfo("Cancelled")
+		tui.WaitForEnter()
+		return errCancelled
+	}
+
+	cfg, _ := router.Load()
+	if cfg != nil {
+		cfg.Mode = router.Mode(modeStr)
+		cfg.Save()
+	}
+	tui.PrintStatus(fmt.Sprintf("Mode set to %s", router.GetModeDisplayName(router.Mode(modeStr))))
+
+	// Step 4: Create DNS router service
+	svc := dnsrouter.NewService()
+	if err := svc.CreateService(); err != nil {
+		tui.PrintWarning("DNS router service: " + err.Error())
+	} else {
+		tui.PrintStatus("DNS router service created")
+	}
+
+	// Step 5: Install transport binaries
+	fmt.Println()
 	tui.PrintInfo("Installing transport binaries...")
 	fmt.Println()
 
-	// Install all binaries
-	tui.PrintInfo("Installing dnstt-server...")
-	if err := transport.EnsureBinariesInstalled(types.TypeDNSTTSocks); err != nil {
+	if err := transport.EnsureDnsttInstalled(); err != nil {
 		tui.PrintError("Failed to install dnstt-server: " + err.Error())
 	}
 
-	tui.PrintInfo("Installing slipstream-server...")
-	if err := transport.EnsureBinariesInstalled(types.TypeSlipstreamSocks); err != nil {
+	if err := transport.EnsureSlipstreamInstalled(); err != nil {
 		tui.PrintError("Failed to install slipstream-server: " + err.Error())
 	}
 
-	tui.PrintInfo("Installing ssserver (shadowsocks)...")
-	if err := transport.EnsureBinariesInstalled(types.TypeSlipstreamShadowsocks); err != nil {
+	if err := transport.EnsureShadowsocksInstalled(); err != nil {
 		tui.PrintError("Failed to install ssserver: " + err.Error())
+	}
+
+	if err := transport.EnsureSSHTunUserInstalled(); err != nil {
+		tui.PrintWarning("sshtun-user: " + err.Error())
 	}
 
 	tui.PrintInfo("Installing microsocks...")
 	if err := installMicrosocks(); err != nil {
 		tui.PrintError("Failed to install microsocks: " + err.Error())
+	} else {
+		// Configure and start microsocks service
+		if !proxy.IsMicrosocksRunning() {
+			// Find available port and save to config
+			port, err := proxy.FindAvailablePort()
+			if err != nil {
+				tui.PrintWarning("Could not find available port: " + err.Error())
+			} else {
+				cfg, _ = router.Load()
+				if cfg != nil {
+					cfg.Proxy.Port = port
+					cfg.Save()
+				}
+				if err := proxy.ConfigureMicrosocks(port); err != nil {
+					tui.PrintWarning("microsocks service config: " + err.Error())
+				} else {
+					if err := proxy.StartMicrosocks(); err != nil {
+						tui.PrintWarning("microsocks service start: " + err.Error())
+					} else {
+						tui.PrintStatus(fmt.Sprintf("microsocks installed and running on port %d", port))
+					}
+				}
+			}
+		} else {
+			tui.PrintStatus("microsocks already running")
+		}
+	}
+
+	// Step 6: Configure firewall
+	fmt.Println()
+	tui.PrintInfo("Configuring firewall...")
+	network.ClearNATOnly()
+	if err := network.AllowPort53(); err != nil {
+		tui.PrintWarning("Firewall configuration: " + err.Error())
+	} else {
+		tui.PrintStatus("Firewall configured (port 53 UDP/TCP)")
 	}
 
 	fmt.Println()
-	tui.PrintSuccess("Binary installation complete!")
+	tui.PrintSuccess("Installation complete!")
+	fmt.Println()
+	tui.PrintInfo("Next steps:")
+	fmt.Println("  1. Add instance: Instance → Add")
+	fmt.Println("  2. Start router: Router → Start")
+	fmt.Println()
+
 	tui.WaitForEnter()
 	return errCancelled
 }
@@ -1026,91 +1376,14 @@ func runUninstallMenu() error {
 	tui.PrintInfo("Note: The dnstm binary will be kept for easy reinstallation.")
 	fmt.Println()
 
-	var confirm bool
-	huh.NewConfirm().Title("Proceed with uninstall?").Value(&confirm).Run()
+	confirm, _ := tui.RunConfirm(tui.ConfirmConfig{Title: "Proceed with uninstall?"})
 	if !confirm {
 		tui.PrintInfo("Cancelled")
 		tui.WaitForEnter()
 		return errCancelled
 	}
 
-	// Run uninstall
-	fmt.Println()
-
-	// Stop all services
-	tui.PrintInfo("Stopping all services...")
-	cfg, _ := router.Load()
-	if cfg != nil {
-		for name, t := range cfg.Transports {
-			instance := router.NewInstance(name, t)
-			if instance.IsActive() {
-				instance.Stop()
-			}
-		}
-	}
-	svc := dnsrouter.NewService()
-	if svc.IsActive() {
-		svc.Stop()
-	}
-	if proxy.IsMicrosocksRunning() {
-		proxy.StopMicrosocks()
-	}
-	tui.PrintStatus("Services stopped")
-
-	// Remove instance services
-	tui.PrintInfo("Removing instance services...")
-	if cfg != nil {
-		for name, t := range cfg.Transports {
-			instance := router.NewInstance(name, t)
-			instance.RemoveService()
-		}
-	}
-	tui.PrintStatus("Instance services removed")
-
-	// Remove DNS router service
-	tui.PrintInfo("Removing DNS router service...")
-	svc.Remove()
-	tui.PrintStatus("DNS router service removed")
-
-	// Remove config directory
-	tui.PrintInfo("Removing configuration...")
-	os.RemoveAll("/etc/dnstm")
-	tui.PrintStatus("Configuration removed")
-
-	// Remove dnstm user
-	tui.PrintInfo("Removing dnstm user...")
-	system.RemoveDnstmUser()
-	tui.PrintStatus("User removed")
-
-	// Remove microsocks
-	tui.PrintInfo("Removing microsocks...")
-	proxy.UninstallMicrosocks()
-	tui.PrintStatus("Microsocks removed")
-
-	// Remove transport binaries
-	tui.PrintInfo("Removing transport binaries...")
-	binaries := []string{
-		"/usr/local/bin/dnstt-server",
-		"/usr/local/bin/slipstream-server",
-		"/usr/local/bin/ssserver",
-	}
-	for _, bin := range binaries {
-		os.Remove(bin)
-	}
-	tui.PrintStatus("Binaries removed")
-
-	// Remove firewall rules
-	tui.PrintInfo("Removing firewall rules...")
-	network.ClearNATOnly()
-	network.RemoveAllFirewallRules()
-	tui.PrintStatus("Firewall rules removed")
-
-	fmt.Println()
-	tui.PrintSuccess("Uninstallation complete!")
-	tui.PrintInfo("All dnstm components have been removed.")
-	fmt.Println()
-	tui.PrintInfo("Note: The dnstm binary is still available for reinstallation.")
-	fmt.Println("      To fully remove: rm /usr/local/bin/dnstm")
+	installer.PerformFullUninstall()
 
 	tui.WaitForEnter()
 	os.Exit(0)
