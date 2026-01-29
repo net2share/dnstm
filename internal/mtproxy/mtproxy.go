@@ -45,7 +45,7 @@ func IsMTProxyInstalled() bool {
 	return err == nil
 }
 
-func InstallMTProxy(secret string, progressFn func(downloaded, total int64)) error {
+func InstallMTProxy(progressFn func(downloaded, total int64)) error {
 	binaryPath := filepath.Join(MTProxyInstallationDir, MTProxyBinaryName)
 
 	// Check if binary exists and build if needed
@@ -441,7 +441,9 @@ WantedBy=multi-user.target
 	}
 
 	// Reload systemd and enable service
-	exec.Command("systemctl", "daemon-reload").Run()
+	if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {
+		return fmt.Errorf("failed to reload systemd: %w", err)
+	}
 	if err := exec.Command("systemctl", "enable", MTProxyBridgeService).Run(); err != nil {
 		return fmt.Errorf("failed to enable bridge service: %w", err)
 	}
@@ -458,7 +460,9 @@ func UninstallBridge() error {
 	exec.Command("systemctl", "stop", MTProxyBridgeService).Run()
 	exec.Command("systemctl", "disable", MTProxyBridgeService).Run()
 	os.Remove(fmt.Sprintf("/etc/systemd/system/%s.service", MTProxyBridgeService))
-	exec.Command("systemctl", "daemon-reload").Run()
+	if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {
+		return fmt.Errorf("failed to reload systemd: %w", err)
+	}
 	tui.PrintStatus("MTProxy bridge service removed")
 	return nil
 }

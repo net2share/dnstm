@@ -238,6 +238,10 @@ func addInstanceInteractive(args []string, cfg *router.Config) error {
 		if err := configureDNSTTMTProxy(transportCfg); err != nil {
 			return err
 		}
+		tui.PrintStatus("Installing socat bridge for DNSTT...")
+		if err := mtproxy.InstallBridge(); err != nil {
+			return fmt.Errorf("failed to install MTProxy bridge: %w", err)
+		}
 	}
 
 	// Allocate port
@@ -335,7 +339,7 @@ func addInstanceNonInteractive(cmd *cobra.Command, args []string, cfg *router.Co
 	case types.TypeSlipstreamMTProxy:
 		transportCfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyPort)}
 	case types.TypeDNSTTMTProxy:
-		transportCfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyPort)}
+		transportCfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyBridgePort)}
 		transportCfg.DNSTT = &types.DNSTTConfig{MTU: 1232}
 	default:
 		return fmt.Errorf("unknown transport type: %s", transportType)
