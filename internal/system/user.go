@@ -2,8 +2,10 @@ package system
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"os/user"
+	"strconv"
 )
 
 const (
@@ -74,6 +76,52 @@ func RemoveDnstmUserIfOrphaned(checkInstalled func() bool) {
 // RemoveDnstmUser removes the dnstm user unconditionally.
 func RemoveDnstmUser() {
 	RemoveSystemUser(DnstmUser)
+}
+
+// ChownToDnstm changes ownership of a file or directory to the dnstm user.
+func ChownToDnstm(path string) error {
+	u, err := user.Lookup(DnstmUser)
+	if err != nil {
+		return fmt.Errorf("user %s not found: %w", DnstmUser, err)
+	}
+
+	uid, err := strconv.Atoi(u.Uid)
+	if err != nil {
+		return fmt.Errorf("invalid uid: %w", err)
+	}
+
+	gid, err := strconv.Atoi(u.Gid)
+	if err != nil {
+		return fmt.Errorf("invalid gid: %w", err)
+	}
+
+	return os.Chown(path, uid, gid)
+}
+
+// ChownDirToDnstm recursively changes ownership of a directory to the dnstm user.
+func ChownDirToDnstm(path string) error {
+	u, err := user.Lookup(DnstmUser)
+	if err != nil {
+		return fmt.Errorf("user %s not found: %w", DnstmUser, err)
+	}
+
+	uid, err := strconv.Atoi(u.Uid)
+	if err != nil {
+		return fmt.Errorf("invalid uid: %w", err)
+	}
+
+	gid, err := strconv.Atoi(u.Gid)
+	if err != nil {
+		return fmt.Errorf("invalid gid: %w", err)
+	}
+
+	// Use chown -R for recursive ownership change
+	cmd := exec.Command("chown", "-R", fmt.Sprintf("%d:%d", uid, gid), path)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("chown failed: %s: %w", string(output), err)
+	}
+
+	return nil
 }
 
 // CreateDnsttUser creates the dnstt system user (backward compatible wrapper).

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/net2share/dnstm/internal/system"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -44,6 +45,19 @@ func Generate(privateKeyPath, publicKeyPath string) (publicKey string, err error
 
 	if err := os.WriteFile(publicKeyPath, []byte(publicKeyHex+"\n"), 0644); err != nil {
 		return "", fmt.Errorf("failed to write public key: %w", err)
+	}
+
+	// Set ownership to dnstm user so the service can read the keys
+	if err := system.ChownToDnstm(privateKeyPath); err != nil {
+		// Non-fatal: log but continue (user might not exist yet)
+		_ = err
+	}
+	if err := system.ChownToDnstm(publicKeyPath); err != nil {
+		_ = err
+	}
+	// Also chown the directory
+	if err := system.ChownToDnstm(filepath.Dir(privateKeyPath)); err != nil {
+		_ = err
 	}
 
 	return publicKeyHex, nil

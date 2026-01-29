@@ -2,13 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/charmbracelet/huh"
-	"github.com/net2share/dnstm/internal/menu"
-	"github.com/net2share/dnstm/internal/tunnel"
-	_ "github.com/net2share/dnstm/internal/tunnel/dnstt"
-	_ "github.com/net2share/dnstm/internal/tunnel/shadowsocks"
-	_ "github.com/net2share/dnstm/internal/tunnel/slipstream"
+	"github.com/net2share/dnstm/internal/dnsrouter"
+	"github.com/net2share/dnstm/internal/network"
+	"github.com/net2share/dnstm/internal/proxy"
+	"github.com/net2share/dnstm/internal/router"
+	"github.com/net2share/dnstm/internal/system"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"
 	"github.com/spf13/cobra"
@@ -16,128 +17,155 @@ import (
 
 var uninstallCmd = &cobra.Command{
 	Use:   "uninstall",
-	Short: "Uninstall a DNS tunnel provider",
-	Long:  "Uninstall a DNS tunnel provider (dnstt, slipstream, or shadowsocks)",
+	Short: "Completely uninstall dnstm",
+	Long: `Remove all dnstm components from the system.
+
+This will:
+  - Stop and remove all instance services
+  - Stop and remove DNS router service
+  - Stop and remove microsocks service
+  - Remove all configuration in /etc/dnstm
+  - Remove dnstm user
+  - Remove transport binaries (dnstt-server, slipstream-server, ssserver, microsocks)
+  - Remove firewall rules
+
+Note: The dnstm binary itself is kept for easy reinstallation.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := osdetect.RequireRoot(); err != nil {
+			return err
+		}
+
+		force, _ := cmd.Flags().GetBool("force")
+		if !force {
+			fmt.Println()
+			tui.PrintWarning("This will remove all dnstm components from your system:")
+			fmt.Println("  - All instance services and configurations")
+			fmt.Println("  - DNS router and microsocks services")
+			fmt.Println("  - Transport binaries (dnstt-server, slipstream-server, ssserver, microsocks)")
+			fmt.Println("  - The dnstm user")
+			fmt.Println("  - Firewall rules")
+			fmt.Println()
+			tui.PrintInfo("Note: The dnstm binary will be kept for easy reinstallation.")
+			fmt.Println()
+
+			var confirm bool
+			err := huh.NewConfirm().
+				Title("Are you sure you want to uninstall everything?").
+				Value(&confirm).
+				Run()
+			if err != nil {
+				return err
+			}
+			if !confirm {
+				tui.PrintInfo("Cancelled")
+				return nil
+			}
+		}
+
+		return PerformFullUninstall()
+	},
 }
 
-var uninstallDnsttCmd = &cobra.Command{
-	Use:   "dnstt",
-	Short: "Uninstall DNSTT server",
-	Long:  "Completely remove the DNSTT DNS tunnel server",
-	RunE:  runUninstallDnstt,
-}
-
-var uninstallSlipstreamCmd = &cobra.Command{
-	Use:   "slipstream",
-	Short: "Uninstall Slipstream server",
-	Long:  "Completely remove the Slipstream DNS tunnel server",
-	RunE:  runUninstallSlipstream,
-}
-
-var uninstallShadowsocksCmd = &cobra.Command{
-	Use:   "shadowsocks",
-	Short: "Uninstall Shadowsocks server",
-	Long:  "Completely remove the Shadowsocks DNS tunnel server",
-	RunE:  runUninstallShadowsocks,
-}
-
-func init() {
-	uninstallCmd.AddCommand(uninstallDnsttCmd)
-	uninstallCmd.AddCommand(uninstallSlipstreamCmd)
-	uninstallCmd.AddCommand(uninstallShadowsocksCmd)
-}
-
-func runUninstallDnstt(cmd *cobra.Command, args []string) error {
-	return runUninstallProvider(cmd, tunnel.ProviderDNSTT)
-}
-
-func runUninstallSlipstream(cmd *cobra.Command, args []string) error {
-	return runUninstallProvider(cmd, tunnel.ProviderSlipstream)
-}
-
-func runUninstallShadowsocks(cmd *cobra.Command, args []string) error {
-	return runUninstallProvider(cmd, tunnel.ProviderShadowsocks)
-}
-
-func runUninstallProvider(cmd *cobra.Command, pt tunnel.ProviderType) error {
-	if err := osdetect.RequireRoot(); err != nil {
-		return err
-	}
-
-	menu.Version = Version
-	menu.BuildTime = BuildTime
-	menu.PrintBanner()
-
-	provider, err := tunnel.Get(pt)
-	if err != nil {
-		return err
-	}
-
-	if !provider.IsInstalled() {
-		return fmt.Errorf("%s is not installed", provider.DisplayName())
-	}
-
-	return runUninstallInteractive(provider)
-}
-
-func runUninstallInteractive(provider tunnel.Provider) error {
+// PerformFullUninstall removes all dnstm components from the system.
+// It can be called from both CLI and interactive menu.
+func PerformFullUninstall() error {
 	fmt.Println()
-	tui.PrintWarning(fmt.Sprintf("This will completely remove %s from your system:", provider.DisplayName()))
-	fmt.Println("  - Stop and remove the service")
-	fmt.Println("  - Remove the binary")
-	fmt.Println("  - Remove all configuration files")
-	fmt.Println("  - Remove firewall rules")
-	fmt.Println("  - Remove the system user")
+	tui.PrintInfo("Performing full uninstall...")
 	fmt.Println()
 
-	var confirm bool
-	err := huh.NewConfirm().
-		Title("Are you sure you want to uninstall?").
-		Value(&confirm).
-		Run()
-	if err != nil {
-		return err
-	}
+	totalSteps := 8
+	currentStep := 0
 
-	if !confirm {
-		tui.PrintInfo("Uninstall cancelled")
-		return nil
+	// Step 1: Stop all services (including microsocks)
+	currentStep++
+	tui.PrintStep(currentStep, totalSteps, "Stopping all services...")
+	cfg, _ := router.Load()
+	if cfg != nil {
+		for name, transport := range cfg.Transports {
+			instance := router.NewInstance(name, transport)
+			if instance.IsActive() {
+				instance.Stop()
+			}
+		}
 	}
-
-	// Check if this is the active provider
-	handleActiveProviderSwitch(provider)
-
-	fmt.Println()
-	if err := provider.Uninstall(); err != nil {
-		return err
+	svc := dnsrouter.NewService()
+	if svc.IsActive() {
+		svc.Stop()
 	}
+	// Stop microsocks service if running
+	if proxy.IsMicrosocksRunning() {
+		proxy.StopMicrosocks()
+	}
+	tui.PrintStatus("Services stopped")
+
+	// Step 2: Remove instance services
+	currentStep++
+	tui.PrintStep(currentStep, totalSteps, "Removing instance services...")
+	if cfg != nil {
+		for name, transport := range cfg.Transports {
+			instance := router.NewInstance(name, transport)
+			instance.RemoveService()
+		}
+	}
+	tui.PrintStatus("Instance services removed")
+
+	// Step 3: Remove DNS router service
+	currentStep++
+	tui.PrintStep(currentStep, totalSteps, "Removing DNS router service...")
+	svc.Remove()
+	tui.PrintStatus("DNS router service removed")
+
+	// Step 4: Remove /etc/dnstm entirely
+	currentStep++
+	tui.PrintStep(currentStep, totalSteps, "Removing configuration directory...")
+	os.RemoveAll("/etc/dnstm")
+	tui.PrintStatus("Configuration removed")
+
+	// Step 5: Remove dnstm user
+	currentStep++
+	tui.PrintStep(currentStep, totalSteps, "Removing dnstm user...")
+	system.RemoveDnstmUser()
+	tui.PrintStatus("User removed")
+
+	// Step 6: Remove microsocks service and binary
+	currentStep++
+	tui.PrintStep(currentStep, totalSteps, "Removing microsocks service...")
+	proxy.UninstallMicrosocks()
+	tui.PrintStatus("Microsocks removed")
+
+	// Step 7: Remove transport binaries
+	currentStep++
+	tui.PrintStep(currentStep, totalSteps, "Removing transport binaries...")
+	binaries := []string{
+		"/usr/local/bin/dnstt-server",
+		"/usr/local/bin/slipstream-server",
+		"/usr/local/bin/ssserver",
+	}
+	for _, bin := range binaries {
+		if _, err := os.Stat(bin); err == nil {
+			os.Remove(bin)
+		}
+	}
+	tui.PrintStatus("Binaries removed")
+
+	// Step 8: Remove firewall rules
+	currentStep++
+	tui.PrintStep(currentStep, totalSteps, "Removing firewall rules...")
+	network.ClearNATOnly()
+	network.RemoveAllFirewallRules()
+	tui.PrintStatus("Firewall rules removed")
 
 	fmt.Println()
 	tui.PrintSuccess("Uninstallation complete!")
-	tui.PrintInfo(fmt.Sprintf("All %s components have been removed from your system.", provider.DisplayName()))
+	tui.PrintInfo("All dnstm components have been removed.")
+	fmt.Println()
+	tui.PrintInfo("Note: The dnstm binary is still available for reinstallation.")
+	fmt.Println("      To fully remove: rm /usr/local/bin/dnstm")
+	fmt.Println()
 
 	return nil
 }
 
-func handleActiveProviderSwitch(provider tunnel.Provider) {
-	globalCfg, _ := tunnel.LoadGlobalConfig()
-	if globalCfg != nil && globalCfg.ActiveProvider == provider.Name() {
-		// Find another installed provider to switch to
-		var otherProvider tunnel.Provider
-		for _, pt := range tunnel.Types() {
-			if pt == provider.Name() {
-				continue
-			}
-			p, _ := tunnel.Get(pt)
-			if p != nil && p.IsInstalled() {
-				otherProvider = p
-				break
-			}
-		}
-
-		if otherProvider != nil {
-			tui.PrintInfo(fmt.Sprintf("Switching active provider to %s...", otherProvider.DisplayName()))
-			tunnel.SetActiveProvider(otherProvider.Name())
-		}
-	}
+func init() {
+	uninstallCmd.Flags().BoolP("force", "f", false, "Skip confirmation")
 }
