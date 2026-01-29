@@ -13,6 +13,7 @@ const (
 	DnsttPort       = "5300"
 	SlipstreamPort  = "5301"
 	ShadowsocksPort = "5302"
+	MTProxyPort     = "8443"
 )
 
 type FirewallType int

@@ -220,6 +220,14 @@ func validateTransportConfig(name string, cfg *types.TransportConfig) error {
 		if cfg.Target.Address == "" {
 			return fmt.Errorf("transport %s: target address is required", name)
 		}
+	case types.TypeSlipstreamMTProxy, types.TypeDNSTTMTProxy:
+		// MTProxy backend follows the same pattern as SOCKS/SSH - forwards to target address
+		if cfg.Target == nil {
+			return fmt.Errorf("transport %s: target config is required for type %s", name, cfg.Type)
+		}
+		if cfg.Target.Address == "" {
+			return fmt.Errorf("transport %s: target address is required", name)
+		}
 	default:
 		return fmt.Errorf("transport %s: unknown type %s", name, cfg.Type)
 	}
