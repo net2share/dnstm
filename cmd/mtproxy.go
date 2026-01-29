@@ -121,7 +121,7 @@ func runMTProxyInstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if err := mtproxy.InstallMTProxy(secret, progressFn); err != nil {
+	if err := mtproxy.InstallMTProxy(progressFn); err != nil {
 		return fmt.Errorf("failed to install MTProxy: %w", err)
 	}
 	tui.PrintStatus("MTProxy installed")
