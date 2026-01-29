@@ -363,7 +363,9 @@ func RestartMTProxy() error {
 
 func UninstallMTProxy() error {
 	// Stop and remove bridge service first
-	UninstallBridge()
+	if err := UninstallBridge(); err != nil {
+		fmt.Printf("warning: failed to uninstall bridge: %v", err)
+	}
 
 	if service.IsServiceActive(MTProxyServiceName) {
 		service.StopService(MTProxyServiceName)
@@ -404,10 +406,6 @@ func InstallBridge() error {
 			cmd = exec.Command("apt-get", "install", "-y", "socat")
 		case "dnf":
 			cmd = exec.Command("dnf", "install", "-y", "socat")
-		case "yum":
-			cmd = exec.Command("yum", "install", "-y", "socat")
-		case "zypper":
-			cmd = exec.Command("zypper", "install", "-y", "socat")
 		default:
 			return fmt.Errorf("unsupported package manager: %s", osInfo.PackageManager)
 		}

@@ -641,12 +641,27 @@ func generatePassword() string {
 }
 
 func installMtProxy(cfg *types.TransportConfig) (string, error) {
-	secret, err := mtproxy.GenerateSecret()
-	if err != nil {
-		return "", fmt.Errorf("failed to generate secret: %w", err)
-	}
+	// Check if secret already exists in config
+	var secret string
+	if cfg.MTProxy != nil && cfg.MTProxy.Secret != "" {
+		secret = cfg.MTProxy.Secret
+		tui.PrintStatus(fmt.Sprintf("Using saved MTProxy secret: %s", secret))
+	} else {
+		// Generate new secret
+		var err error
+		secret, err = mtproxy.GenerateSecret()
+		if err != nil {
+			return "", fmt.Errorf("failed to generate secret: %w", err)
+		}
 
-	tui.PrintStatus(fmt.Sprintf("Using MTProxy secret: %s", secret))
+		// Save secret to config (without dd prefix)
+		if cfg.MTProxy == nil {
+			cfg.MTProxy = &types.MTProxyConfig{}
+		}
+		cfg.MTProxy.Secret = secret
+
+		tui.PrintStatus(fmt.Sprintf("Generated new MTProxy secret: %s", secret))
+	}
 
 	progressFn := func(downloaded, total int64) {
 		if total > 0 {

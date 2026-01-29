@@ -20,6 +20,7 @@ type TransportConfig struct {
 	Port        int                `yaml:"port"`
 	Shadowsocks *ShadowsocksConfig `yaml:"shadowsocks,omitempty"`
 	DNSTT       *DNSTTConfig       `yaml:"dnstt,omitempty"`
+	MTProxy     *MTProxyConfig     `yaml:"mtproxy,omitempty"`
 	Target      *TargetConfig      `yaml:"target,omitempty"`
 }
 
@@ -34,6 +35,11 @@ type DNSTTConfig struct {
 	MTU int `yaml:"mtu,omitempty"`
 }
 
+// MTProxyConfig holds MTProxy-specific configuration.
+type MTProxyConfig struct {
+	Secret string `yaml:"secret"`
+}
+
 // TargetConfig specifies the target address for forwarding.
 type TargetConfig struct {
 	Address string `yaml:"address"`
@@ -41,7 +47,7 @@ type TargetConfig struct {
 
 // IsSlipstreamType returns true if the transport type uses Slipstream.
 func IsSlipstreamType(t TransportType) bool {
-	return t == TypeSlipstreamShadowsocks || t == TypeSlipstreamSocks || t == TypeSlipstreamMTProxy
+	return t == TypeSlipstreamShadowsocks || t == TypeSlipstreamSocks || t == TypeSlipstreamSSH || t == TypeSlipstreamMTProxy
 }
 
 // IsDNSTTType returns true if the transport type uses DNSTT.
