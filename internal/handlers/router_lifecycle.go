@@ -29,7 +29,7 @@ func HandleRouterStart(ctx *actions.Context) error {
 	}
 
 	ctx.Output.Println()
-	modeName := router.GetModeDisplayName(cfg.Mode)
+	modeName := GetModeDisplayName(cfg.Route.Mode)
 	isRunning := r.IsRunning()
 
 	if isRunning {

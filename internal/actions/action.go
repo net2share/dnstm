@@ -4,7 +4,7 @@ package actions
 import (
 	"context"
 
-	"github.com/net2share/dnstm/internal/router"
+	"github.com/net2share/dnstm/internal/config"
 )
 
 // InputType defines the type of input field.
@@ -130,8 +130,8 @@ type Action struct {
 type Context struct {
 	// Ctx is the standard Go context.
 	Ctx context.Context
-	// Config is the loaded router configuration.
-	Config *router.Config
+	// Config is the loaded configuration.
+	Config *config.Config
 	// Args contains positional arguments.
 	Args []string
 	// Values contains collected input values.
@@ -198,9 +198,9 @@ func (c *Context) Set(key string, value interface{}) {
 	c.Values[key] = value
 }
 
-// Reload reloads the router configuration.
+// Reload reloads the configuration.
 func (c *Context) Reload() error {
-	cfg, err := router.Load()
+	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}

@@ -4,19 +4,19 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/net2share/dnstm/internal/types"
+	"github.com/net2share/dnstm/internal/config"
 )
 
 const (
-	BasePort = 5310
-	MaxPort  = 5399
+	BasePort = config.DefaultPortStart
+	MaxPort  = config.DefaultPortEnd
 )
 
-// AllocatePort finds the next available port for a transport instance.
-func AllocatePort(existing map[string]*types.TransportConfig) (int, error) {
+// AllocatePort finds the next available port for a tunnel.
+func AllocatePort(cfg *config.Config) (int, error) {
 	usedPorts := make(map[int]bool)
-	for _, transport := range existing {
-		usedPorts[transport.Port] = true
+	for _, t := range cfg.Tunnels {
+		usedPorts[t.Port] = true
 	}
 
 	for port := BasePort; port <= MaxPort; port++ {
@@ -29,15 +29,15 @@ func AllocatePort(existing map[string]*types.TransportConfig) (int, error) {
 }
 
 // IsPortAvailable checks if a port is available for use.
-func IsPortAvailable(port int, existing map[string]*types.TransportConfig) bool {
+func IsPortAvailable(port int, cfg *config.Config) bool {
 	// Check if port is in the valid range
 	if port < BasePort || port > MaxPort {
 		return false
 	}
 
-	// Check if port is already used by an existing transport
-	for _, transport := range existing {
-		if transport.Port == port {
+	// Check if port is already used by an existing tunnel
+	for _, t := range cfg.Tunnels {
+		if t.Port == port {
 			return false
 		}
 	}

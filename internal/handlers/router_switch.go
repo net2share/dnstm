@@ -4,15 +4,15 @@ import (
 	"fmt"
 
 	"github.com/net2share/dnstm/internal/actions"
+	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/router"
-	"github.com/net2share/dnstm/internal/types"
 )
 
 func init() {
 	actions.SetRouterHandler(actions.ActionRouterSwitch, HandleRouterSwitch)
 }
 
-// HandleRouterSwitch switches the active instance in single mode.
+// HandleRouterSwitch switches the active tunnel in single mode.
 func HandleRouterSwitch(ctx *actions.Context) error {
 	if err := CheckRequirements(ctx, true, true); err != nil {
 		return err
@@ -28,39 +28,37 @@ func HandleRouterSwitch(ctx *actions.Context) error {
 		return actions.SingleModeOnlyError()
 	}
 
-	// Check if there are instances to switch to
-	if len(cfg.Transports) == 0 {
-		return actions.NoInstancesError()
+	// Check if there are tunnels to switch to
+	if len(cfg.Tunnels) == 0 {
+		return actions.NoTunnelsError()
 	}
 
-	instanceName := ctx.GetArg(0)
+	tunnelTag := ctx.GetArg(0)
 
-	// If only one instance, just make sure it's active
-	if len(cfg.Transports) == 1 {
-		for name := range cfg.Transports {
-			if cfg.Single.Active == name {
-				ctx.Output.Info(fmt.Sprintf("'%s' is already the active instance", name))
-				return nil
-			}
-			instanceName = name
-			break
+	// If only one tunnel, just make sure it's active
+	if len(cfg.Tunnels) == 1 {
+		tag := cfg.Tunnels[0].Tag
+		if cfg.Route.Active == tag {
+			ctx.Output.Info(fmt.Sprintf("'%s' is already the active tunnel", tag))
+			return nil
 		}
+		tunnelTag = tag
 	}
 
-	// If no instance name provided, the adapter should have shown a picker
-	if instanceName == "" {
-		return actions.NewActionError("instance name required", "Usage: dnstm router switch <instance>")
+	// If no tunnel tag provided, the adapter should have shown a picker
+	if tunnelTag == "" {
+		return actions.NewActionError("tunnel tag required", "Usage: dnstm router switch <tag>")
 	}
 
-	// Verify instance exists
-	transport, ok := cfg.Transports[instanceName]
-	if !ok {
-		return actions.NotFoundError(instanceName)
+	// Verify tunnel exists
+	tunnel := cfg.GetTunnelByTag(tunnelTag)
+	if tunnel == nil {
+		return actions.TunnelNotFoundError(tunnelTag)
 	}
 
 	// Check if already active
-	if cfg.Single.Active == instanceName {
-		ctx.Output.Info(fmt.Sprintf("'%s' is already the active instance", instanceName))
+	if cfg.Route.Active == tunnelTag {
+		ctx.Output.Info(fmt.Sprintf("'%s' is already the active tunnel", tunnelTag))
 		return nil
 	}
 
@@ -71,25 +69,26 @@ func HandleRouterSwitch(ctx *actions.Context) error {
 	}
 
 	ctx.Output.Println()
-	ctx.Output.Info(fmt.Sprintf("Switching to '%s'...", instanceName))
+	ctx.Output.Info(fmt.Sprintf("Switching to '%s'...", tunnelTag))
 	ctx.Output.Println()
 
-	if err := r.SwitchActiveInstance(instanceName); err != nil {
-		return fmt.Errorf("failed to switch instance: %w", err)
+	if err := r.SwitchActiveTunnel(tunnelTag); err != nil {
+		return fmt.Errorf("failed to switch tunnel: %w", err)
 	}
 
 	// Show success
-	typeName := types.GetTransportTypeDisplayName(transport.Type)
+	transportName := config.GetTransportTypeDisplayName(tunnel.Transport)
 
 	ctx.Output.Println()
-	ctx.Output.Success(fmt.Sprintf("Switched to '%s'!", instanceName))
+	ctx.Output.Success(fmt.Sprintf("Switched to '%s'!", tunnelTag))
 	ctx.Output.Println()
 
 	var lines []string
-	lines = append(lines, ctx.Output.KV("Instance: ", instanceName))
-	lines = append(lines, ctx.Output.KV("Type:     ", typeName))
-	lines = append(lines, ctx.Output.KV("Domain:   ", transport.Domain))
-	lines = append(lines, ctx.Output.KV("Port:     ", fmt.Sprintf("%d", transport.Port)))
+	lines = append(lines, ctx.Output.KV("Tunnel:    ", tunnelTag))
+	lines = append(lines, ctx.Output.KV("Transport: ", transportName))
+	lines = append(lines, ctx.Output.KV("Backend:   ", tunnel.Backend))
+	lines = append(lines, ctx.Output.KV("Domain:    ", tunnel.Domain))
+	lines = append(lines, ctx.Output.KV("Port:      ", fmt.Sprintf("%d", tunnel.Port)))
 	ctx.Output.Box("Active Tunnel", lines)
 	ctx.Output.Println()
 

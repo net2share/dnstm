@@ -16,17 +16,29 @@ var (
 	// ErrNotInstalled indicates transport binaries are not installed.
 	ErrNotInstalled = errors.New("transport binaries not installed")
 
-	// ErrInstanceNotFound indicates the instance was not found.
-	ErrInstanceNotFound = errors.New("instance not found")
+	// ErrTunnelNotFound indicates the tunnel was not found.
+	ErrTunnelNotFound = errors.New("tunnel not found")
 
-	// ErrInstanceExists indicates the instance already exists.
-	ErrInstanceExists = errors.New("instance already exists")
+	// ErrTunnelExists indicates the tunnel already exists.
+	ErrTunnelExists = errors.New("tunnel already exists")
+
+	// ErrBackendNotFound indicates the backend was not found.
+	ErrBackendNotFound = errors.New("backend not found")
+
+	// ErrBackendExists indicates the backend already exists.
+	ErrBackendExists = errors.New("backend already exists")
+
+	// ErrBackendInUse indicates the backend is in use by tunnels.
+	ErrBackendInUse = errors.New("backend in use by tunnels")
 
 	// ErrInvalidMode indicates an invalid operating mode.
 	ErrInvalidMode = errors.New("invalid operating mode")
 
-	// ErrNoInstances indicates no instances are configured.
-	ErrNoInstances = errors.New("no instances configured")
+	// ErrNoTunnels indicates no tunnels are configured.
+	ErrNoTunnels = errors.New("no tunnels configured")
+
+	// ErrNoBackends indicates no backends are configured.
+	ErrNoBackends = errors.New("no backends configured")
 
 	// ErrSingleModeOnly indicates the action is only available in single mode.
 	ErrSingleModeOnly = errors.New("only available in single-tunnel mode")
@@ -75,21 +87,48 @@ func WrapError(err error, message, hint string) *ActionError {
 	}
 }
 
-// NotFoundError creates an instance not found error.
-func NotFoundError(name string) *ActionError {
+// TunnelNotFoundError creates a tunnel not found error.
+func TunnelNotFoundError(tag string) *ActionError {
 	return &ActionError{
-		Message: fmt.Sprintf("instance '%s' not found", name),
-		Hint:    "Use 'dnstm instance list' to see available instances",
-		Err:     ErrInstanceNotFound,
+		Message: fmt.Sprintf("tunnel '%s' not found", tag),
+		Hint:    "Use 'dnstm tunnel list' to see available tunnels",
+		Err:     ErrTunnelNotFound,
 	}
 }
 
-// ExistsError creates an instance already exists error.
-func ExistsError(name string) *ActionError {
+// TunnelExistsError creates a tunnel already exists error.
+func TunnelExistsError(tag string) *ActionError {
 	return &ActionError{
-		Message: fmt.Sprintf("instance '%s' already exists", name),
-		Hint:    "Choose a different name or remove the existing instance",
-		Err:     ErrInstanceExists,
+		Message: fmt.Sprintf("tunnel '%s' already exists", tag),
+		Hint:    "Choose a different tag or remove the existing tunnel",
+		Err:     ErrTunnelExists,
+	}
+}
+
+// BackendNotFoundError creates a backend not found error.
+func BackendNotFoundError(tag string) *ActionError {
+	return &ActionError{
+		Message: fmt.Sprintf("backend '%s' not found", tag),
+		Hint:    "Use 'dnstm backend list' to see available backends",
+		Err:     ErrBackendNotFound,
+	}
+}
+
+// BackendExistsError creates a backend already exists error.
+func BackendExistsError(tag string) *ActionError {
+	return &ActionError{
+		Message: fmt.Sprintf("backend '%s' already exists", tag),
+		Hint:    "Choose a different tag or remove the existing backend",
+		Err:     ErrBackendExists,
+	}
+}
+
+// BackendInUseError creates a backend in use error.
+func BackendInUseError(tag string, tunnels []string) *ActionError {
+	return &ActionError{
+		Message: fmt.Sprintf("backend '%s' is in use by tunnels: %v", tag, tunnels),
+		Hint:    "Remove or reconfigure the tunnels first",
+		Err:     ErrBackendInUse,
 	}
 }
 
@@ -120,11 +159,11 @@ func SingleModeOnlyError() *ActionError {
 	}
 }
 
-// NoInstancesError creates an error for no instances configured.
-func NoInstancesError() *ActionError {
+// NoBackendsError creates an error for no backends configured.
+func NoBackendsError() *ActionError {
 	return &ActionError{
-		Message: "no instances configured",
-		Hint:    "Use 'dnstm instance add' to create one",
-		Err:     ErrNoInstances,
+		Message: "no backends configured",
+		Hint:    "Use 'dnstm backend add' to create one",
+		Err:     ErrNoBackends,
 	}
 }

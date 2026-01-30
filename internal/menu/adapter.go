@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/net2share/dnstm/internal/actions"
+	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/handlers"
 	"github.com/net2share/dnstm/internal/router"
 	"github.com/net2share/go-corelib/tui"
@@ -22,7 +23,7 @@ func newActionContext(args []string) *actions.Context {
 
 	// Load config
 	if router.IsInitialized() {
-		cfg, _ := router.Load()
+		cfg, _ := config.Load()
 		ctx.Config = cfg
 	}
 
@@ -34,9 +35,9 @@ func BuildMenuOptions(parentID string) []tui.MenuOption {
 	var options []tui.MenuOption
 
 	// Load config for ShowInMenu checks
-	var cfg *router.Config
+	var cfg *config.Config
 	if router.IsInitialized() {
-		cfg, _ = router.Load()
+		cfg, _ = config.Load()
 	}
 
 	children := actions.GetChildren(parentID)
@@ -90,7 +91,7 @@ func RunAction(actionID string) error {
 
 	// Load config
 	if router.IsInitialized() {
-		cfg, _ := router.Load()
+		cfg, _ := config.Load()
 		ctx.Config = cfg
 	}
 
@@ -232,7 +233,7 @@ func runPickerForAction(ctx *actions.Context, action *actions.Action) (string, e
 	// Get options from context using shared helper
 	options := actions.GetPickerOptions(ctx)
 	if len(options) == 0 {
-		return "", actions.NoInstancesError()
+		return "", actions.NoTunnelsError()
 	}
 
 	// Convert to tui options
@@ -271,9 +272,9 @@ func RunSubmenu(parentID string) error {
 		var options []tui.MenuOption
 
 		// Load config for dynamic menu building
-		var cfg *router.Config
+		var cfg *config.Config
 		if router.IsInitialized() {
-			cfg, _ = router.Load()
+			cfg, _ = config.Load()
 		}
 
 		// For router submenu, build options manually to include mode and switch labels
@@ -281,7 +282,7 @@ func RunSubmenu(parentID string) error {
 			modeName := "unknown"
 			isSingleMode := false
 			if cfg != nil {
-				modeName = router.GetModeDisplayName(cfg.Mode)
+				modeName = handlers.GetModeDisplayName(cfg.Route.Mode)
 				isSingleMode = cfg.IsSingleMode()
 			}
 
@@ -293,8 +294,8 @@ func RunSubmenu(parentID string) error {
 			// Switch Active is only relevant in single mode
 			if isSingleMode {
 				activeLabel := "Switch Active: (none)"
-				if cfg != nil && cfg.Single.Active != "" {
-					activeLabel = fmt.Sprintf("Switch Active: %s", cfg.Single.Active)
+				if cfg != nil && cfg.Route.Active != "" {
+					activeLabel = fmt.Sprintf("Switch Active: %s", cfg.Route.Active)
 				}
 				options = append(options, tui.MenuOption{Label: activeLabel, Value: actions.ActionRouterSwitch})
 			}

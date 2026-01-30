@@ -18,7 +18,7 @@ func init() {
 		Parent:            ActionRouter,
 		Use:               "status",
 		Short:             "Show router status",
-		Long:              "Show the status of the router, DNS router, and all transport instances",
+		Long:              "Show the status of the router, DNS router, and all tunnels",
 		MenuLabel:         "Status",
 		RequiresRoot:      true,
 		RequiresInstalled: true,
@@ -26,12 +26,12 @@ func init() {
 
 	// Register router.start action
 	Register(&Action{
-		ID:        ActionRouterStart,
-		Parent:    ActionRouter,
-		Use:      "start",
-		Short:    "Start the router",
-		Long:     "Start or restart tunnels based on current mode.\n\nIf already running, restarts to pick up any configuration changes.\n\nIn single-tunnel mode: starts the active instance.\nIn multi-tunnel mode: starts DNS router and all instances.",
-		MenuLabel: "Start/Restart",
+		ID:                ActionRouterStart,
+		Parent:            ActionRouter,
+		Use:               "start",
+		Short:             "Start the router",
+		Long:              "Start or restart tunnels based on current mode.\n\nIf already running, restarts to pick up any configuration changes.\n\nIn single-tunnel mode: starts the active tunnel.\nIn multi-tunnel mode: starts DNS router and all enabled tunnels.",
+		MenuLabel:         "Start/Restart",
 		RequiresRoot:      true,
 		RequiresInstalled: true,
 	})
@@ -42,8 +42,20 @@ func init() {
 		Parent:            ActionRouter,
 		Use:               "stop",
 		Short:             "Stop the router",
-		Long:              "Stop tunnels based on current mode.\n\nIn single-tunnel mode: stops the active instance.\nIn multi-tunnel mode: stops DNS router and all instances.",
+		Long:              "Stop tunnels based on current mode.\n\nIn single-tunnel mode: stops the active tunnel.\nIn multi-tunnel mode: stops DNS router and all tunnels.",
 		MenuLabel:         "Stop",
+		RequiresRoot:      true,
+		RequiresInstalled: true,
+	})
+
+	// Register router.restart action
+	Register(&Action{
+		ID:                ActionRouterRestart,
+		Parent:            ActionRouter,
+		Use:               "restart",
+		Short:             "Restart the router",
+		Long:              "Restart all tunnels based on current mode.",
+		MenuLabel:         "Restart",
 		RequiresRoot:      true,
 		RequiresInstalled: true,
 	})
@@ -90,17 +102,17 @@ func init() {
 	Register(&Action{
 		ID:                ActionRouterSwitch,
 		Parent:            ActionRouter,
-		Use:               "switch [instance]",
-		Short:             "Switch active tunnel instance",
-		Long:              "Switch the active tunnel instance in single-tunnel mode.\n\nWithout arguments, shows an interactive picker.\nWith an instance name, switches to that instance directly.\n\nThis command is only available in single-tunnel mode.\nUse 'dnstm router mode single' to switch to single-tunnel mode first.",
+		Use:               "switch [tag]",
+		Short:             "Switch active tunnel",
+		Long:              "Switch the active tunnel in single-tunnel mode.\n\nWithout arguments, shows an interactive picker.\nWith a tunnel tag, switches to that tunnel directly.\n\nThis command is only available in single-tunnel mode.\nUse 'dnstm router mode single' to switch to single-tunnel mode first.",
 		MenuLabel:         "Switch Active",
 		RequiresRoot:      true,
 		RequiresInstalled: true,
 		Args: &ArgsSpec{
-			Name:        "instance",
-			Description: "Instance name to switch to",
+			Name:        "tag",
+			Description: "Tunnel tag to switch to",
 			Required:    false,
-			PickerFunc:  InstancePicker,
+			PickerFunc:  TunnelPicker,
 		},
 		ShowInMenu: func(ctx *Context) bool {
 			// Only show in single mode

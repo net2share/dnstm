@@ -2,25 +2,43 @@ package actions
 
 // Action IDs for type-safe references throughout the codebase.
 const (
-	// Instance actions
-	ActionInstance            = "instance"
-	ActionInstanceList        = "instance.list"
-	ActionInstanceAdd         = "instance.add"
-	ActionInstanceRemove      = "instance.remove"
-	ActionInstanceStart       = "instance.start"
-	ActionInstanceStop        = "instance.stop"
-	ActionInstanceStatus      = "instance.status"
-	ActionInstanceLogs        = "instance.logs"
-	ActionInstanceReconfigure = "instance.reconfigure"
+	// Backend actions
+	ActionBackend          = "backend"
+	ActionBackendList      = "backend.list"
+	ActionBackendAvailable = "backend.available"
+	ActionBackendAdd       = "backend.add"
+	ActionBackendRemove    = "backend.remove"
+	ActionBackendStatus    = "backend.status"
+
+	// Tunnel actions
+	ActionTunnel            = "tunnel"
+	ActionTunnelList        = "tunnel.list"
+	ActionTunnelAdd         = "tunnel.add"
+	ActionTunnelRemove      = "tunnel.remove"
+	ActionTunnelEnable      = "tunnel.enable"
+	ActionTunnelDisable     = "tunnel.disable"
+	ActionTunnelStart       = "tunnel.start"
+	ActionTunnelStop        = "tunnel.stop"
+	ActionTunnelRestart     = "tunnel.restart"
+	ActionTunnelStatus      = "tunnel.status"
+	ActionTunnelLogs        = "tunnel.logs"
+	ActionTunnelReconfigure = "tunnel.reconfigure"
 
 	// Router actions
-	ActionRouter       = "router"
-	ActionRouterStatus = "router.status"
-	ActionRouterStart  = "router.start"
-	ActionRouterStop   = "router.stop"
-	ActionRouterLogs   = "router.logs"
-	ActionRouterMode   = "router.mode"
-	ActionRouterSwitch = "router.switch"
+	ActionRouter        = "router"
+	ActionRouterStatus  = "router.status"
+	ActionRouterStart   = "router.start"
+	ActionRouterStop    = "router.stop"
+	ActionRouterRestart = "router.restart"
+	ActionRouterLogs    = "router.logs"
+	ActionRouterMode    = "router.mode"
+	ActionRouterSwitch  = "router.switch"
+
+	// Config actions
+	ActionConfig         = "config"
+	ActionConfigLoad     = "config.load"
+	ActionConfigExport   = "config.export"
+	ActionConfigValidate = "config.validate"
 
 	// System actions
 	ActionInstall   = "install"

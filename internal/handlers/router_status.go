@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/net2share/dnstm/internal/actions"
+	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/router"
-	"github.com/net2share/dnstm/internal/types"
 )
 
 func init() {
@@ -32,37 +32,37 @@ func HandleRouterStatus(ctx *actions.Context) error {
 
 	// Build status output
 	var lines []string
-	modeName := router.GetModeDisplayName(cfg.Mode)
+	modeName := GetModeDisplayName(cfg.Route.Mode)
 	lines = append(lines, fmt.Sprintf("Mode: %s", modeName))
 
 	if cfg.IsSingleMode() {
 		// Single-tunnel mode status
 		lines = append(lines, "")
-		if cfg.Single.Active != "" {
-			instance := r.GetInstance(cfg.Single.Active)
-			if instance != nil {
+		if cfg.Route.Active != "" {
+			tunnel := r.GetTunnel(cfg.Route.Active)
+			if tunnel != nil {
 				status := actions.SymbolStopped + " Stopped"
-				if instance.IsActive() {
+				if tunnel.IsActive() {
 					status = actions.SymbolRunning + " Running"
 				}
-				typeName := types.GetTransportTypeDisplayName(instance.Type)
-				lines = append(lines, fmt.Sprintf("Active: %s (%s) %s", cfg.Single.Active, typeName, status))
-				lines = append(lines, fmt.Sprintf("  %s %s %s 127.0.0.1:%d", actions.SymbolBranch, instance.Domain, actions.SymbolArrow, instance.Port))
+				transportName := config.GetTransportTypeDisplayName(tunnel.Transport)
+				lines = append(lines, fmt.Sprintf("Active: %s (%s) %s", cfg.Route.Active, transportName, status))
+				lines = append(lines, fmt.Sprintf("  %s %s %s 127.0.0.1:%d", actions.SymbolBranch, tunnel.Domain, actions.SymbolArrow, tunnel.Port))
 			}
 		} else {
 			lines = append(lines, "Active: (none)")
 		}
 
-		// Show other instances
-		if len(cfg.Transports) > 1 {
+		// Show other tunnels
+		if len(cfg.Tunnels) > 1 {
 			lines = append(lines, "")
-			lines = append(lines, "Other instances:")
-			for name, transport := range cfg.Transports {
-				if name == cfg.Single.Active {
+			lines = append(lines, "Other tunnels:")
+			for _, t := range cfg.Tunnels {
+				if t.Tag == cfg.Route.Active {
 					continue
 				}
-				typeName := types.GetTransportTypeDisplayName(transport.Type)
-				lines = append(lines, fmt.Sprintf("  %-16s %s", name, typeName))
+				transportName := config.GetTransportTypeDisplayName(t.Transport)
+				lines = append(lines, fmt.Sprintf("  %-16s %s", t.Tag, transportName))
 			}
 		}
 	} else {
@@ -77,28 +77,28 @@ func HandleRouterStatus(ctx *actions.Context) error {
 		}
 		lines = append(lines, fmt.Sprintf("DNS Router: %s (port 53)", routerStatus))
 		lines = append(lines, "")
-		lines = append(lines, "Instances:")
+		lines = append(lines, "Tunnels:")
 
-		instances := r.GetAllInstances()
-		if len(instances) == 0 {
-			lines = append(lines, "  No instances configured")
+		tunnels := r.GetAllTunnels()
+		if len(tunnels) == 0 {
+			lines = append(lines, "  No tunnels configured")
 		} else {
-			for name, instance := range instances {
+			for tag, tunnel := range tunnels {
 				status := actions.SymbolStopped + " Stopped"
-				if instance.IsActive() {
+				if tunnel.IsActive() {
 					status = actions.SymbolRunning + " Running"
 				}
-				if !instance.IsInstalled() {
+				if !tunnel.IsInstalled() {
 					status = actions.SymbolError + " Not installed"
 				}
 
-				typeName := types.GetTransportTypeDisplayName(instance.Type)
+				transportName := config.GetTransportTypeDisplayName(tunnel.Transport)
 				defaultMarker := ""
-				if cfg.Routing.Default == name {
+				if cfg.Route.Default == tag {
 					defaultMarker = " (default)"
 				}
-				lines = append(lines, fmt.Sprintf("  %-16s %-24s %s%s", name, typeName, status, defaultMarker))
-				lines = append(lines, fmt.Sprintf("    %s %s %s 127.0.0.1:%d", actions.SymbolBranch, instance.Domain, actions.SymbolArrow, instance.Port))
+				lines = append(lines, fmt.Sprintf("  %-16s %-24s %s%s", tag, transportName, status, defaultMarker))
+				lines = append(lines, fmt.Sprintf("    %s %s %s 127.0.0.1:%d", actions.SymbolBranch, tunnel.Domain, actions.SymbolArrow, tunnel.Port))
 			}
 		}
 	}

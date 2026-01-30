@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/net2share/dnstm/internal/actions"
+	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/dnsrouter"
 	"github.com/net2share/dnstm/internal/network"
 	"github.com/net2share/dnstm/internal/proxy"
@@ -63,16 +64,17 @@ func HandleInstall(ctx *actions.Context) error {
 	}
 	ctx.Output.Status("Router initialized")
 
-	// Step 3: Set operating mode
-	cfg, err := router.Load()
+	// Step 3: Set operating mode and ensure built-in backends
+	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-	cfg.Mode = router.Mode(modeStr)
+	cfg.Route.Mode = modeStr
+	cfg.EnsureBuiltinBackends()
 	if err := cfg.Save(); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
-	ctx.Output.Status(fmt.Sprintf("Mode set to %s", router.GetModeDisplayName(cfg.Mode)))
+	ctx.Output.Status(fmt.Sprintf("Mode set to %s", GetModeDisplayName(cfg.Route.Mode)))
 
 	// Step 4: Create DNS router service
 	svc := dnsrouter.NewService()
@@ -125,6 +127,7 @@ func HandleInstall(ctx *actions.Context) error {
 				ctx.Output.Warning("Could not find available port: " + err.Error())
 			} else {
 				cfg.Proxy.Port = port
+				cfg.UpdateSocksBackendPort(port)
 				if err := cfg.Save(); err != nil {
 					ctx.Output.Warning("Failed to save proxy port: " + err.Error())
 				}
@@ -157,7 +160,7 @@ func HandleInstall(ctx *actions.Context) error {
 	ctx.Output.Success("Installation complete!")
 	ctx.Output.Println()
 	ctx.Output.Info("Next steps:")
-	ctx.Output.Println("  1. Add instance: dnstm instance add")
+	ctx.Output.Println("  1. Add tunnel: dnstm tunnel add")
 	ctx.Output.Println("  2. Start router: dnstm router start")
 	ctx.Output.Println()
 

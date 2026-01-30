@@ -21,17 +21,17 @@ func PerformFullUninstall() error {
 	totalSteps := 7
 	currentStep := 0
 
-	// Step 1: Remove all instances (stops, disables, removes services)
+	// Step 1: Remove all tunnels (stops, disables, removes services)
 	currentStep++
-	tui.PrintStep(currentStep, totalSteps, "Removing all instances...")
+	tui.PrintStep(currentStep, totalSteps, "Removing all tunnels...")
 	cfg, _ := router.Load()
 	if cfg != nil {
-		for name, transport := range cfg.Transports {
-			instance := router.NewInstance(name, transport)
-			instance.RemoveService() // Stops, disables, and removes systemd service
+		for _, t := range cfg.Tunnels {
+			tunnel := router.NewTunnel(&t)
+			tunnel.RemoveService() // Stops, disables, and removes systemd service
 		}
 	}
-	tui.PrintStatus("Instances removed")
+	tui.PrintStatus("Tunnels removed")
 
 	// Step 2: Remove DNS router service
 	currentStep++

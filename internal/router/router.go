@@ -3,47 +3,47 @@ package router
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/net2share/dnstm/internal/certs"
+	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/dnsrouter"
 	"github.com/net2share/dnstm/internal/network"
 	"github.com/net2share/dnstm/internal/system"
-	"github.com/net2share/dnstm/internal/types"
 )
 
-// Router orchestrates multiple transport instances and the DNS router.
+// Router orchestrates multiple tunnels and the DNS router.
 type Router struct {
-	config    *Config
-	instances map[string]*Instance
+	config    *config.Config
+	tunnels   map[string]*Tunnel
 	dnsrouter *dnsrouter.Service
 	certMgr   *certs.Manager
 }
 
 // New creates a new router from configuration.
-func New(cfg *Config) (*Router, error) {
+func New(cfg *config.Config) (*Router, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
 	r := &Router{
 		config:    cfg,
-		instances: make(map[string]*Instance),
+		tunnels:   make(map[string]*Tunnel),
 		dnsrouter: dnsrouter.NewService(),
 		certMgr:   certs.NewManager(),
 	}
 
-	// Create instances from config
-	for name, transportCfg := range cfg.Transports {
-		r.instances[name] = NewInstance(name, transportCfg)
+	// Create tunnels from config
+	for i := range cfg.Tunnels {
+		t := &cfg.Tunnels[i]
+		r.tunnels[t.Tag] = NewTunnel(t)
 	}
 
 	return r, nil
 }
 
 // Start starts the router based on the current mode.
-// In single mode: starts the active instance (binds directly to EXTERNAL_IP:53).
-// In multi mode: starts the DNS router and all instances.
+// In single mode: starts the active tunnel (binds directly to EXTERNAL_IP:53).
+// In multi mode: starts the DNS router and all enabled tunnels.
 func (r *Router) Start() error {
 	// Ensure dnstm user exists
 	if err := system.CreateDnstmUser(); err != nil {
@@ -56,28 +56,16 @@ func (r *Router) Start() error {
 	return r.startMultiMode()
 }
 
-// startSingleMode starts the active instance which binds directly to EXTERNAL_IP:53.
-// No DNAT is needed since the transport binds directly to the external interface.
+// startSingleMode starts the active tunnel which binds directly to EXTERNAL_IP:53.
 func (r *Router) startSingleMode() error {
-	active := r.config.Single.Active
+	active := r.config.Route.Active
 	if active == "" {
-		return fmt.Errorf("no active instance configured; use 'dnstm instance add' first")
+		return fmt.Errorf("no active tunnel configured; use 'dnstm tunnel add' first")
 	}
 
-	_, ok := r.config.Transports[active]
-	if !ok {
-		return fmt.Errorf("active instance '%s' not found", active)
-	}
-
-	instance, ok := r.instances[active]
-	if !ok {
-		return fmt.Errorf("active instance '%s' not initialized", active)
-	}
-
-	// Always regenerate service for single mode to ensure correct binding (EXTERNAL_IP:53)
-	// This handles cases where instance was created in multi-mode or mode changed
-	if err := instance.RegenerateService(ServiceModeSingle); err != nil {
-		return fmt.Errorf("failed to configure service for single mode: %w", err)
+	tunnel := r.tunnels[active]
+	if tunnel == nil {
+		return fmt.Errorf("active tunnel '%s' not found", active)
 	}
 
 	// Clear any stale NAT rules (transport binds directly to external IP, no NAT needed)
@@ -85,15 +73,15 @@ func (r *Router) startSingleMode() error {
 	// Ensure firewall allows port 53
 	network.AllowPort53()
 
-	// Start the instance
-	if err := instance.Start(); err != nil {
-		return fmt.Errorf("failed to start instance %s: %w", active, err)
+	// Start the tunnel
+	if err := tunnel.Start(); err != nil {
+		return fmt.Errorf("failed to start tunnel %s: %w", active, err)
 	}
 
 	return nil
 }
 
-// startMultiMode starts the DNS router and all instances.
+// startMultiMode starts the DNS router and all enabled tunnels.
 func (r *Router) startMultiMode() error {
 	// Generate DNS router config
 	if err := r.regenerateDNSRouterConfig(); err != nil {
@@ -112,15 +100,16 @@ func (r *Router) startMultiMode() error {
 	// Ensure firewall allows port 53
 	network.AllowPort53()
 
-	// Start all backend instances FIRST (before dnsrouter)
-	// This ensures backends are ready to receive traffic when dnsrouter starts
-	for name, instance := range r.instances {
-		if err := instance.Start(); err != nil {
-			return fmt.Errorf("failed to start instance %s: %w", name, err)
+	// Start all enabled tunnels FIRST (before dnsrouter)
+	for tag, tunnel := range r.tunnels {
+		if tunnel.Config.IsEnabled() {
+			if err := tunnel.Start(); err != nil {
+				return fmt.Errorf("failed to start tunnel %s: %w", tag, err)
+			}
 		}
 	}
 
-	// Start DNS router AFTER instances are ready
+	// Start DNS router AFTER tunnels are ready
 	if err := r.dnsrouter.Start(); err != nil {
 		return fmt.Errorf("failed to start DNS router: %w", err)
 	}
@@ -129,8 +118,6 @@ func (r *Router) startMultiMode() error {
 }
 
 // Stop stops the router based on the current mode.
-// In single mode: stops the active instance and removes NAT rules.
-// In multi mode: stops all instances and the DNS router.
 func (r *Router) Stop() error {
 	if r.config.IsSingleMode() {
 		return r.stopSingleMode()
@@ -138,16 +125,15 @@ func (r *Router) Stop() error {
 	return r.stopMultiMode()
 }
 
-// stopSingleMode stops the active instance.
-// No NAT cleanup needed since we bind directly to external IP.
+// stopSingleMode stops the active tunnel.
 func (r *Router) stopSingleMode() error {
 	var lastErr error
 
-	active := r.config.Single.Active
+	active := r.config.Route.Active
 	if active != "" {
-		if instance, ok := r.instances[active]; ok {
-			if err := instance.Stop(); err != nil {
-				lastErr = fmt.Errorf("failed to stop instance %s: %w", active, err)
+		if tunnel, ok := r.tunnels[active]; ok {
+			if err := tunnel.Stop(); err != nil {
+				lastErr = fmt.Errorf("failed to stop tunnel %s: %w", active, err)
 			}
 		}
 	}
@@ -155,14 +141,14 @@ func (r *Router) stopSingleMode() error {
 	return lastErr
 }
 
-// stopMultiMode stops all instances and the DNS router.
+// stopMultiMode stops all tunnels and the DNS router.
 func (r *Router) stopMultiMode() error {
 	var lastErr error
 
-	// Stop all instances
-	for name, instance := range r.instances {
-		if err := instance.Stop(); err != nil {
-			lastErr = fmt.Errorf("failed to stop instance %s: %w", name, err)
+	// Stop all tunnels
+	for tag, tunnel := range r.tunnels {
+		if err := tunnel.Stop(); err != nil {
+			lastErr = fmt.Errorf("failed to stop tunnel %s: %w", tag, err)
 		}
 	}
 
@@ -177,20 +163,20 @@ func (r *Router) stopMultiMode() error {
 // IsRunning returns true if any router services are currently active.
 func (r *Router) IsRunning() bool {
 	if r.config.IsSingleMode() {
-		active := r.config.Single.Active
+		active := r.config.Route.Active
 		if active != "" {
-			if instance, ok := r.instances[active]; ok {
-				return instance.IsActive()
+			if tunnel, ok := r.tunnels[active]; ok {
+				return tunnel.IsActive()
 			}
 		}
 		return false
 	}
-	// Multi mode - check dnsrouter or any instance
+	// Multi mode - check dnsrouter or any tunnel
 	if r.dnsrouter.IsActive() {
 		return true
 	}
-	for _, instance := range r.instances {
-		if instance.IsActive() {
+	for _, tunnel := range r.tunnels {
+		if tunnel.IsActive() {
 			return true
 		}
 	}
@@ -205,24 +191,18 @@ func (r *Router) Restart() error {
 	return r.Start()
 }
 
-// AddInstance adds a new transport instance.
-func (r *Router) AddInstance(name string, cfg *types.TransportConfig) error {
-	if err := ValidateName(name); err != nil {
+// AddTunnel adds a new tunnel.
+func (r *Router) AddTunnel(cfg *config.TunnelConfig) error {
+	if err := ValidateName(cfg.Tag); err != nil {
 		return err
 	}
 
-	if _, exists := r.instances[name]; exists {
-		return fmt.Errorf("instance %s already exists", name)
+	if _, exists := r.tunnels[cfg.Tag]; exists {
+		return fmt.Errorf("tunnel %s already exists", cfg.Tag)
 	}
 
 	if cfg.Port == 0 {
-		port, err := AllocatePort(r.config.Transports)
-		if err != nil {
-			return err
-		}
-		cfg.Port = port
-	} else if !IsPortAvailable(cfg.Port, r.config.Transports) {
-		return fmt.Errorf("port %d is not available", cfg.Port)
+		cfg.Port = r.config.AllocateNextPort()
 	}
 
 	// Generate or reuse certificate/keys
@@ -230,36 +210,26 @@ func (r *Router) AddInstance(name string, cfg *types.TransportConfig) error {
 		return err
 	}
 
-	// Create instance
-	instance := NewInstance(name, cfg)
-
-	// Create systemd service
-	if err := instance.CreateService(); err != nil {
-		return fmt.Errorf("failed to create service: %w", err)
-	}
-
-	// Set permissions
-	if err := instance.SetPermissions(); err != nil {
-		return fmt.Errorf("failed to set permissions: %w", err)
-	}
+	// Create tunnel
+	tunnel := NewTunnel(cfg)
 
 	// Update config
-	r.config.Transports[name] = cfg
-	r.instances[name] = instance
+	r.config.Tunnels = append(r.config.Tunnels, *cfg)
+	r.tunnels[cfg.Tag] = tunnel
 
-	// In single mode: auto-set as active if first instance
+	// In single mode: auto-set as active if first tunnel
 	if r.config.IsSingleMode() {
-		if r.config.Single.Active == "" {
-			r.config.Single.Active = name
+		if r.config.Route.Active == "" {
+			r.config.Route.Active = cfg.Tag
 		}
 	} else {
 		// In multi mode: regenerate DNS router config
 		if err := r.regenerateDNSRouterConfig(); err != nil {
 			return fmt.Errorf("failed to regenerate DNS router config: %w", err)
 		}
-		// Set as default if first instance
-		if r.config.Routing.Default == "" {
-			r.config.Routing.Default = name
+		// Set as default if first tunnel
+		if r.config.Route.Default == "" {
+			r.config.Route.Default = cfg.Tag
 		}
 	}
 
@@ -271,46 +241,50 @@ func (r *Router) AddInstance(name string, cfg *types.TransportConfig) error {
 	return nil
 }
 
-// RemoveInstance removes a transport instance.
-func (r *Router) RemoveInstance(name string) error {
-	instance, exists := r.instances[name]
+// RemoveTunnel removes a tunnel.
+func (r *Router) RemoveTunnel(tag string) error {
+	tunnel, exists := r.tunnels[tag]
 	if !exists {
-		return fmt.Errorf("instance %s not found", name)
+		return fmt.Errorf("tunnel %s not found", tag)
 	}
 
 	// Remove service
-	if err := instance.RemoveService(); err != nil {
+	if err := tunnel.RemoveService(); err != nil {
 		return fmt.Errorf("failed to remove service: %w", err)
 	}
 
-	// Remove instance config directory
-	if err := instance.RemoveConfigDir(); err != nil {
+	// Remove tunnel config directory
+	if err := tunnel.RemoveConfigDir(); err != nil {
 		return fmt.Errorf("failed to remove config directory: %w", err)
 	}
 
-	// Update config
-	delete(r.config.Transports, name)
-	delete(r.instances, name)
+	// Remove from config
+	var newTunnels []config.TunnelConfig
+	for _, t := range r.config.Tunnels {
+		if t.Tag != tag {
+			newTunnels = append(newTunnels, t)
+		}
+	}
+	r.config.Tunnels = newTunnels
+	delete(r.tunnels, tag)
 
 	// Handle mode-specific cleanup
 	if r.config.IsSingleMode() {
-		// Update active instance if needed
-		if r.config.Single.Active == name {
-			r.config.Single.Active = ""
-			// Set to first available instance
-			for n := range r.config.Transports {
-				r.config.Single.Active = n
-				break
+		// Update active tunnel if needed
+		if r.config.Route.Active == tag {
+			r.config.Route.Active = ""
+			// Set to first available tunnel
+			if len(r.config.Tunnels) > 0 {
+				r.config.Route.Active = r.config.Tunnels[0].Tag
 			}
 		}
 	} else {
 		// Update default route if needed
-		if r.config.Routing.Default == name {
-			r.config.Routing.Default = ""
-			// Set to first available instance
-			for n := range r.config.Transports {
-				r.config.Routing.Default = n
-				break
+		if r.config.Route.Default == tag {
+			r.config.Route.Default = ""
+			// Set to first available tunnel
+			if len(r.config.Tunnels) > 0 {
+				r.config.Route.Default = r.config.Tunnels[0].Tag
 			}
 		}
 
@@ -328,34 +302,35 @@ func (r *Router) RemoveInstance(name string) error {
 	return nil
 }
 
-// GetInstance returns an instance by name.
-func (r *Router) GetInstance(name string) *Instance {
-	return r.instances[name]
+// GetTunnel returns a tunnel by tag.
+func (r *Router) GetTunnel(tag string) *Tunnel {
+	return r.tunnels[tag]
 }
 
-// GetAllInstances returns all instances.
-func (r *Router) GetAllInstances() map[string]*Instance {
-	return r.instances
+// GetAllTunnels returns all tunnels.
+func (r *Router) GetAllTunnels() map[string]*Tunnel {
+	return r.tunnels
 }
 
 // GetConfig returns the current configuration.
-func (r *Router) GetConfig() *Config {
+func (r *Router) GetConfig() *config.Config {
 	return r.config
 }
 
 // Reload reloads the configuration and regenerates the DNS router config.
 func (r *Router) Reload() error {
-	cfg, err := Load()
+	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	r.config = cfg
 
-	// Recreate instances
-	r.instances = make(map[string]*Instance)
-	for name, transportCfg := range cfg.Transports {
-		r.instances[name] = NewInstance(name, transportCfg)
+	// Recreate tunnels
+	r.tunnels = make(map[string]*Tunnel)
+	for i := range cfg.Tunnels {
+		t := &cfg.Tunnels[i]
+		r.tunnels[t.Tag] = NewTunnel(t)
 	}
 
 	// Only regenerate and restart DNS router in multi mode
@@ -373,22 +348,19 @@ func (r *Router) Reload() error {
 }
 
 // ensureCryptoMaterial ensures certificates or keys exist for the domain.
-func (r *Router) ensureCryptoMaterial(cfg *types.TransportConfig) error {
-	if types.IsSlipstreamType(cfg.Type) {
+func (r *Router) ensureCryptoMaterial(cfg *config.TunnelConfig) error {
+	if cfg.Transport == config.TransportSlipstream {
 		certInfo, err := r.certMgr.GetOrCreate(cfg.Domain)
 		if err != nil {
 			return fmt.Errorf("failed to get certificate: %w", err)
 		}
 
-		// Update certificate config
-		if r.config.Certificates == nil {
-			r.config.Certificates = make(map[string]*CertConfig)
+		// Update slipstream config with cert paths
+		if cfg.Slipstream == nil {
+			cfg.Slipstream = &config.SlipstreamConfig{}
 		}
-		r.config.Certificates[cfg.Domain] = &CertConfig{
-			Cert:        certInfo.CertPath,
-			Key:         certInfo.KeyPath,
-			Fingerprint: certInfo.Fingerprint,
-		}
+		cfg.Slipstream.Cert = certInfo.CertPath
+		cfg.Slipstream.Key = certInfo.KeyPath
 	}
 
 	return nil
@@ -404,14 +376,14 @@ func (r *Router) regenerateDNSRouterConfig() error {
 	// Resolve listen address (0.0.0.0 -> external IP)
 	listenAddr := r.resolveListenAddress(r.config.Listen.Address)
 
-	// Convert transports to RouteInputs
+	// Convert tunnels to RouteInputs
 	routes := r.convertToRouteInputs()
 
 	// Get default backend
 	defaultBackend := ""
-	if r.config.Routing.Default != "" {
-		if transport, ok := r.config.Transports[r.config.Routing.Default]; ok {
-			defaultBackend = fmt.Sprintf("127.0.0.1:%d", transport.Port)
+	if r.config.Route.Default != "" {
+		if t := r.config.GetTunnelByTag(r.config.Route.Default); t != nil {
+			defaultBackend = fmt.Sprintf("127.0.0.1:%d", t.Port)
 		}
 	}
 
@@ -444,27 +416,29 @@ func (r *Router) resolveListenAddress(addr string) string {
 	return fmt.Sprintf("%s:%s", externalIP, port)
 }
 
-// convertToRouteInputs converts transports to dnsrouter.RouteInput slice.
+// convertToRouteInputs converts enabled tunnels to dnsrouter.RouteInput slice.
 func (r *Router) convertToRouteInputs() []dnsrouter.RouteInput {
-	routes := make([]dnsrouter.RouteInput, 0, len(r.config.Transports))
-	for _, transport := range r.config.Transports {
-		routes = append(routes, dnsrouter.RouteInput{
-			Domain:  transport.Domain,
-			Backend: fmt.Sprintf("127.0.0.1:%d", transport.Port),
-		})
+	var routes []dnsrouter.RouteInput
+	for _, t := range r.config.Tunnels {
+		if t.IsEnabled() {
+			routes = append(routes, dnsrouter.RouteInput{
+				Domain:  t.Domain,
+				Backend: fmt.Sprintf("127.0.0.1:%d", t.Port),
+			})
+		}
 	}
 	return routes
 }
 
-// SetDefaultRoute sets the default routing instance.
-func (r *Router) SetDefaultRoute(name string) error {
-	if name != "" {
-		if _, exists := r.instances[name]; !exists {
-			return fmt.Errorf("instance %s not found", name)
+// SetDefaultRoute sets the default routing tunnel.
+func (r *Router) SetDefaultRoute(tag string) error {
+	if tag != "" {
+		if _, exists := r.tunnels[tag]; !exists {
+			return fmt.Errorf("tunnel %s not found", tag)
 		}
 	}
 
-	r.config.Routing.Default = name
+	r.config.Route.Default = tag
 
 	if err := r.regenerateDNSRouterConfig(); err != nil {
 		return err
@@ -480,12 +454,12 @@ func (r *Router) SetDefaultRoute(name string) error {
 // Initialize initializes the router configuration and directories.
 func Initialize() error {
 	// Create main config directory with 0755 to allow dnstm user to traverse
-	if err := os.MkdirAll(ConfigDir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory %s: %w", ConfigDir, err)
+	if err := os.MkdirAll(config.ConfigDir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", config.ConfigDir, err)
 	}
 
 	// Create subdirectories with 0750 (owned by dnstm, so accessible to dnstm)
-	subdirs := []string{CertsDir, KeysDir, filepath.Join(ConfigDir, "instances")}
+	subdirs := []string{config.CertsDir, config.KeysDir, config.TunnelsDir}
 	for _, dir := range subdirs {
 		if err := os.MkdirAll(dir, 0750); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
@@ -501,8 +475,10 @@ func Initialize() error {
 	network.ClearNATOnly()
 
 	// Create default config if not exists
-	if !ConfigExists() {
-		cfg := Default()
+	if !config.ConfigExists() {
+		cfg := config.Default()
+		// Ensure built-in backends are added
+		cfg.EnsureBuiltinBackends()
 		if err := cfg.Save(); err != nil {
 			return fmt.Errorf("failed to save default config: %w", err)
 		}
@@ -513,10 +489,22 @@ func Initialize() error {
 
 // IsInitialized checks if the router has been initialized.
 func IsInitialized() bool {
-	return ConfigExists()
+	return config.ConfigExists()
 }
 
 // GetDNSRouterService returns the DNS router service.
 func (r *Router) GetDNSRouterService() *dnsrouter.Service {
 	return r.dnsrouter
+}
+
+// GetModeDisplayName returns a human-readable name for a mode.
+func GetModeDisplayName(mode string) string {
+	switch mode {
+	case "single":
+		return "Single-tunnel"
+	case "multi":
+		return "Multi-tunnel"
+	default:
+		return mode
+	}
 }

@@ -7,9 +7,9 @@ import (
 	"os"
 
 	"github.com/net2share/dnstm/internal/actions"
+	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/router"
 	"github.com/net2share/dnstm/internal/transport"
-	"github.com/net2share/dnstm/internal/types"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"
 )
@@ -58,26 +58,26 @@ func RunInteractive() error {
 	return runMainMenu()
 }
 
-// buildInstanceSummary builds a summary string for the main menu header.
-func buildInstanceSummary() string {
-	cfg, err := router.Load()
+// buildTunnelSummary builds a summary string for the main menu header.
+func buildTunnelSummary() string {
+	cfg, err := config.Load()
 	if err != nil || cfg == nil {
 		return ""
 	}
 
-	total := len(cfg.Transports)
+	total := len(cfg.Tunnels)
 	running := 0
-	for name, transport := range cfg.Transports {
-		instance := router.NewInstance(name, transport)
-		if instance.IsActive() {
+	for _, t := range cfg.Tunnels {
+		tunnel := router.NewTunnel(&t)
+		if tunnel.IsActive() {
 			running++
 		}
 	}
 
-	if cfg.IsSingleMode() && cfg.Single.Active != "" {
-		return fmt.Sprintf("Instances: %d | Running: %d | Active: %s", total, running, cfg.Single.Active)
+	if cfg.IsSingleMode() && cfg.Route.Active != "" {
+		return fmt.Sprintf("Tunnels: %d | Running: %d | Active: %s", total, running, cfg.Route.Active)
 	}
-	return fmt.Sprintf("Instances: %d | Running: %d", total, running)
+	return fmt.Sprintf("Tunnels: %d | Running: %d", total, running)
 }
 
 func runMainMenu() error {
@@ -106,11 +106,12 @@ func runMainMenu() error {
 			options = append(options, tui.MenuOption{Label: "Install (Required)", Value: actions.ActionInstall})
 			options = append(options, tui.MenuOption{Label: "Exit", Value: "exit"})
 		} else {
-			// Build instance summary for header
-			header = buildInstanceSummary()
+			// Build tunnel summary for header
+			header = buildTunnelSummary()
 
 			// Fully installed - show all options
-			options = append(options, tui.MenuOption{Label: "Instances →", Value: actions.ActionInstance})
+			options = append(options, tui.MenuOption{Label: "Tunnels →", Value: actions.ActionTunnel})
+			options = append(options, tui.MenuOption{Label: "Backends →", Value: actions.ActionBackend})
 			options = append(options, tui.MenuOption{Label: "Router →", Value: actions.ActionRouter})
 			options = append(options, tui.MenuOption{Label: "SSH Users →", Value: actions.ActionSSHUsers})
 			options = append(options, tui.MenuOption{Label: "Uninstall", Value: actions.ActionUninstall})
@@ -146,8 +147,10 @@ func handleMainMenuChoice(choice string) error {
 	switch choice {
 	case actions.ActionRouter:
 		return RunSubmenu(actions.ActionRouter)
-	case actions.ActionInstance:
-		return runInstanceMenu()
+	case actions.ActionTunnel:
+		return runTunnelMenu()
+	case actions.ActionBackend:
+		return RunSubmenu(actions.ActionBackend)
 	case actions.ActionSSHUsers:
 		return RunAction(actions.ActionSSHUsers)
 	case actions.ActionInstall:
@@ -165,19 +168,19 @@ func handleMainMenuChoice(choice string) error {
 	return nil
 }
 
-// runInstanceMenu shows the instance submenu with special handling for list navigation.
-func runInstanceMenu() error {
+// runTunnelMenu shows the tunnel submenu with special handling for list navigation.
+func runTunnelMenu() error {
 	for {
 		fmt.Println()
 
 		options := []tui.MenuOption{
-			{Label: "Add", Value: actions.ActionInstanceAdd},
+			{Label: "Add", Value: actions.ActionTunnelAdd},
 			{Label: "List →", Value: "list"},
 			{Label: "Back", Value: "back"},
 		}
 
 		choice, err := tui.RunMenu(tui.MenuConfig{
-			Title:   "Instances",
+			Title:   "Tunnels",
 			Options: options,
 		})
 		if err != nil || choice == "" || choice == "back" {
@@ -185,79 +188,79 @@ func runInstanceMenu() error {
 		}
 
 		switch choice {
-		case actions.ActionInstanceAdd:
-			if err := RunAction(actions.ActionInstanceAdd); err != nil && err != errCancelled {
+		case actions.ActionTunnelAdd:
+			if err := RunAction(actions.ActionTunnelAdd); err != nil && err != errCancelled {
 				tui.PrintError(err.Error())
 			}
 			tui.WaitForEnter()
 		case "list":
-			if err := runInstanceListMenu(); err != errCancelled {
+			if err := runTunnelListMenu(); err != errCancelled {
 				tui.WaitForEnter()
 			}
 		}
 	}
 }
 
-// runInstanceListMenu shows all instances and allows selecting one to manage.
-func runInstanceListMenu() error {
+// runTunnelListMenu shows all tunnels and allows selecting one to manage.
+func runTunnelListMenu() error {
 	for {
-		cfg, err := router.Load()
+		cfg, err := config.Load()
 		if err != nil {
 			tui.PrintError("Failed to load config: " + err.Error())
 			return nil
 		}
 
-		if len(cfg.Transports) == 0 {
-			tui.PrintInfo("No instances configured. Add one first.")
+		if len(cfg.Tunnels) == 0 {
+			tui.PrintInfo("No tunnels configured. Add one first.")
 			tui.WaitForEnter()
 			return errCancelled
 		}
 
 		var options []tui.MenuOption
-		for name, transport := range cfg.Transports {
-			instance := router.NewInstance(name, transport)
+		for _, t := range cfg.Tunnels {
+			tunnel := router.NewTunnel(&t)
 			status := "○"
-			if instance.IsActive() {
+			if tunnel.IsActive() {
 				status = "●"
 			}
-			typeName := types.GetTransportTypeDisplayName(transport.Type)
-			label := fmt.Sprintf("%s %s (%s)", status, name, typeName)
-			options = append(options, tui.MenuOption{Label: label, Value: name})
+			transportName := config.GetTransportTypeDisplayName(t.Transport)
+			label := fmt.Sprintf("%s %s (%s → %s)", status, t.Tag, transportName, t.Backend)
+			options = append(options, tui.MenuOption{Label: label, Value: t.Tag})
 		}
 		options = append(options, tui.MenuOption{Label: "Back", Value: "back"})
 
 		selected, err := tui.RunMenu(tui.MenuConfig{
-			Title:   "Select Instance",
+			Title:   "Select Tunnel",
 			Options: options,
 		})
 		if err != nil || selected == "" || selected == "back" {
 			return errCancelled
 		}
 
-		if err := runInstanceManageMenu(selected); err != errCancelled {
+		if err := runTunnelManageMenu(selected); err != errCancelled {
 			tui.WaitForEnter()
 		}
 	}
 }
 
-// runInstanceManageMenu shows management options for a specific instance.
-func runInstanceManageMenu(name string) error {
+// runTunnelManageMenu shows management options for a specific tunnel.
+func runTunnelManageMenu(tag string) error {
 	for {
-		cfg, err := router.Load()
+		cfg, err := config.Load()
 		if err != nil {
 			tui.PrintError("Failed to load config: " + err.Error())
 			return nil
 		}
 
-		transport, exists := cfg.Transports[name]
-		if !exists {
-			tui.PrintError(fmt.Sprintf("Instance '%s' not found", name))
+		tunnelCfg := cfg.GetTunnelByTag(tag)
+		if tunnelCfg == nil {
+			tui.PrintError(fmt.Sprintf("Tunnel '%s' not found", tag))
 			return nil
 		}
 
-		instance := router.NewInstance(name, transport)
+		tunnel := router.NewTunnel(tunnelCfg)
 		status := "Stopped"
-		if instance.IsActive() {
+		if tunnel.IsActive() {
 			status = "Running"
 		}
 
@@ -266,43 +269,45 @@ func runInstanceManageMenu(name string) error {
 			{Label: "Logs", Value: "logs"},
 			{Label: "Start/Restart", Value: "start"},
 			{Label: "Stop", Value: "stop"},
+			{Label: "Enable", Value: "enable"},
+			{Label: "Disable", Value: "disable"},
 			{Label: "Reconfigure", Value: "reconfigure"},
 			{Label: "Remove", Value: "remove"},
 			{Label: "Back", Value: "back"},
 		}
 
-		typeName := types.GetTransportTypeDisplayName(transport.Type)
+		transportName := config.GetTransportTypeDisplayName(tunnelCfg.Transport)
 		choice, err := tui.RunMenu(tui.MenuConfig{
-			Title:       fmt.Sprintf("%s (%s)", name, status),
-			Description: fmt.Sprintf("%s → %s:%d", typeName, transport.Domain, transport.Port),
+			Title:       fmt.Sprintf("%s (%s)", tag, status),
+			Description: fmt.Sprintf("%s → %s:%d", transportName, tunnelCfg.Domain, tunnelCfg.Port),
 			Options:     options,
 		})
 		if err != nil || choice == "" || choice == "back" {
 			return errCancelled
 		}
 
-		// Execute the action with the instance name as argument
-		actionID := "instance." + choice
-		if err := runInstanceAction(actionID, name); err != nil {
+		// Execute the action with the tunnel tag as argument
+		actionID := "tunnel." + choice
+		if err := runTunnelAction(actionID, tag); err != nil {
 			if err == errCancelled {
 				continue
 			}
 			tui.PrintError(err.Error())
 			tui.WaitForEnter()
 		} else {
-			// Check if instance was removed
+			// Check if tunnel was removed
 			if choice == "remove" {
 				return errCancelled
 			}
-			// Check if instance was renamed
+			// Check if tunnel was renamed
 			if choice == "reconfigure" {
-				cfg, err = router.Load()
+				cfg, err = config.Load()
 				if err != nil || cfg == nil {
 					// Config unavailable, go back to list
 					return errCancelled
 				}
-				if _, exists := cfg.Transports[name]; !exists {
-					// Instance was renamed, go back to list
+				if cfg.GetTunnelByTag(tag) == nil {
+					// Tunnel was renamed, go back to list
 					return errCancelled
 				}
 			}
@@ -311,13 +316,14 @@ func runInstanceManageMenu(name string) error {
 	}
 }
 
-// runInstanceAction runs an instance action with the given name as argument.
-func runInstanceAction(actionID, instanceName string) error {
-	// Special handling for actions that need the instance name
+// runTunnelAction runs a tunnel action with the given tag as argument.
+func runTunnelAction(actionID, tunnelTag string) error {
+	// Special handling for actions that need the tunnel tag
 	switch actionID {
-	case actions.ActionInstanceStatus, actions.ActionInstanceLogs, actions.ActionInstanceStart,
-		actions.ActionInstanceStop, actions.ActionInstanceRemove, actions.ActionInstanceReconfigure:
-		return runActionWithArgs(actionID, []string{instanceName})
+	case actions.ActionTunnelStatus, actions.ActionTunnelLogs, actions.ActionTunnelStart,
+		actions.ActionTunnelStop, actions.ActionTunnelRestart, actions.ActionTunnelEnable,
+		actions.ActionTunnelDisable, actions.ActionTunnelRemove, actions.ActionTunnelReconfigure:
+		return runActionWithArgs(actionID, []string{tunnelTag})
 	default:
 		return RunAction(actionID)
 	}
@@ -334,10 +340,10 @@ func runActionWithArgs(actionID string, args []string) error {
 	ctx := newActionContext(args)
 
 	// Handle confirmation for remove action
-	if actionID == actions.ActionInstanceRemove && action.Confirm != nil {
-		name := args[0]
+	if actionID == actions.ActionTunnelRemove && action.Confirm != nil {
+		tag := args[0]
 		confirm, err := tui.RunConfirm(tui.ConfirmConfig{
-			Title:       fmt.Sprintf("Remove '%s'?", name),
+			Title:       fmt.Sprintf("Remove '%s'?", tag),
 			Description: "This will stop the service and remove all configuration",
 		})
 		if err != nil {

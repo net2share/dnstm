@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/net2share/dnstm/internal/actions"
+	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/router"
 )
 
@@ -29,39 +30,38 @@ func HandleRouterMode(ctx *actions.Context) error {
 
 	// Switch mode
 	modeStr := ctx.GetArg(0)
-	newMode := router.Mode(modeStr)
-	if newMode != router.ModeSingle && newMode != router.ModeMulti {
+	if modeStr != "single" && modeStr != "multi" {
 		return actions.NewActionError(
 			fmt.Sprintf("invalid mode '%s'", modeStr),
 			"Use 'single' or 'multi'",
 		)
 	}
 
-	return switchMode(ctx, cfg, newMode)
+	return switchMode(ctx, cfg, modeStr)
 }
 
-func showCurrentMode(ctx *actions.Context, cfg *router.Config) error {
+func showCurrentMode(ctx *actions.Context, cfg *config.Config) error {
 	ctx.Output.Println()
 
-	modeName := router.GetModeDisplayName(cfg.Mode)
+	modeName := GetModeDisplayName(cfg.Route.Mode)
 	var lines []string
 	lines = append(lines, fmt.Sprintf("Mode: %s", modeName))
 
 	if cfg.IsSingleMode() {
-		if cfg.Single.Active != "" {
-			lines = append(lines, fmt.Sprintf("Active instance: %s", cfg.Single.Active))
-			if transport, ok := cfg.Transports[cfg.Single.Active]; ok {
-				lines = append(lines, fmt.Sprintf("Domain: %s", transport.Domain))
+		if cfg.Route.Active != "" {
+			lines = append(lines, fmt.Sprintf("Active tunnel: %s", cfg.Route.Active))
+			if tunnel := cfg.GetTunnelByTag(cfg.Route.Active); tunnel != nil {
+				lines = append(lines, fmt.Sprintf("Domain: %s", tunnel.Domain))
 			}
 		} else {
-			lines = append(lines, "Active instance: (none)")
+			lines = append(lines, "Active tunnel: (none)")
 		}
 		lines = append(lines, "")
-		lines = append(lines, "Use 'dnstm router switch <instance>' to change active tunnel")
+		lines = append(lines, "Use 'dnstm router switch <tag>' to change active tunnel")
 	} else {
-		lines = append(lines, fmt.Sprintf("Instances: %d", len(cfg.Transports)))
-		if cfg.Routing.Default != "" {
-			lines = append(lines, fmt.Sprintf("Default route: %s", cfg.Routing.Default))
+		lines = append(lines, fmt.Sprintf("Tunnels: %d", len(cfg.Tunnels)))
+		if cfg.Route.Default != "" {
+			lines = append(lines, fmt.Sprintf("Default route: %s", cfg.Route.Default))
 		}
 	}
 
@@ -71,9 +71,9 @@ func showCurrentMode(ctx *actions.Context, cfg *router.Config) error {
 	return nil
 }
 
-func switchMode(ctx *actions.Context, cfg *router.Config, newMode router.Mode) error {
-	if cfg.Mode == newMode {
-		modeName := router.GetModeDisplayName(newMode)
+func switchMode(ctx *actions.Context, cfg *config.Config, newMode string) error {
+	if cfg.Route.Mode == newMode {
+		modeName := GetModeDisplayName(newMode)
 		ctx.Output.Info(fmt.Sprintf("Already in %s mode", modeName))
 		return nil
 	}
@@ -85,8 +85,8 @@ func switchMode(ctx *actions.Context, cfg *router.Config, newMode router.Mode) e
 
 	ctx.Output.Println()
 
-	newModeName := router.GetModeDisplayName(newMode)
-	oldModeName := router.GetModeDisplayName(cfg.Mode)
+	newModeName := GetModeDisplayName(newMode)
+	oldModeName := GetModeDisplayName(cfg.Route.Mode)
 	ctx.Output.Info(fmt.Sprintf("Switching from %s to %s mode...", oldModeName, newModeName))
 	ctx.Output.Println()
 
@@ -99,16 +99,16 @@ func switchMode(ctx *actions.Context, cfg *router.Config, newMode router.Mode) e
 	ctx.Output.Println()
 
 	// Show next steps
-	if newMode == router.ModeSingle {
+	if newMode == "single" {
 		ctx.Output.Info("Commands for single-tunnel mode:")
-		ctx.Output.Println("  dnstm router switch <instance>  - Switch active tunnel")
-		ctx.Output.Println("  dnstm router start              - Start active tunnel")
-		ctx.Output.Println("  dnstm router stop               - Stop active tunnel")
+		ctx.Output.Println("  dnstm router switch <tag>  - Switch active tunnel")
+		ctx.Output.Println("  dnstm router start         - Start active tunnel")
+		ctx.Output.Println("  dnstm router stop          - Stop active tunnel")
 	} else {
 		ctx.Output.Info("Commands for multi-tunnel mode:")
-		ctx.Output.Println("  dnstm router status      - Show router and instance status")
-		ctx.Output.Println("  dnstm router start       - Start router and all instances")
-		ctx.Output.Println("  dnstm router stop        - Stop router and all instances")
+		ctx.Output.Println("  dnstm router status      - Show router and tunnel status")
+		ctx.Output.Println("  dnstm router start       - Start router and all tunnels")
+		ctx.Output.Println("  dnstm router stop        - Stop router and all tunnels")
 	}
 	ctx.Output.Println()
 

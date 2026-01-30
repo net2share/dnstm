@@ -1,9 +1,9 @@
 package router
 
 import (
+	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/network"
 	"github.com/net2share/dnstm/internal/transport"
-	"github.com/net2share/dnstm/internal/types"
 )
 
 // ServiceMode defines how a transport service should bind.
@@ -27,7 +27,7 @@ func NewServiceGenerator() *ServiceGenerator {
 // GetBindOptions returns the appropriate BuildOptions for the given mode.
 // For single mode: binds to EXTERNAL_IP:53
 // For multi mode: binds to 127.0.0.1:cfg.Port
-func (sg *ServiceGenerator) GetBindOptions(cfg *types.TransportConfig, mode ServiceMode) (*transport.BuildOptions, error) {
+func (sg *ServiceGenerator) GetBindOptions(cfg *config.TunnelConfig, mode ServiceMode) (*transport.BuildOptions, error) {
 	if mode == ServiceModeSingle {
 		externalIP, err := network.GetExternalIP()
 		if err != nil {

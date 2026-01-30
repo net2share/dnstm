@@ -10,30 +10,24 @@ import (
 
 // ModeSnapshot captures the state before a mode switch for rollback.
 type ModeSnapshot struct {
-	Mode            Mode
-	ActiveInstance  string
+	Mode            string
+	ActiveTunnel    string
 	DefaultRoute    string
 	RunningServices []string
-	ConfigYAML      []byte
 }
 
 // SwitchMode switches the operating mode of dnstm.
-// This handles all necessary state transitions including:
-// - Stopping current services
-// - Regenerating service files with correct bindings
-// - Updating firewall rules
-// - Starting services for the new mode
-func (r *Router) SwitchMode(newMode Mode) error {
-	currentMode := r.config.Mode
+func (r *Router) SwitchMode(newMode string) error {
+	currentMode := r.config.Route.Mode
 
 	if currentMode == newMode {
 		return nil // Already in requested mode
 	}
 
 	switch newMode {
-	case ModeSingle:
+	case "single":
 		return r.switchToSingleMode()
-	case ModeMulti:
+	case "multi":
 		return r.switchToMultiMode()
 	default:
 		return fmt.Errorf("unknown mode: %s", newMode)
@@ -43,16 +37,16 @@ func (r *Router) SwitchMode(newMode Mode) error {
 // captureSnapshot captures current state for potential rollback.
 func (r *Router) captureSnapshot() (*ModeSnapshot, error) {
 	snapshot := &ModeSnapshot{
-		Mode:            r.config.Mode,
-		ActiveInstance:  r.config.Single.Active,
-		DefaultRoute:    r.config.Routing.Default,
+		Mode:            r.config.Route.Mode,
+		ActiveTunnel:    r.config.Route.Active,
+		DefaultRoute:    r.config.Route.Default,
 		RunningServices: make([]string, 0),
 	}
 
 	// Track running services
-	for name, instance := range r.instances {
-		if instance.IsActive() {
-			snapshot.RunningServices = append(snapshot.RunningServices, name)
+	for tag, tunnel := range r.tunnels {
+		if tunnel.IsActive() {
+			snapshot.RunningServices = append(snapshot.RunningServices, tag)
 		}
 	}
 	if r.dnsrouter.IsActive() {
@@ -67,41 +61,19 @@ func (r *Router) rollback(snapshot *ModeSnapshot, reason string) error {
 	log.Printf("[warning] rolling back mode switch: %s", reason)
 
 	// Restore config values
-	r.config.Mode = snapshot.Mode
-	r.config.Single.Active = snapshot.ActiveInstance
-	r.config.Routing.Default = snapshot.DefaultRoute
-
-	// Try to regenerate services with original mode
-	serviceMode := ServiceModeMulti
-	if snapshot.Mode == ModeSingle {
-		serviceMode = ServiceModeSingle
-	}
-
-	// Regenerate the active instance if in single mode
-	if snapshot.Mode == ModeSingle && snapshot.ActiveInstance != "" {
-		if instance, ok := r.instances[snapshot.ActiveInstance]; ok {
-			if err := instance.RegenerateService(serviceMode); err != nil {
-				log.Printf("[warning] rollback: failed to regenerate %s: %v", snapshot.ActiveInstance, err)
-			}
-		}
-	} else {
-		// Regenerate all instances for multi mode
-		for name, instance := range r.instances {
-			if err := instance.RegenerateService(serviceMode); err != nil {
-				log.Printf("[warning] rollback: failed to regenerate %s: %v", name, err)
-			}
-		}
-	}
+	r.config.Route.Mode = snapshot.Mode
+	r.config.Route.Active = snapshot.ActiveTunnel
+	r.config.Route.Default = snapshot.DefaultRoute
 
 	// Try to restart previously running services
-	for _, name := range snapshot.RunningServices {
-		if name == "dnsrouter" {
+	for _, tag := range snapshot.RunningServices {
+		if tag == "dnsrouter" {
 			if err := r.dnsrouter.Start(); err != nil {
 				log.Printf("[warning] rollback: failed to start dnsrouter: %v", err)
 			}
-		} else if instance, ok := r.instances[name]; ok {
-			if err := instance.Start(); err != nil {
-				log.Printf("[warning] rollback: failed to start %s: %v", name, err)
+		} else if tunnel, ok := r.tunnels[tag]; ok {
+			if err := tunnel.Start(); err != nil {
+				log.Printf("[warning] rollback: failed to start %s: %v", tag, err)
 			}
 		}
 	}
@@ -115,7 +87,6 @@ func (r *Router) rollback(snapshot *ModeSnapshot, reason string) error {
 }
 
 // switchToSingleMode transitions from multi to single mode.
-// In single mode, the transport binds directly to EXTERNAL_IP:53.
 func (r *Router) switchToSingleMode() error {
 	snapshot, _ := r.captureSnapshot()
 
@@ -126,29 +97,30 @@ func (r *Router) switchToSingleMode() error {
 		}
 	}
 
-	// 2. Stop all instances
-	for name, instance := range r.instances {
-		if instance.IsActive() {
-			if err := instance.Stop(); err != nil {
-				return fmt.Errorf("failed to stop instance %s: %w", name, err)
+	// 2. Stop all tunnels
+	for tag, tunnel := range r.tunnels {
+		if tunnel.IsActive() {
+			if err := tunnel.Stop(); err != nil {
+				return fmt.Errorf("failed to stop tunnel %s: %w", tag, err)
 			}
 		}
 	}
 
-	// 3. Determine active instance
-	active := r.config.Single.Active
-	if active == "" && len(r.config.Transports) > 0 {
-		// Pick first available instance
-		for name := range r.config.Transports {
-			active = name
-			break
+	// 3. Determine active tunnel
+	active := r.config.Route.Active
+	if active == "" && len(r.config.Tunnels) > 0 {
+		// Pick first enabled tunnel
+		for _, t := range r.config.Tunnels {
+			if t.IsEnabled() {
+				active = t.Tag
+				break
+			}
 		}
-		r.config.Single.Active = active
+		r.config.Route.Active = active
 	}
 
 	// 4. Wait for port 53 to become available
 	if !network.WaitForPortAvailable(53, 10*time.Second) {
-		// Try to kill the process
 		if err := network.KillProcessOnPort(53); err != nil {
 			if !network.WaitForPortAvailable(53, 5*time.Second) {
 				return r.rollback(snapshot, "port 53 unavailable")
@@ -160,27 +132,18 @@ func (r *Router) switchToSingleMode() error {
 	network.ClearNATOnly()
 	network.AllowPort53()
 
-	// 6. Regenerate active instance for single mode (EXTERNAL_IP:53)
-	if active != "" {
-		if instance, ok := r.instances[active]; ok {
-			if err := instance.RegenerateService(ServiceModeSingle); err != nil {
-				return r.rollback(snapshot, fmt.Sprintf("failed to regenerate %s: %v", active, err))
-			}
-		}
-	}
+	// 6. Update config mode
+	r.config.Route.Mode = "single"
 
-	// 7. Update config mode
-	r.config.Mode = ModeSingle
-
-	// 8. Save config
+	// 7. Save config
 	if err := r.config.Save(); err != nil {
 		return r.rollback(snapshot, fmt.Sprintf("failed to save config: %v", err))
 	}
 
-	// 9. Start active instance if any
+	// 8. Start active tunnel if any
 	if active != "" {
-		if instance, ok := r.instances[active]; ok {
-			if err := instance.Start(); err != nil {
+		if tunnel, ok := r.tunnels[active]; ok {
+			if err := tunnel.Start(); err != nil {
 				return r.rollback(snapshot, fmt.Sprintf("failed to start %s: %v", active, err))
 			}
 		}
@@ -190,25 +153,24 @@ func (r *Router) switchToSingleMode() error {
 }
 
 // switchToMultiMode transitions from single to multi mode.
-// In multi mode, transports bind to 127.0.0.1:PORT and DNS router handles routing.
 func (r *Router) switchToMultiMode() error {
-	// Validate: each instance must have a unique domain in multi-mode
-	domains := make(map[string]string) // domain -> instance name
-	for name, cfg := range r.config.Transports {
-		if existing, ok := domains[cfg.Domain]; ok {
-			return fmt.Errorf("cannot switch to multi-mode: instances '%s' and '%s' share the same domain '%s'; each instance must have a unique domain", existing, name, cfg.Domain)
+	// Validate: each tunnel must have a unique domain in multi-mode
+	domains := make(map[string]string)
+	for _, t := range r.config.Tunnels {
+		if existing, ok := domains[t.Domain]; ok {
+			return fmt.Errorf("cannot switch to multi-mode: tunnels '%s' and '%s' share the same domain '%s'", existing, t.Tag, t.Domain)
 		}
-		domains[cfg.Domain] = name
+		domains[t.Domain] = t.Tag
 	}
 
 	snapshot, _ := r.captureSnapshot()
 
-	// 1. Stop active instance if running
-	if r.config.Single.Active != "" {
-		if instance, ok := r.instances[r.config.Single.Active]; ok {
-			if instance.IsActive() {
-				if err := instance.Stop(); err != nil {
-					return fmt.Errorf("failed to stop instance %s: %w", r.config.Single.Active, err)
+	// 1. Stop active tunnel if running
+	if r.config.Route.Active != "" {
+		if tunnel, ok := r.tunnels[r.config.Route.Active]; ok {
+			if tunnel.IsActive() {
+				if err := tunnel.Stop(); err != nil {
+					return fmt.Errorf("failed to stop tunnel %s: %w", r.config.Route.Active, err)
 				}
 			}
 		}
@@ -227,55 +189,51 @@ func (r *Router) switchToMultiMode() error {
 	network.ClearNATOnly()
 	network.AllowPort53()
 
-	// 4. Regenerate ALL instances for multi mode (127.0.0.1:PORT)
-	for name, instance := range r.instances {
-		if err := instance.RegenerateService(ServiceModeMulti); err != nil {
-			log.Printf("[warning] failed to regenerate %s: %v", name, err)
-			// Continue - best effort for instances
-		}
-	}
+	// 4. Update config mode
+	r.config.Route.Mode = "multi"
 
-	// 5. Update config mode
-	r.config.Mode = ModeMulti
-
-	// 6. Set default route if not set
-	if r.config.Routing.Default == "" && len(r.config.Transports) > 0 {
-		// Use previous active or first available
-		if r.config.Single.Active != "" {
-			r.config.Routing.Default = r.config.Single.Active
+	// 5. Set default route if not set
+	if r.config.Route.Default == "" && len(r.config.Tunnels) > 0 {
+		// Use previous active or first enabled
+		if r.config.Route.Active != "" {
+			r.config.Route.Default = r.config.Route.Active
 		} else {
-			for name := range r.config.Transports {
-				r.config.Routing.Default = name
-				break
+			for _, t := range r.config.Tunnels {
+				if t.IsEnabled() {
+					r.config.Route.Default = t.Tag
+					break
+				}
 			}
 		}
 	}
 
-	// 7. Regenerate DNS router config
+	// 6. Regenerate DNS router config
 	if err := r.regenerateDNSRouterConfig(); err != nil {
 		return r.rollback(snapshot, fmt.Sprintf("failed to generate DNS router config: %v", err))
 	}
 
-	// 8. Save config
+	// 7. Save config
 	if err := r.config.Save(); err != nil {
 		return r.rollback(snapshot, fmt.Sprintf("failed to save config: %v", err))
 	}
 
-	// 9. Create DNS router service if needed
+	// 8. Create DNS router service if needed
 	if !r.dnsrouter.IsServiceInstalled() {
 		if err := r.dnsrouter.CreateService(); err != nil {
 			return r.rollback(snapshot, fmt.Sprintf("failed to create DNS router service: %v", err))
 		}
 	}
 
-	// 10. Start all backend instances FIRST (before dnsrouter)
-	for name, instance := range r.instances {
-		if err := instance.Start(); err != nil {
-			return r.rollback(snapshot, fmt.Sprintf("failed to start instance %s: %v", name, err))
+	// 9. Start all enabled tunnels FIRST (before dnsrouter)
+	for tag, tunnel := range r.tunnels {
+		if tunnel.Config.IsEnabled() {
+			if err := tunnel.Start(); err != nil {
+				return r.rollback(snapshot, fmt.Sprintf("failed to start tunnel %s: %v", tag, err))
+			}
 		}
 	}
 
-	// 11. Start DNS router AFTER instances are ready
+	// 10. Start DNS router AFTER tunnels are ready
 	if err := r.dnsrouter.Start(); err != nil {
 		return r.rollback(snapshot, fmt.Sprintf("failed to start DNS router: %v", err))
 	}
@@ -283,42 +241,36 @@ func (r *Router) switchToMultiMode() error {
 	return nil
 }
 
-// SwitchActiveInstance switches the active instance in single mode.
-// This regenerates service files with correct bindings.
-func (r *Router) SwitchActiveInstance(name string) error {
+// SwitchActiveTunnel switches the active tunnel in single mode.
+func (r *Router) SwitchActiveTunnel(tag string) error {
 	if !r.config.IsSingleMode() {
-		return fmt.Errorf("switch is only available in single mode; use 'dnstm mode single' first")
+		return fmt.Errorf("switch is only available in single mode; use 'dnstm router mode single' first")
 	}
 
-	// Validate instance exists
-	_, ok := r.config.Transports[name]
+	// Validate tunnel exists
+	if r.config.GetTunnelByTag(tag) == nil {
+		return fmt.Errorf("tunnel '%s' does not exist", tag)
+	}
+
+	newTunnel, ok := r.tunnels[tag]
 	if !ok {
-		return fmt.Errorf("instance '%s' does not exist", name)
+		return fmt.Errorf("tunnel '%s' not found", tag)
 	}
 
-	newInstance, ok := r.instances[name]
-	if !ok {
-		return fmt.Errorf("instance '%s' not found", name)
-	}
-
-	currentActive := r.config.Single.Active
+	currentActive := r.config.Route.Active
 
 	// Nothing to do if already active
-	if currentActive == name {
+	if currentActive == tag {
 		return nil
 	}
 
-	// 1. Stop current active instance and reset to multi-ready
+	// 1. Stop current active tunnel
 	if currentActive != "" {
-		if oldInstance, ok := r.instances[currentActive]; ok {
-			if oldInstance.IsActive() {
-				if err := oldInstance.Stop(); err != nil {
-					return fmt.Errorf("failed to stop current instance %s: %w", currentActive, err)
+		if oldTunnel, ok := r.tunnels[currentActive]; ok {
+			if oldTunnel.IsActive() {
+				if err := oldTunnel.Stop(); err != nil {
+					return fmt.Errorf("failed to stop current tunnel %s: %w", currentActive, err)
 				}
-			}
-			// Reset old instance to multi-mode binding
-			if err := oldInstance.RegenerateService(ServiceModeMulti); err != nil {
-				log.Printf("[warning] failed to reset %s to multi mode: %v", currentActive, err)
 			}
 		}
 	}
@@ -332,33 +284,16 @@ func (r *Router) SwitchActiveInstance(name string) error {
 		}
 	}
 
-	// 3. Regenerate new active for single mode (EXTERNAL_IP:53)
-	if err := newInstance.RegenerateService(ServiceModeSingle); err != nil {
-		return fmt.Errorf("failed to regenerate %s for single mode: %w", name, err)
-	}
-
-	// 4. Update config
-	r.config.Single.Active = name
+	// 3. Update config
+	r.config.Route.Active = tag
 	if err := r.config.Save(); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	// 5. Start new active instance
-	if err := newInstance.Start(); err != nil {
-		return fmt.Errorf("failed to start instance %s: %w", name, err)
+	// 4. Start new active tunnel
+	if err := newTunnel.Start(); err != nil {
+		return fmt.Errorf("failed to start tunnel %s: %w", tag, err)
 	}
 
 	return nil
-}
-
-// GetModeDisplayName returns a human-readable name for the mode.
-func GetModeDisplayName(m Mode) string {
-	switch m {
-	case ModeSingle:
-		return "Single-tunnel"
-	case ModeMulti:
-		return "Multi-tunnel"
-	default:
-		return string(m)
-	}
 }

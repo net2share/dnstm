@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 
 	"github.com/net2share/dnstm/internal/actions"
-	"github.com/net2share/dnstm/internal/router"
+	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/transport"
 	"github.com/net2share/go-corelib/osdetect"
 )
@@ -18,20 +18,20 @@ func CheckRequirements(ctx *actions.Context, requireInstalled, requireInitialize
 		return actions.NotInstalledError(missing)
 	}
 
-	if requireInitialized && !router.IsInitialized() {
+	if requireInitialized && !config.ConfigExists() {
 		return actions.NotInitializedError()
 	}
 
 	return nil
 }
 
-// LoadConfig loads and caches the router configuration.
-func LoadConfig(ctx *actions.Context) (*router.Config, error) {
+// LoadConfig loads and caches the configuration.
+func LoadConfig(ctx *actions.Context) (*config.Config, error) {
 	if ctx.Config != nil {
 		return ctx.Config, nil
 	}
 
-	cfg, err := router.Load()
+	cfg, err := config.Load()
 	if err != nil {
 		return nil, err
 	}
@@ -39,34 +39,34 @@ func LoadConfig(ctx *actions.Context) (*router.Config, error) {
 	return cfg, nil
 }
 
-// GetInstanceByName retrieves an instance by name from the config.
-func GetInstanceByName(ctx *actions.Context, name string) (*router.Instance, error) {
+// GetTunnelByTag retrieves a tunnel by tag from the config.
+func GetTunnelByTag(ctx *actions.Context, tag string) (*config.TunnelConfig, error) {
 	cfg, err := LoadConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	transportCfg, exists := cfg.Transports[name]
-	if !exists {
-		return nil, actions.NotFoundError(name)
+	tunnel := cfg.GetTunnelByTag(tag)
+	if tunnel == nil {
+		return nil, actions.TunnelNotFoundError(tag)
 	}
 
-	return router.NewInstance(name, transportCfg), nil
+	return tunnel, nil
 }
 
-// GetAllInstances returns all configured instances.
-func GetAllInstances(ctx *actions.Context) (map[string]*router.Instance, error) {
+// GetBackendByTag retrieves a backend by tag from the config.
+func GetBackendByTag(ctx *actions.Context, tag string) (*config.BackendConfig, error) {
 	cfg, err := LoadConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	instances := make(map[string]*router.Instance)
-	for name, transportCfg := range cfg.Transports {
-		instances[name] = router.NewInstance(name, transportCfg)
+	backend := cfg.GetBackendByTag(tag)
+	if backend == nil {
+		return nil, actions.BackendNotFoundError(tag)
 	}
 
-	return instances, nil
+	return backend, nil
 }
 
 // RequireSingleMode returns an error if not in single mode.
@@ -83,15 +83,29 @@ func RequireSingleMode(ctx *actions.Context) error {
 	return nil
 }
 
-// RequireInstances returns an error if no instances are configured.
-func RequireInstances(ctx *actions.Context) error {
+// RequireTunnels returns an error if no tunnels are configured.
+func RequireTunnels(ctx *actions.Context) error {
 	cfg, err := LoadConfig(ctx)
 	if err != nil {
 		return err
 	}
 
-	if len(cfg.Transports) == 0 {
-		return actions.NoInstancesError()
+	if len(cfg.Tunnels) == 0 {
+		return actions.NoTunnelsError()
+	}
+
+	return nil
+}
+
+// RequireBackends returns an error if no backends are configured.
+func RequireBackends(ctx *actions.Context) error {
+	cfg, err := LoadConfig(ctx)
+	if err != nil {
+		return err
+	}
+
+	if len(cfg.Backends) == 0 {
+		return actions.NoBackendsError()
 	}
 
 	return nil
@@ -114,4 +128,16 @@ func GeneratePassword() string {
 // GetDefaultSSHAddress returns the default SSH server address.
 func GetDefaultSSHAddress() string {
 	return "127.0.0.1:" + osdetect.DetectSSHPort()
+}
+
+// GetModeDisplayName returns a human-readable mode name.
+func GetModeDisplayName(mode string) string {
+	switch mode {
+	case "single":
+		return "Single-tunnel"
+	case "multi":
+		return "Multi-tunnel"
+	default:
+		return mode
+	}
 }

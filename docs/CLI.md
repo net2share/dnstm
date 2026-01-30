@@ -30,6 +30,7 @@ This command:
 - Creates the dnstm system user
 - Initializes router configuration and directories
 - Sets operating mode (single or multi)
+- Creates default backends (socks, ssh)
 - Creates DNS router service
 - Downloads and installs transport binaries
 - Installs and starts the microsocks SOCKS5 proxy
@@ -47,57 +48,136 @@ dnstm router start                         # Start all tunnels
 dnstm router stop                          # Stop all tunnels
 dnstm router logs [-n lines]               # Show DNS router logs
 dnstm router mode [single|multi]           # Show or switch mode
-dnstm router switch [name]                 # Switch active instance (single mode)
+dnstm router switch [tag]                  # Switch active tunnel (single mode)
 ```
 
-## Instance Commands
+## Tunnel Commands
 
-Manage transport instances.
+Manage DNS tunnels (previously called instances).
 
 ```bash
-dnstm instance list                        # List all instances
-dnstm instance add [name] [flags]          # Add new instance
-dnstm instance remove <name> [--force]     # Remove instance
-dnstm instance start <name>                # Start instance
-dnstm instance stop <name>                 # Stop instance
-dnstm instance logs <name> [-n lines]      # Show instance logs
-dnstm instance status <name>               # Show instance status with cert/key info
-dnstm instance reconfigure <name>          # Reconfigure instance (including rename)
+dnstm tunnel list                          # List all tunnels
+dnstm tunnel add [tag] [flags]             # Add new tunnel
+dnstm tunnel remove <tag> [--force]        # Remove tunnel
+dnstm tunnel start <tag>                   # Start tunnel
+dnstm tunnel stop <tag>                    # Stop tunnel
+dnstm tunnel restart <tag>                 # Restart tunnel
+dnstm tunnel enable <tag>                  # Enable tunnel
+dnstm tunnel disable <tag>                 # Disable tunnel
+dnstm tunnel logs <tag> [-n lines]         # Show tunnel logs
+dnstm tunnel status <tag>                  # Show tunnel status with cert/key info
+dnstm tunnel reconfigure <tag>             # Reconfigure tunnel (including rename)
 ```
 
-### Instance Add Flags
+### Tunnel Add Flags
 
 ```bash
-dnstm instance add myinstance \
-  --type slipstream-shadowsocks \
-  --domain t.example.com \
-  --password "optional-password" \
-  --method aes-256-gcm
+dnstm tunnel add my-tunnel \
+  --transport slipstream \
+  --backend ss-primary \
+  --domain t.example.com
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--type`, `-t` | Transport type (required for CLI mode) |
-| `--domain`, `-d` | Domain name (required for CLI mode) |
-| `--target` | Target address (for socks/ssh types) |
-| `--password` | Shadowsocks password (auto-generated if empty) |
-| `--method` | Shadowsocks encryption method |
-
-Transport types:
-- `slipstream-shadowsocks` - Slipstream + Shadowsocks (recommended)
-- `slipstream-socks` - Slipstream with SOCKS target
-- `slipstream-ssh` - Slipstream with SSH target
-- `dnstt-socks` - DNSTT with SOCKS target
-- `dnstt-ssh` - DNSTT with SSH target
+| `--transport`, `-t` | Transport type: `slipstream` or `dnstt` |
+| `--backend`, `-b` | Backend tag to forward traffic to |
+| `--domain`, `-d` | Domain name |
+| `--port`, `-p` | Port number (auto-allocated if not specified) |
+| `--mtu` | MTU for DNSTT (default: 1232) |
 
 ### Interactive Fallback
 
 When required flags are not provided, commands fall back to interactive mode:
 
 ```bash
-dnstm instance add              # Opens interactive add flow
-dnstm instance remove           # Shows instance picker
-dnstm router switch             # Shows instance picker
+dnstm tunnel add              # Opens interactive add flow
+dnstm tunnel remove           # Shows tunnel picker
+dnstm router switch           # Shows tunnel picker
+```
+
+## Backend Commands
+
+Manage backend services that tunnels forward traffic to.
+
+```bash
+dnstm backend list                         # List all backends
+dnstm backend available                    # Show available backend types
+dnstm backend add <tag> [flags]            # Add new backend
+dnstm backend remove <tag>                 # Remove backend
+dnstm backend status <tag>                 # Show backend status
+```
+
+### Backend Add Flags
+
+```bash
+# Add a Shadowsocks backend
+dnstm backend add ss-primary \
+  --type shadowsocks \
+  --password "my-password" \
+  --method aes-256-gcm
+
+# Add a custom SOCKS backend
+dnstm backend add my-proxy \
+  --type socks \
+  --address 192.168.1.100:1080
+
+# Add a custom target backend
+dnstm backend add web-server \
+  --type custom \
+  --address 127.0.0.1:8080
+```
+
+| Flag | Description |
+|------|-------------|
+| `--type`, `-t` | Backend type: `socks`, `ssh`, `shadowsocks`, `custom` |
+| `--address`, `-a` | Target address (for socks/ssh/custom) |
+| `--password` | Shadowsocks password (auto-generated if empty) |
+| `--method` | Shadowsocks encryption method |
+
+### Backend Types
+
+| Type | Description |
+|------|-------------|
+| `socks` | SOCKS5 proxy (default: microsocks at 127.0.0.1:1080) |
+| `ssh` | SSH server (default: 127.0.0.1:22) |
+| `shadowsocks` | Shadowsocks server (slipstream only, uses SIP003 plugin) |
+| `custom` | Custom target address |
+
+**Note:** DNSTT transport does not support the `shadowsocks` backend type.
+
+## Config Commands
+
+Manage configuration files.
+
+```bash
+dnstm config export [-o file]              # Export current config to stdout or file
+dnstm config load <file>                   # Load and deploy config from file
+dnstm config validate <file>               # Validate config file without deploying
+```
+
+### Config Export
+
+```bash
+# Export to stdout
+dnstm config export
+
+# Export to file
+dnstm config export -o backup.json
+```
+
+### Config Load
+
+```bash
+# Load from file (validates and saves to /etc/dnstm/config.json)
+dnstm config load my-config.json
+```
+
+### Config Validate
+
+```bash
+# Validate without deploying
+dnstm config validate my-config.json
 ```
 
 ## Mode Command
@@ -116,17 +196,17 @@ dnstm router mode multi        # Switch to multi-tunnel mode
 - Lower overhead (no DNS router process)
 
 **Multi-tunnel mode:**
-- All tunnels run simultaneously
+- All enabled tunnels run simultaneously
 - DNS router handles domain-based routing
 - Each domain routes to its designated tunnel
 
 ## Switch Command
 
-Switch active instance in single-tunnel mode (subcommand of `router`).
+Switch active tunnel in single-tunnel mode (subcommand of `router`).
 
 ```bash
 dnstm router switch            # Interactive picker
-dnstm router switch <name>     # Switch to named instance
+dnstm router switch <tag>      # Switch to named tunnel
 ```
 
 ## SSH Users
@@ -146,7 +226,7 @@ dnstm uninstall [--force]
 ```
 
 This removes:
-- All instance services
+- All tunnel services
 - DNS router and microsocks services
 - Configuration files (`/etc/dnstm/`)
 - Transport binaries
@@ -161,9 +241,15 @@ This removes:
 # Install and initialize
 sudo dnstm install --mode single
 
-# Add Shadowsocks instance
-sudo dnstm instance add ss1 \
-  --type slipstream-shadowsocks \
+# Add Shadowsocks backend
+sudo dnstm backend add ss-primary \
+  --type shadowsocks \
+  --password "my-password"
+
+# Add Slipstream tunnel
+sudo dnstm tunnel add main \
+  --transport slipstream \
+  --backend ss-primary \
   --domain t.example.com
 
 # Start
@@ -173,38 +259,60 @@ sudo dnstm router start
 sudo dnstm router status
 ```
 
-### Multiple Instances
+### Multiple Tunnels
 
 ```bash
 # Install in multi mode
 sudo dnstm install --mode multi
 
-# Add instances
-sudo dnstm instance add ss1 --type slipstream-shadowsocks --domain t1.example.com
-sudo dnstm instance add dnstt1 --type dnstt-socks --domain t2.example.com
+# Add tunnels with different transports
+sudo dnstm tunnel add slipstream-1 \
+  --transport slipstream \
+  --backend ss-primary \
+  --domain t1.example.com
+
+sudo dnstm tunnel add dnstt-1 \
+  --transport dnstt \
+  --backend socks \
+  --domain t2.example.com
 
 # Start all
 sudo dnstm router start
 ```
 
-### Switch Between Instances
+### Switch Between Tunnels
 
 ```bash
 # Switch to single mode
 sudo dnstm router mode single
 
-# Switch active instance
-sudo dnstm router switch ss1
+# Switch active tunnel
+sudo dnstm router switch slipstream-1
 ```
 
-### Reconfigure Instance
+### Export and Restore Configuration
 
 ```bash
-# Rename and reconfigure an instance
-sudo dnstm instance reconfigure myinstance
+# Export current config
+sudo dnstm config export -o backup.json
+
+# Validate before deploying
+dnstm config validate backup.json
+
+# Load on another server
+sudo dnstm config load backup.json
+sudo dnstm router start
+```
+
+### Reconfigure Tunnel
+
+```bash
+# Rename and reconfigure a tunnel
+sudo dnstm tunnel reconfigure my-tunnel
 
 # This opens an interactive flow to modify:
-# - Instance name (rename)
+# - Tunnel tag (rename)
 # - Domain
-# - Type-specific settings (password, method, target address)
+# - Backend
+# - Transport-specific settings (MTU for DNSTT)
 ```

@@ -2,99 +2,214 @@
 
 ## Main Configuration
 
-**Path**: `/etc/dnstm/config.yaml`
+**Path**: `/etc/dnstm/config.json`
 
-```yaml
-version: "1"
-mode: single  # or "multi"
+```json
+{
+  "log": {
+    "level": "info",
+    "output": "",
+    "timestamp": true
+  },
+  "listen": {
+    "address": "0.0.0.0:53"
+  },
+  "proxy": {
+    "port": 1080
+  },
+  "backends": [
+    {
+      "tag": "socks",
+      "type": "socks",
+      "address": "127.0.0.1:1080"
+    },
+    {
+      "tag": "ssh",
+      "type": "ssh",
+      "address": "127.0.0.1:22"
+    },
+    {
+      "tag": "ss-primary",
+      "type": "shadowsocks",
+      "shadowsocks": {
+        "password": "generated-password",
+        "method": "aes-256-gcm"
+      }
+    }
+  ],
+  "tunnels": [
+    {
+      "tag": "tunnel-1",
+      "enabled": true,
+      "transport": "slipstream",
+      "backend": "ss-primary",
+      "domain": "t1.example.com",
+      "port": 5310,
+      "slipstream": {
+        "cert": "/etc/dnstm/certs/t1_example_com_cert.pem",
+        "key": "/etc/dnstm/certs/t1_example_com_key.pem"
+      }
+    },
+    {
+      "tag": "tunnel-2",
+      "enabled": true,
+      "transport": "dnstt",
+      "backend": "socks",
+      "domain": "t2.example.com",
+      "port": 5311,
+      "dnstt": {
+        "mtu": 1232,
+        "private_key": "/etc/dnstm/keys/t2_example_com_server.key"
+      }
+    }
+  ],
+  "route": {
+    "mode": "single",
+    "active": "tunnel-1",
+    "default": "tunnel-1"
+  }
+}
+```
 
-single:
-  active: instance1  # Active instance in single-mode
+## Backend Types
 
-listen:
-  address: "0.0.0.0:53"
+### SOCKS5 Backend
 
-transports:
-  instance1:
-    type: slipstream-shadowsocks
-    domain: t1.example.com
-    port: 5300
-    shadowsocks:
-      password: "generated-password"
-      method: aes-256-gcm
+Forward traffic to a SOCKS5 proxy (e.g., microsocks).
 
-  instance2:
-    type: slipstream-ssh
-    domain: t2.example.com
-    port: 5301
-    target:
-      address: "127.0.0.1:22"
+```json
+{
+  "tag": "socks",
+  "type": "socks",
+  "address": "127.0.0.1:1080"
+}
+```
 
-  instance3:
-    type: dnstt-socks
-    domain: t3.example.com
-    port: 5302
-    target:
-      address: "127.0.0.1:1080"
-    dnstt:
-      mtu: 1232
+### SSH Backend
 
-routing:
-  default: instance1
+Forward traffic to an SSH server.
 
-proxy:
-  port: 1080  # Microsocks SOCKS5 proxy port
+```json
+{
+  "tag": "ssh",
+  "type": "ssh",
+  "address": "127.0.0.1:22"
+}
+```
+
+### Shadowsocks Backend
+
+Use Shadowsocks encryption (Slipstream only, via SIP003 plugin).
+
+```json
+{
+  "tag": "ss-primary",
+  "type": "shadowsocks",
+  "shadowsocks": {
+    "password": "your-password",
+    "method": "aes-256-gcm"
+  }
+}
+```
+
+Supported methods:
+- `aes-256-gcm` (recommended)
+- `chacha20-ietf-poly1305`
+
+### Custom Backend
+
+Forward traffic to any custom address.
+
+```json
+{
+  "tag": "web-server",
+  "type": "custom",
+  "address": "192.168.1.100:8080"
+}
 ```
 
 ## Transport Types
 
-### Slipstream + Shadowsocks
+### Slipstream
 
-```yaml
-type: slipstream-shadowsocks
-domain: t.example.com
-port: 5300
-shadowsocks:
-  password: "your-password"
-  method: aes-256-gcm  # or chacha20-ietf-poly1305
+High-performance DNS tunnel with TLS encryption.
+
+```json
+{
+  "tag": "my-tunnel",
+  "transport": "slipstream",
+  "backend": "ss-primary",
+  "domain": "t.example.com",
+  "port": 5310,
+  "slipstream": {
+    "cert": "/etc/dnstm/certs/t_example_com_cert.pem",
+    "key": "/etc/dnstm/certs/t_example_com_key.pem"
+  }
+}
 ```
 
-### Slipstream SOCKS/SSH
+Slipstream supports all backend types including Shadowsocks.
 
-```yaml
-type: slipstream-socks  # or slipstream-ssh
-domain: t.example.com
-port: 5301
-target:
-  address: "127.0.0.1:1080"  # or 127.0.0.1:22 for SSH
+### DNSTT
+
+Classic DNS tunnel using Curve25519 keys.
+
+```json
+{
+  "tag": "my-tunnel",
+  "transport": "dnstt",
+  "backend": "socks",
+  "domain": "t.example.com",
+  "port": 5311,
+  "dnstt": {
+    "mtu": 1232,
+    "private_key": "/etc/dnstm/keys/t_example_com_server.key"
+  }
+}
 ```
 
-### DNSTT SOCKS/SSH
+**Note:** DNSTT does not support the `shadowsocks` backend type.
 
-```yaml
-type: dnstt-socks  # or dnstt-ssh
-domain: t.example.com
-port: 5302
-target:
-  address: "127.0.0.1:1080"  # or 127.0.0.1:22 for SSH
-dnstt:
-  mtu: 1232  # 512-1400
+## Transport-Backend Compatibility
+
+| Transport | socks | ssh | shadowsocks | custom |
+|-----------|-------|-----|-------------|--------|
+| slipstream | ✓ | ✓ | ✓ | ✓ |
+| dnstt | ✓ | ✓ | ✗ | ✓ |
+
+## Route Configuration
+
+```json
+{
+  "route": {
+    "mode": "single",
+    "active": "tunnel-1",
+    "default": "tunnel-1"
+  }
+}
 ```
+
+| Field | Description |
+|-------|-------------|
+| `mode` | Operating mode: `single` or `multi` |
+| `active` | Active tunnel tag (single mode only) |
+| `default` | Default route for unmatched domains (multi mode) |
 
 ## Directory Structure
 
 ```
 /etc/dnstm/
-├── config.yaml           # Main configuration
-├── dnsrouter.yaml        # DNS router config (multi-mode)
+├── config.json           # Main configuration (JSON)
+├── dnsrouter.yaml        # DNS router config (multi-mode, internal)
 ├── certs/                # TLS certificates (Slipstream)
-│   ├── domain_cert.pem
-│   └── domain_key.pem
+│   ├── t_example_com_cert.pem
+│   └── t_example_com_key.pem
 ├── keys/                 # Curve25519 keys (DNSTT)
-│   ├── domain_server.key
-│   └── domain_server.pub
-└── instances/            # Per-instance configs
-    └── <name>/
+│   ├── t_example_com_server.key
+│   └── t_example_com_server.pub
+└── tunnels/              # Per-tunnel configs
+    └── <tag>/
+        └── config.json   # Shadowsocks config for SIP003
 ```
 
 ## Certificates (Slipstream)
@@ -112,7 +227,7 @@ Properties:
 
 View fingerprint:
 ```bash
-dnstm instance status <name>
+dnstm tunnel status <tag>
 ```
 
 ## Keys (DNSTT)
@@ -125,14 +240,14 @@ Files named by domain:
 
 View public key:
 ```bash
-dnstm instance status <name>
+dnstm tunnel status <tag>
 ```
 
 ## Port Allocation
 
-Ports auto-allocated starting from 5300:
-- First instance: 5300
-- Second instance: 5301
+Ports auto-allocated starting from 5310:
+- First tunnel: 5310
+- Second tunnel: 5311
 - etc.
 
 Port 53 is used by:
@@ -150,7 +265,7 @@ Directory permissions:
 - `/etc/dnstm/` - 755
 - `/etc/dnstm/certs/` - 750
 - `/etc/dnstm/keys/` - 750
-- `/etc/dnstm/instances/` - 750
+- `/etc/dnstm/tunnels/` - 750
 
 ## Firewall Rules
 
@@ -177,3 +292,16 @@ Transport binaries are stored in `/usr/local/bin/`:
 - `ssserver` - Shadowsocks server
 - `microsocks` - SOCKS5 proxy
 - `sshtun-user` - SSH user management tool
+
+## Config Management Commands
+
+```bash
+# Export current config to file
+dnstm config export -o backup.json
+
+# Validate a config file
+dnstm config validate backup.json
+
+# Load config from file
+dnstm config load backup.json
+```

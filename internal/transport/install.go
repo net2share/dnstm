@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/types"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"
@@ -44,6 +45,7 @@ type githubAsset struct {
 }
 
 // EnsureBinariesInstalled checks and installs required binaries for a transport type.
+// This is the legacy function that accepts types.TransportType.
 func EnsureBinariesInstalled(t types.TransportType) error {
 	switch t {
 	case types.TypeSlipstreamShadowsocks:
@@ -55,6 +57,29 @@ func EnsureBinariesInstalled(t types.TransportType) error {
 		return EnsureSlipstreamInstalled()
 	case types.TypeDNSTTSocks, types.TypeDNSTTSSH:
 		return EnsureDnsttInstalled()
+	default:
+		return nil
+	}
+}
+
+// EnsureTransportBinariesInstalled checks and installs required binaries for a transport type.
+// This function accepts the new config.TransportType.
+func EnsureTransportBinariesInstalled(transport config.TransportType) error {
+	switch transport {
+	case config.TransportSlipstream:
+		return EnsureSlipstreamInstalled()
+	case config.TransportDNSTT:
+		return EnsureDnsttInstalled()
+	default:
+		return nil
+	}
+}
+
+// EnsureBackendBinariesInstalled checks and installs required binaries for a backend type.
+func EnsureBackendBinariesInstalled(backend config.BackendType) error {
+	switch backend {
+	case config.BackendShadowsocks:
+		return EnsureShadowsocksInstalled()
 	default:
 		return nil
 	}

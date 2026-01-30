@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/net2share/dnstm/internal/types"
+	"github.com/net2share/dnstm/internal/config"
 )
 
 var adjectives = []string{
@@ -36,13 +36,13 @@ func GenerateName() string {
 	return adj + "-" + noun
 }
 
-// GenerateUniqueName generates a unique name that doesn't conflict with existing transports.
-func GenerateUniqueName(existing map[string]*types.TransportConfig) string {
+// GenerateUniqueTag generates a unique tag that doesn't conflict with existing tunnels.
+func GenerateUniqueTag(cfg *config.Config) string {
 	maxAttempts := 100
 	for i := 0; i < maxAttempts; i++ {
-		name := GenerateName()
-		if _, exists := existing[name]; !exists {
-			return name
+		tag := GenerateName()
+		if cfg.GetTunnelByTag(tag) == nil {
+			return tag
 		}
 	}
 	// Fallback: add a random suffix
@@ -86,20 +86,20 @@ func NormalizeName(name string) string {
 	return name
 }
 
-// SuggestSimilarNames suggests similar names if a name is taken.
-func SuggestSimilarNames(baseName string, existing map[string]*types.TransportConfig, count int) []string {
+// SuggestSimilarTags suggests similar tags if a tag is taken.
+func SuggestSimilarTags(baseTag string, cfg *config.Config, count int) []string {
 	suggestions := make([]string, 0, count)
 
 	// Try adding numbers
 	for i := 2; i <= count+10 && len(suggestions) < count; i++ {
-		candidate := fmt.Sprintf("%s-%d", baseName, i)
-		if _, exists := existing[candidate]; !exists {
+		candidate := fmt.Sprintf("%s-%d", baseTag, i)
+		if cfg.GetTunnelByTag(candidate) == nil {
 			suggestions = append(suggestions, candidate)
 		}
 	}
 
 	// Try different adjectives with the same noun
-	parts := strings.Split(baseName, "-")
+	parts := strings.Split(baseTag, "-")
 	if len(parts) >= 2 {
 		noun := parts[len(parts)-1]
 		for _, adj := range adjectives {
@@ -107,8 +107,8 @@ func SuggestSimilarNames(baseName string, existing map[string]*types.TransportCo
 				break
 			}
 			candidate := adj + "-" + noun
-			if candidate != baseName {
-				if _, exists := existing[candidate]; !exists {
+			if candidate != baseTag {
+				if cfg.GetTunnelByTag(candidate) == nil {
 					suggestions = append(suggestions, candidate)
 				}
 			}
@@ -118,7 +118,26 @@ func SuggestSimilarNames(baseName string, existing map[string]*types.TransportCo
 	return suggestions
 }
 
-// GetServiceName returns the systemd service name for an instance.
-func GetServiceName(instanceName string) string {
-	return "dnstm-" + instanceName
+// GetServiceName returns the systemd service name for a tunnel.
+func GetServiceName(tag string) string {
+	return "dnstm-" + tag
+}
+
+// GenerateUniqueTunnelTag generates a unique tag that doesn't conflict with existing tunnels.
+// This function takes a slice of tunnel configs directly.
+func GenerateUniqueTunnelTag(tunnels []config.TunnelConfig) string {
+	maxAttempts := 100
+	existingTags := make(map[string]bool)
+	for _, t := range tunnels {
+		existingTags[t.Tag] = true
+	}
+
+	for i := 0; i < maxAttempts; i++ {
+		tag := GenerateName()
+		if !existingTags[tag] {
+			return tag
+		}
+	}
+	// Fallback: add a random suffix
+	return GenerateName() + fmt.Sprintf("-%d", rand.IntN(1000))
 }
