@@ -34,7 +34,7 @@ dnstm manages DNS tunnel services on Linux servers. It supports two transport pr
 - One transport handles DNS queries at a time
 - Active transport binds directly to port 53 on the external IP
 - Lower overhead (no router process, no NAT)
-- Switch transports with `dnstm switch <name>`
+- Switch transports with `dnstm router switch <name>`
 
 ### Multi-Tunnel Mode
 

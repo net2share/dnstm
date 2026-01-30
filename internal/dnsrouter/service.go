@@ -2,7 +2,6 @@ package dnsrouter
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/net2share/dnstm/internal/service"
@@ -31,12 +30,9 @@ func NewService() *Service {
 }
 
 func getBinaryPath() string {
-	// The binary is the dnstm binary itself with a subcommand
-	exe, err := os.Executable()
-	if err != nil {
-		return "/usr/local/bin/dnstm"
-	}
-	return exe
+	// Always use the installed path for systemd services
+	// This prevents issues when running from development locations
+	return "/usr/local/bin/dnstm"
 }
 
 // CreateService creates the systemd service for the DNS router.

@@ -192,6 +192,15 @@ func (r *Router) switchToSingleMode() error {
 // switchToMultiMode transitions from single to multi mode.
 // In multi mode, transports bind to 127.0.0.1:PORT and DNS router handles routing.
 func (r *Router) switchToMultiMode() error {
+	// Validate: each instance must have a unique domain in multi-mode
+	domains := make(map[string]string) // domain -> instance name
+	for name, cfg := range r.config.Transports {
+		if existing, ok := domains[cfg.Domain]; ok {
+			return fmt.Errorf("cannot switch to multi-mode: instances '%s' and '%s' share the same domain '%s'; each instance must have a unique domain", existing, name, cfg.Domain)
+		}
+		domains[cfg.Domain] = name
+	}
+
 	snapshot, _ := r.captureSnapshot()
 
 	// 1. Stop active instance if running

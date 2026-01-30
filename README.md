@@ -133,6 +133,7 @@ sudo dnstm router start
 - [CLI Reference](docs/CLI.md) - Complete command reference
 - [Configuration](docs/CONFIGURATION.md) - Configuration files and options
 - [Client Setup](docs/CLIENT.md) - Client-side connection guides
+- [Development](docs/DEVELOPMENT.md) - Action-based architecture and adding commands
 
 ## Requirements
 

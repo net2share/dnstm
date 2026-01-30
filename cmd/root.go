@@ -6,6 +6,9 @@ import (
 	"os"
 	"strings"
 
+	// Import handlers to register them with actions
+	_ "github.com/net2share/dnstm/internal/handlers"
+
 	"github.com/net2share/dnstm/internal/menu"
 	"github.com/net2share/dnstm/internal/transport"
 	"github.com/net2share/go-corelib/osdetect"
@@ -46,14 +49,8 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.Version = Version
 
-	// Main commands (order matches menu)
-	rootCmd.AddCommand(instanceCmd)
-	rootCmd.AddCommand(routerCmd)
-	rootCmd.AddCommand(sshUsersCmd)
-	rootCmd.AddCommand(uninstallCmd)
-
-	// Utilities
-	rootCmd.AddCommand(installCmd)
+	// Register all action-based commands
+	RegisterActionsWithRoot(rootCmd)
 }
 
 // Execute runs the root command.

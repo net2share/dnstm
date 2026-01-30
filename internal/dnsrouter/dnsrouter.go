@@ -214,6 +214,8 @@ func (r *Router) handleQuery(packet []byte, packetBuf *[]byte, clientAddr *net.U
 }
 
 // findBackend finds the backend for a query name.
+// Returns empty string if no route matches (request will be dropped).
+// Note: defaultBackend is kept for display/state preservation only, not for routing.
 func (r *Router) findBackend(queryName string) string {
 	// Check routes in order (first match wins)
 	for _, route := range r.routes {
@@ -222,8 +224,9 @@ func (r *Router) findBackend(queryName string) string {
 		}
 	}
 
-	// Fall back to default
-	return r.defaultBackend
+	// No match - drop the request
+	// (defaultBackend is only used for display and mode-switching state preservation)
+	return ""
 }
 
 // getBackendConn gets or creates a persistent connection to a backend.

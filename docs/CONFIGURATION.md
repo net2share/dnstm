@@ -112,7 +112,7 @@ Properties:
 
 View fingerprint:
 ```bash
-dnstm instance config <name>
+dnstm instance status <name>
 ```
 
 ## Keys (DNSTT)
@@ -125,7 +125,7 @@ Files named by domain:
 
 View public key:
 ```bash
-dnstm instance config <name>
+dnstm instance status <name>
 ```
 
 ## Port Allocation

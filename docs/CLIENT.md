@@ -12,7 +12,7 @@ Download client binaries:
 Get connection details from the server:
 
 ```bash
-dnstm instance config <name>
+dnstm instance status <name>
 ```
 
 This shows:
@@ -20,29 +20,44 @@ This shows:
 - Port
 - Certificate fingerprint (Slipstream)
 - Public key (DNSTT)
-- Password (Shadowsocks)
+- Password and method (Shadowsocks)
+
+## Certificate/Key Files
+
+Certificate and key files are stored on the server:
+- Slipstream certificates: `/etc/dnstm/certs/<domain>_cert.pem`
+- DNSTT public keys: `/etc/dnstm/keys/<domain>_server.pub`
+
+Domain names use underscores (e.g., `a.example.com` → `a_example_com_cert.pem`).
 
 ## Slipstream + Shadowsocks
 
-### 1. Copy Certificate
+### 1. Get Connection Info
 
 ```bash
-scp root@server:/etc/dnstm/certs/domain_cert.pem ./
+# On server
+dnstm instance status <name>
 ```
 
-### 2. Connect with sslocal
+Note the domain, password, and encryption method.
+
+### 2. Copy Certificate
 
 ```bash
-sslocal \
-  -s "127.0.0.1:5310" \
-  -b "127.0.0.1:1080" \
-  -m "aes-256-gcm" \
-  -k "PASSWORD" \
-  --plugin "slipstream-client" \
-  --plugin-opts "domain=DOMAIN;resolver=1.1.1.1:53;cert=/path/to/cert.pem"
+scp root@server:/etc/dnstm/certs/<domain>_cert.pem ./cert.pem
 ```
 
-### 3. Test
+### 3. Start Tunnel and Connect
+
+```bash
+# Start slipstream tunnel (creates local TCP port)
+slipstream-client -d DOMAIN -r 8.8.8.8:53 --cert cert.pem -l 5201 &
+
+# Connect sslocal through the tunnel
+sslocal -s 127.0.0.1:5201 -k "PASSWORD" -m METHOD -b 127.0.0.1:1080
+```
+
+### 4. Test
 
 ```bash
 curl -x socks5h://127.0.0.1:1080 https://httpbin.org/ip
@@ -53,18 +68,16 @@ curl -x socks5h://127.0.0.1:1080 https://httpbin.org/ip
 ### 1. Copy Certificate
 
 ```bash
-scp root@server:/etc/dnstm/certs/domain_cert.pem ./
+scp root@server:/etc/dnstm/certs/<domain>_cert.pem ./cert.pem
 ```
 
 ### 2. Connect
 
 ```bash
-slipstream-client \
-  --domain DOMAIN \
-  --resolver 1.1.1.1:53 \
-  --tcp-listen-port 1080 \
-  --cert /path/to/cert.pem
+slipstream-client -d DOMAIN -r 8.8.8.8:53 --cert cert.pem -l 1080
 ```
+
+The tunnel acts directly as a SOCKS5 proxy (connects to microsocks on server).
 
 ### 3. Test
 
@@ -77,17 +90,13 @@ curl -x socks5h://127.0.0.1:1080 https://httpbin.org/ip
 ### 1. Copy Certificate
 
 ```bash
-scp root@server:/etc/dnstm/certs/domain_cert.pem ./
+scp root@server:/etc/dnstm/certs/<domain>_cert.pem ./cert.pem
 ```
 
-### 2. Start Client
+### 2. Start Tunnel
 
 ```bash
-slipstream-client \
-  --domain DOMAIN \
-  --resolver 1.1.1.1:53 \
-  --tcp-listen-port 2222 \
-  --cert /path/to/cert.pem
+slipstream-client -d DOMAIN -r 8.8.8.8:53 --cert cert.pem -l 2222
 ```
 
 ### 3. SSH Through Tunnel
@@ -104,37 +113,37 @@ ssh -D 1080 -p 2222 user@127.0.0.1
 
 Then use `127.0.0.1:1080` as SOCKS5 proxy.
 
+### 5. Test with curl
+
+```bash
+# Start SSH with dynamic port forwarding in background
+ssh -D 1080 -f -N -p 2222 user@127.0.0.1
+
+# Test connection
+curl -x socks5h://127.0.0.1:1080 https://httpbin.org/ip
+```
+
 ## DNSTT SOCKS
 
 ### 1. Get Public Key
 
 From server:
 ```bash
-dnstm instance config <name>
+dnstm instance status <name>
 ```
 
-Or copy the key file:
-```bash
-scp root@server:/etc/dnstm/keys/domain_server.pub ./
-```
+Copy the public key (64 hex digits).
 
 ### 2. Connect
 
 ```bash
-dnstt-client \
-  -udp 1.1.1.1:53 \
-  -pubkey PUBLIC_KEY \
-  DOMAIN \
-  127.0.0.1:1080
+dnstt-client -udp 8.8.8.8:53 -pubkey PUBLIC_KEY DOMAIN 127.0.0.1:1080
 ```
 
 Or with key file:
 ```bash
-dnstt-client \
-  -udp 1.1.1.1:53 \
-  -pubkey-file server.pub \
-  DOMAIN \
-  127.0.0.1:1080
+scp root@server:/etc/dnstm/keys/<domain>_server.pub ./
+dnstt-client -udp 8.8.8.8:53 -pubkey-file <domain>_server.pub DOMAIN 127.0.0.1:1080
 ```
 
 ### 3. Test
@@ -148,71 +157,90 @@ curl -x socks5h://127.0.0.1:1080 https://httpbin.org/ip
 ### 1. Get Public Key
 
 ```bash
-dnstm instance config <name>
+dnstm instance status <name>
 ```
 
-### 2. SSH via ProxyCommand
+### 2. Start Tunnel
 
 ```bash
-ssh -o ProxyCommand="dnstt-client -udp 1.1.1.1:53 -pubkey PUBLIC_KEY DOMAIN 127.0.0.1:%p" user@localhost
+dnstt-client -udp 8.8.8.8:53 -pubkey PUBLIC_KEY DOMAIN 127.0.0.1:2222
 ```
 
-### 3. SOCKS Proxy via SSH
+### 3. SSH Through Tunnel
 
 ```bash
-ssh -D 1080 -o ProxyCommand="dnstt-client -udp 1.1.1.1:53 -pubkey PUBLIC_KEY DOMAIN 127.0.0.1:%p" user@localhost
+ssh -p 2222 user@127.0.0.1
+```
+
+### 4. Alternative: SSH via ProxyCommand
+
+```bash
+ssh -o ProxyCommand="dnstt-client -udp 8.8.8.8:53 -pubkey PUBLIC_KEY DOMAIN 127.0.0.1:%p" user@localhost
+```
+
+### 5. SOCKS Proxy via SSH
+
+```bash
+ssh -D 1080 -p 2222 user@127.0.0.1
+```
+
+### 6. Test with curl
+
+```bash
+# Start SSH with dynamic port forwarding in background
+ssh -D 1080 -f -N -p 2222 user@127.0.0.1
+
+# Test connection
+curl -x socks5h://127.0.0.1:1080 https://httpbin.org/ip
 ```
 
 ## DNS Resolvers
 
-Use any public DNS resolver:
-- `1.1.1.1` (Cloudflare)
-- `8.8.8.8` (Google)
+Use any public DNS resolver. Recommended order:
+- `8.8.8.8` (Google) - most reliable
 - `9.9.9.9` (Quad9)
+- `1.1.1.1` (Cloudflare)
 
-TCP mode (if UDP blocked):
-- Slipstream: `--resolver 1.1.1.1:53` (auto-detects TCP)
-- DNSTT: `-dot 1.1.1.1:853` (DNS-over-TLS)
+If UDP is blocked, use DNS-over-TLS or DNS-over-HTTPS:
+- DNSTT: `-dot 8.8.8.8:853` or `-doh https://dns.google/dns-query`
 
 ## Troubleshooting
 
 ### Connection Timeout
 
-1. Check DNS records resolve correctly:
-   ```bash
-   dig +short NS t.example.com
-   ```
-
-2. Verify server is running:
+1. Verify server is running:
    ```bash
    dnstm router status
    ```
 
-3. Check server logs:
+2. Check server logs:
    ```bash
    dnstm instance logs <name>
    ```
 
-### Certificate Mismatch
+3. Try a different DNS resolver (8.8.8.8 vs 1.1.1.1)
+
+### Certificate Mismatch (Slipstream)
 
 Copy the latest certificate from server:
 ```bash
-scp root@server:/etc/dnstm/certs/domain_cert.pem ./
+scp root@server:/etc/dnstm/certs/<domain>_cert.pem ./cert.pem
 ```
 
-### Wrong Public Key
+### Wrong Public Key (DNSTT)
 
 Get the correct key:
 ```bash
-dnstm instance config <name>
+dnstm instance status <name>
 ```
 
 ### Slow Connection
 
-DNSTT: Try increasing MTU (up to 1400):
-```yaml
-dnstt:
-  mtu: 1400
-```
+DNSTT is slower than Slipstream due to protocol overhead. For better performance, use Slipstream transports.
 
-Slipstream generally performs better than DNSTT.
+### Slipstream Connection Disconnects
+
+Check the client output for errors. Common issues:
+- Certificate mismatch: re-copy the certificate
+- DNS propagation: try a different resolver
+- Server not running: check `dnstm router status`

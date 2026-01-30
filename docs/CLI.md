@@ -10,7 +10,7 @@ Run without arguments for the interactive menu:
 sudo dnstm
 ```
 
-The menu structure mirrors the CLI commands exactly.
+The menu structure mirrors the CLI commands exactly. When optional arguments are not provided, the CLI will fall back to interactive mode for selection.
 
 ## Install Command
 
@@ -60,10 +60,9 @@ dnstm instance add [name] [flags]          # Add new instance
 dnstm instance remove <name> [--force]     # Remove instance
 dnstm instance start <name>                # Start instance
 dnstm instance stop <name>                 # Stop instance
-dnstm instance restart <name>              # Restart instance
 dnstm instance logs <name> [-n lines]      # Show instance logs
-dnstm instance config <name>               # Show instance config
-dnstm instance status <name>               # Show instance status
+dnstm instance status <name>               # Show instance status with cert/key info
+dnstm instance reconfigure <name>          # Reconfigure instance (including rename)
 ```
 
 ### Instance Add Flags
@@ -91,6 +90,16 @@ Transport types:
 - `dnstt-socks` - DNSTT with SOCKS target
 - `dnstt-ssh` - DNSTT with SSH target
 
+### Interactive Fallback
+
+When required flags are not provided, commands fall back to interactive mode:
+
+```bash
+dnstm instance add              # Opens interactive add flow
+dnstm instance remove           # Shows instance picker
+dnstm router switch             # Shows instance picker
+```
+
 ## Mode Command
 
 Show or switch operating mode (subcommand of `router`).
@@ -100,6 +109,16 @@ dnstm router mode              # Show current mode
 dnstm router mode single       # Switch to single-tunnel mode
 dnstm router mode multi        # Switch to multi-tunnel mode
 ```
+
+**Single-tunnel mode:**
+- One tunnel active at a time
+- Transport binds directly to external IP:53
+- Lower overhead (no DNS router process)
+
+**Multi-tunnel mode:**
+- All tunnels run simultaneously
+- DNS router handles domain-based routing
+- Each domain routes to its designated tunnel
 
 ## Switch Command
 
@@ -176,4 +195,16 @@ sudo dnstm router mode single
 
 # Switch active instance
 sudo dnstm router switch ss1
+```
+
+### Reconfigure Instance
+
+```bash
+# Rename and reconfigure an instance
+sudo dnstm instance reconfigure myinstance
+
+# This opens an interactive flow to modify:
+# - Instance name (rename)
+# - Domain
+# - Type-specific settings (password, method, target address)
 ```

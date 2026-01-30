@@ -76,8 +76,13 @@ type CertConfig struct {
 	Fingerprint string `yaml:"fingerprint,omitempty"`
 }
 
-// RoutingConfig configures domain routing.
+// RoutingConfig configures domain routing in multi-mode.
 type RoutingConfig struct {
+	// Default is the fallback instance for unmatched domains in multi-mode.
+	// In practice, transports only respond to their configured domains, so
+	// unmatched queries would fail anyway. This field is mainly used for:
+	// - Preserving state when switching modes (single.active ↔ routing.default)
+	// - Display purposes (marking which instance is "default" in status output)
 	Default string `yaml:"default,omitempty"`
 }
 
