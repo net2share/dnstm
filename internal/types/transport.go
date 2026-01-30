@@ -71,7 +71,7 @@ func GetTransportTypeDisplayName(t TransportType) string {
 	case TypeDNSTTSSH:
 		return "DNSTT SSH"
 	case TypeDNSTTMTProxy:
-		return "DNSTT + MTProxy (socat)"
+		return "DNSTT + MTProxy"
 	default:
 		return string(t)
 	}

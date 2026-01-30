@@ -909,7 +909,7 @@ func runInstanceAdd() {
 			{Label: "Slipstream + MTProxy (Telegram)", Value: string(types.TypeSlipstreamMTProxy)},
 			{Label: "DNSTT SOCKS", Value: string(types.TypeDNSTTSocks)},
 			{Label: "DNSTT SSH", Value: string(types.TypeDNSTTSSH)},
-			{Label: "DNSTT + MTProxy (Telegram, via socat)", Value: string(types.TypeDNSTTMTProxy)},
+			{Label: "DNSTT + MTProxy (Telegram)", Value: string(types.TypeDNSTTMTProxy)},
 		},
 	})
 	if err != nil || transportType == "" {
@@ -1018,13 +1018,11 @@ func runInstanceAdd() {
 			tui.PrintError("Failed to configure MTProxy: " + err.Error())
 			return
 		}
-		// Target is the local MTProxy endpoint - Slipstream supports raw TCP, no bridge needed
+
 		transportCfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyPort)}
 		// Show connection URL
 		fmt.Println()
 		tui.PrintBox("Slipstream + MTProxy (direct)", []string{
-			"Slipstream client supports raw TCP tunnel (no bridge needed)",
-			"",
 			"Client-side Telegram config:",
 			"  Type:   MTProto Proxy",
 			"  Server: 127.0.0.1 (via slipstream-client)",
@@ -1060,23 +1058,21 @@ func runInstanceAdd() {
 		transportCfg.Target = &types.TargetConfig{Address: target}
 		transportCfg.DNSTT = &types.DNSTTConfig{MTU: 1232}
 	case types.TypeDNSTTMTProxy:
-		proxyUrl, err := configureAndInstallMTProxyWithBridge(transportCfg)
+		proxyUrl, err := configureAndInstallMTProxy(transportCfg)
 		if err != nil {
 			tui.PrintError("Failed to configure MTProxy: " + err.Error())
 			return
 		}
-		// Target is the bridge port which forwards to MTProxy
-		transportCfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyBridgePort)}
+
+		transportCfg.Target = &types.TargetConfig{Address: fmt.Sprintf("%s:%s", mtproxy.MTProxyBindAddr, mtproxy.MTProxyPort)}
 		transportCfg.DNSTT = &types.DNSTTConfig{MTU: 1232}
 		// Show connection URL
 		fmt.Println()
-		tui.PrintBox("DNSTT + MTProxy (via socat bridge)", []string{
-			"Server-side: socat bridge (port " + mtproxy.MTProxyBridgePort + ") → MTProxy (port " + mtproxy.MTProxyPort + ")",
-			"",
+		tui.PrintBox("DNSTT + MTProxy", []string{
 			"Client-side Telegram config:",
 			"  Type:   MTProto Proxy",
 			"  Server: 127.0.0.1 (via dnstt-client)",
-			"  Port:   " + mtproxy.MTProxyBridgePort,
+			"  Port:   " + mtproxy.MTProxyPort,
 			"  Secret: dd<your-secret>",
 			"",
 			"Or for direct connection (without DNS tunnel):",
@@ -1492,22 +1488,5 @@ func configureAndInstallMTProxy(cfg *types.TransportConfig) (string, error) {
 	}
 
 	proxyUrl := mtproxy.FormatProxyURL(secret, domain)
-	return proxyUrl, nil
-}
-
-// configureAndInstallMTProxyWithBridge installs MTProxy and the socat bridge for DNSTT
-func configureAndInstallMTProxyWithBridge(cfg *types.TransportConfig) (string, error) {
-	// First install MTProxy
-	proxyUrl, err := configureAndInstallMTProxy(cfg)
-	if err != nil {
-		return "", err
-	}
-
-	// Then install the socat bridge
-	tui.PrintStatus("Installing socat bridge for DNSTT...")
-	if err := mtproxy.InstallBridge(); err != nil {
-		return "", fmt.Errorf("failed to install MTProxy bridge: %w", err)
-	}
-
 	return proxyUrl, nil
 }

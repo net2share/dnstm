@@ -233,8 +233,7 @@ func (b *Builder) buildDNSTTSSH(name string, cfg *types.TransportConfig, opts *B
 }
 
 // buildSlipstreamMTProxy builds the command for Slipstream MTProxy mode.
-// Slipstream client supports raw TCP tunneling, so no bridge is needed.
-// The tunnel forwards directly to MTProxy.
+
 func (b *Builder) buildSlipstreamMTProxy(name string, cfg *types.TransportConfig, opts *BuildOptions) (*BuildResult, error) {
 	// Uses TCP forwarding to MTProxy target
 	return b.buildSlipstreamTCP(name, cfg, opts)
@@ -277,11 +276,8 @@ func (b *Builder) buildSlipstreamTCP(name string, cfg *types.TransportConfig, op
 }
 
 // buildDNSTTMTProxy builds the command for DNSTT MTProxy mode.
-// DNSTT client only provides a SOCKS5 interface, so a socat bridge is installed
-// on the server to forward TCP from the bridge port to MTProxy.
-// The dnstt-server target is the bridge port (8444), which forwards to MTProxy (8443).
+
 func (b *Builder) buildDNSTTMTProxy(name string, cfg *types.TransportConfig, opts *BuildOptions) (*BuildResult, error) {
-	// Uses TCP forwarding to MTProxy bridge target
 	return b.buildDNSTTTCP(name, cfg, opts)
 }
 

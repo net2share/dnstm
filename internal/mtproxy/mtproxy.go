@@ -18,12 +18,11 @@ import (
 )
 
 const (
-	MTProxyBinaryName      = "mtproto-proxy"
-	MTProxyServiceName     = "mtproxy"
-	MTProxyBridgeService   = "mtproxy-bridge"
-	MTProxyBindAddr        = "127.0.0.1"
-	MTProxyPort            = "8443"
-	MTProxyBridgePort      = "8444" // socat bridge listens here, forwards to MTProxy
+	MTProxyBinaryName    = "mtproto-proxy"
+	MTProxyServiceName   = "mtproxy"
+	MTProxyBridgeService = "mtproxy-bridge"
+	MTProxyBindAddr      = "127.0.0.1"
+	MTProxyPort          = "8443"
 	MTProxyStatsPort       = "8888"
 	MTProxyInstallationDir = "/usr/local/bin"
 	MTProxyConfigDir       = "/etc/mtproxy"
@@ -362,11 +361,6 @@ func RestartMTProxy() error {
 }
 
 func UninstallMTProxy() error {
-	// Stop and remove bridge service first
-	if err := UninstallBridge(); err != nil {
-		fmt.Printf("warning: failed to uninstall bridge: %v", err)
-	}
-
 	if service.IsServiceActive(MTProxyServiceName) {
 		service.StopService(MTProxyServiceName)
 	}
@@ -386,107 +380,4 @@ func UninstallMTProxy() error {
 	}
 
 	return nil
-}
-
-// InstallBridge installs socat and creates a systemd service that bridges TCP to MTProxy.
-// This is needed for DNSTT because dnstt-client provides a SOCKS5 interface, not raw TCP.
-// The bridge listens on MTProxyBridgePort and forwards raw TCP to MTProxy on MTProxyPort.
-func InstallBridge() error {
-	// Check if socat is installed
-	if _, err := exec.LookPath("socat"); err != nil {
-		tui.PrintStatus("Installing socat...")
-		osInfo, err := osdetect.Detect()
-		if err != nil {
-			return fmt.Errorf("failed to detect OS: %w", err)
-		}
-
-		var cmd *exec.Cmd
-		switch osInfo.PackageManager {
-		case "apt", "apt-get":
-			cmd = exec.Command("apt-get", "install", "-y", "socat")
-		case "dnf":
-			cmd = exec.Command("dnf", "install", "-y", "socat")
-		default:
-			return fmt.Errorf("unsupported package manager: %s", osInfo.PackageManager)
-		}
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("failed to install socat: %w\n%s", err, output)
-		}
-		tui.PrintSuccess("socat installed")
-	} else {
-		tui.PrintStatus("socat already installed")
-	}
-
-	// Create systemd service for the bridge
-	serviceContent := fmt.Sprintf(`[Unit]
-Description=MTProxy TCP Bridge (socat) for DNSTT
-After=network.target mtproxy.service
-Requires=mtproxy.service
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/socat TCP-LISTEN:%s,fork,reuseaddr,bind=%s TCP:%s:%s
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-`, MTProxyBridgePort, MTProxyBindAddr, MTProxyBindAddr, MTProxyPort)
-
-	servicePath := fmt.Sprintf("/etc/systemd/system/%s.service", MTProxyBridgeService)
-	if err := os.WriteFile(servicePath, []byte(serviceContent), 0644); err != nil {
-		return fmt.Errorf("failed to write bridge service file: %w", err)
-	}
-
-	// Reload systemd and enable service
-	if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {
-		return fmt.Errorf("failed to reload systemd: %w", err)
-	}
-	if err := exec.Command("systemctl", "enable", MTProxyBridgeService).Run(); err != nil {
-		return fmt.Errorf("failed to enable bridge service: %w", err)
-	}
-	if err := exec.Command("systemctl", "start", MTProxyBridgeService).Run(); err != nil {
-		return fmt.Errorf("failed to start bridge service: %w", err)
-	}
-
-	tui.PrintSuccess(fmt.Sprintf("MTProxy bridge service started (port %s → %s)", MTProxyBridgePort, MTProxyPort))
-	return nil
-}
-
-// UninstallBridge removes the socat bridge service
-func UninstallBridge() error {
-	exec.Command("systemctl", "stop", MTProxyBridgeService).Run()
-	exec.Command("systemctl", "disable", MTProxyBridgeService).Run()
-	os.Remove(fmt.Sprintf("/etc/systemd/system/%s.service", MTProxyBridgeService))
-	if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {
-		return fmt.Errorf("failed to reload systemd: %w", err)
-	}
-	tui.PrintStatus("MTProxy bridge service removed")
-	return nil
-}
-
-// IsBridgeInstalled checks if the bridge service exists
-func IsBridgeInstalled() bool {
-	_, err := os.Stat(fmt.Sprintf("/etc/systemd/system/%s.service", MTProxyBridgeService))
-	return err == nil
-}
-
-// IsBridgeRunning checks if the bridge service is active
-func IsBridgeRunning() bool {
-	return service.IsServiceActive(MTProxyBridgeService)
-}
-
-// StartBridge starts the bridge service
-func StartBridge() error {
-	return service.StartService(MTProxyBridgeService)
-}
-
-// StopBridge stops the bridge service
-func StopBridge() error {
-	return service.StopService(MTProxyBridgeService)
-}
-
-// RestartBridge restarts the bridge service
-func RestartBridge() error {
-	return service.RestartService(MTProxyBridgeService)
 }
