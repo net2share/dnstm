@@ -95,19 +95,43 @@ func RunAction(actionID string) error {
 		ctx.Config = cfg
 	}
 
-	// Handle required argument with picker
-	if action.Args != nil && action.Args.Required && action.Args.PickerFunc != nil {
-		selected, err := runPickerForAction(ctx, action)
-		if err != nil {
-			if err == actions.ErrCancelled {
+	// Handle argument collection
+	if action.Args != nil {
+		if action.Args.PickerFunc != nil {
+			// Use picker for selection from existing items
+			selected, err := runPickerForAction(ctx, action)
+			if err != nil {
+				if err == actions.ErrCancelled {
+					return errCancelled
+				}
+				return err
+			}
+			if selected == "" {
+				if action.Args.Required {
+					return errCancelled
+				}
+				// Optional arg - continue without selection
+			} else {
+				ctx.Args = []string{selected}
+			}
+		} else if action.Args.Required {
+			// Prompt for text input when no picker is available and arg is required
+			value, confirmed, err := tui.RunInput(tui.InputConfig{
+				Title:       action.Args.Name,
+				Description: action.Args.Description,
+			})
+			if err != nil {
+				return err
+			}
+			if !confirmed {
 				return errCancelled
 			}
-			return err
+			if value == "" {
+				return fmt.Errorf("%s is required", action.Args.Name)
+			}
+			ctx.Args = []string{value}
 		}
-		if selected == "" {
-			return errCancelled
-		}
-		ctx.Args = []string{selected}
+		// For optional args without picker, let the handler deal with it
 	}
 
 	// Collect inputs interactively
@@ -124,28 +148,56 @@ func RunAction(actionID string) error {
 		case actions.InputTypeText, actions.InputTypePassword:
 			var val string
 			var confirmed bool
+			description := input.Description
+			defaultVal := input.Default
+			if input.DefaultFunc != nil {
+				defaultVal = input.DefaultFunc(ctx)
+			}
+			if defaultVal != "" && description != "" {
+				description = fmt.Sprintf("%s (default: %s)", description, defaultVal)
+			} else if defaultVal != "" {
+				description = fmt.Sprintf("Default: %s", defaultVal)
+			}
 			val, confirmed, err = tui.RunInput(tui.InputConfig{
 				Title:       input.Label,
-				Description: input.Description,
+				Description: description,
 				Placeholder: input.Placeholder,
-				Value:       input.Default,
+				Value:       defaultVal,
 			})
 			if err != nil {
 				return err
 			}
 			if !confirmed {
 				return errCancelled
+			}
+			// Apply default if empty
+			if val == "" && defaultVal != "" {
+				val = defaultVal
+			}
+			// Check if required and still empty
+			if input.Required && val == "" {
+				return fmt.Errorf("%s is required", input.Label)
 			}
 			value = val
 
 		case actions.InputTypeNumber:
 			var val string
 			var confirmed bool
+			description := input.Description
+			defaultVal := input.Default
+			if input.DefaultFunc != nil {
+				defaultVal = input.DefaultFunc(ctx)
+			}
+			if defaultVal != "" && description != "" {
+				description = fmt.Sprintf("%s (default: %s)", description, defaultVal)
+			} else if defaultVal != "" {
+				description = fmt.Sprintf("Default: %s", defaultVal)
+			}
 			val, confirmed, err = tui.RunInput(tui.InputConfig{
 				Title:       input.Label,
-				Description: input.Description,
-				Placeholder: input.Default,
-				Value:       input.Default,
+				Description: description,
+				Placeholder: defaultVal,
+				Value:       defaultVal,
 			})
 			if err != nil {
 				return err
@@ -153,8 +205,13 @@ func RunAction(actionID string) error {
 			if !confirmed {
 				return errCancelled
 			}
-			if val == "" {
-				val = input.Default
+			// Apply default if empty
+			if val == "" && defaultVal != "" {
+				val = defaultVal
+			}
+			// Check if required and still empty
+			if input.Required && val == "" {
+				return fmt.Errorf("%s is required", input.Label)
 			}
 			var intVal int
 			fmt.Sscanf(val, "%d", &intVal)
@@ -176,6 +233,13 @@ func RunAction(actionID string) error {
 					Value: opt.Value,
 				})
 			}
+			// Add back option if not required
+			if !input.Required {
+				tuiOptions = append(tuiOptions, tui.MenuOption{
+					Label: "Skip",
+					Value: "",
+				})
+			}
 			val, err := tui.RunMenu(tui.MenuConfig{
 				Title:       input.Label,
 				Description: input.Description,
@@ -184,8 +248,11 @@ func RunAction(actionID string) error {
 			if err != nil {
 				return err
 			}
-			if val == "" {
-				return errCancelled
+			if val == "" && input.Required {
+				return fmt.Errorf("%s is required", input.Label)
+			}
+			if val == "" && !input.Required {
+				continue // Skip this optional field
 			}
 			value = val
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/net2share/dnstm/internal/actions"
 	"github.com/net2share/dnstm/internal/config"
+	"github.com/net2share/dnstm/internal/router"
 )
 
 func init() {
@@ -12,6 +13,7 @@ func init() {
 }
 
 // HandleBackendAdd adds a new backend.
+// Inputs are collected by the action system in order: type → tag → type-specific fields
 func HandleBackendAdd(ctx *actions.Context) error {
 	if err := CheckRequirements(ctx, true, true); err != nil {
 		return err
@@ -22,21 +24,26 @@ func HandleBackendAdd(ctx *actions.Context) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Get tag from args
-	tag := ctx.GetArg(0)
+	// Get values from context (collected by action system)
+	backendType := config.BackendType(ctx.GetString("type"))
+	if backendType == "" {
+		return fmt.Errorf("backend type is required")
+	}
+
+	tag := ctx.GetString("tag")
 	if tag == "" {
 		return fmt.Errorf("backend tag is required")
+	}
+
+	// Normalize and validate tag
+	tag = router.NormalizeName(tag)
+	if err := router.ValidateName(tag); err != nil {
+		return fmt.Errorf("invalid tag: %w", err)
 	}
 
 	// Check if tag already exists
 	if cfg.GetBackendByTag(tag) != nil {
 		return actions.BackendExistsError(tag)
-	}
-
-	// Get backend type
-	backendType := config.BackendType(ctx.GetString("type"))
-	if backendType == "" {
-		return fmt.Errorf("backend type is required")
 	}
 
 	// Create backend config
@@ -46,19 +53,15 @@ func HandleBackendAdd(ctx *actions.Context) error {
 	}
 
 	// Handle type-specific fields
+	// Note: SOCKS and SSH are built-in backends and cannot be added manually
 	switch backendType {
-	case config.BackendSOCKS, config.BackendSSH, config.BackendCustom:
+	case config.BackendSOCKS, config.BackendSSH:
+		return fmt.Errorf("%s backends are built-in and cannot be added manually", backendType)
+
+	case config.BackendCustom:
 		address := ctx.GetString("address")
 		if address == "" {
-			// Provide defaults for built-in types
-			switch backendType {
-			case config.BackendSOCKS:
-				address = "127.0.0.1:1080"
-			case config.BackendSSH:
-				address = GetDefaultSSHAddress()
-			default:
-				return fmt.Errorf("address is required for type %s", backendType)
-			}
+			return fmt.Errorf("address is required for custom backend")
 		}
 		backend.Address = address
 
@@ -80,7 +83,7 @@ func HandleBackendAdd(ctx *actions.Context) error {
 		}
 
 	default:
-		return fmt.Errorf("unknown backend type: %s", backendType)
+		return fmt.Errorf("unknown backend type: %s (use 'shadowsocks' or 'custom')", backendType)
 	}
 
 	// Add backend to config

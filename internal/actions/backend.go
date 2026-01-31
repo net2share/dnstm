@@ -61,54 +61,62 @@ func init() {
 	})
 
 	// Register backend.add action
+	// Inputs are ordered for interactive flow: type → tag → type-specific fields
 	Register(&Action{
 		ID:                ActionBackendAdd,
 		Parent:            ActionBackend,
-		Use:               "add <tag>",
+		Use:               "add",
 		Short:             "Add a new backend",
 		Long:              "Add a new backend service",
 		MenuLabel:         "Add",
 		RequiresRoot:      true,
 		RequiresInstalled: true,
-		Args: &ArgsSpec{
-			Name:        "tag",
-			Description: "Backend tag (unique identifier)",
-			Required:    true,
-		},
 		Inputs: []InputField{
 			{
-				Name:      "type",
-				Label:     "Backend Type",
-				ShortFlag: 't',
-				Type:      InputTypeSelect,
-				Required:  true,
-				Options:   BackendTypeOptions(),
+				Name:        "type",
+				Label:       "Backend Type",
+				ShortFlag:   't',
+				Type:        InputTypeSelect,
+				Required:    true,
+				Options:     BackendTypeOptions(),
+				Description: "Type of backend service",
 			},
 			{
-				Name:      "address",
-				Label:     "Address",
-				ShortFlag: 'a',
-				Type:      InputTypeText,
+				Name:        "tag",
+				Label:       "Tag",
+				ShortFlag:   'n',
+				Type:        InputTypeText,
+				Required:    true,
+				Description: "Unique identifier for this backend",
+			},
+			{
+				Name:        "address",
+				Label:       "Address",
+				ShortFlag:   'a',
+				Type:        InputTypeText,
+				Required:    true,
+				Description: "Backend address (host:port)",
 				ShowIf: func(ctx *Context) bool {
-					t := ctx.GetString("type")
-					return t == string(config.BackendSOCKS) ||
-						t == string(config.BackendSSH) ||
-						t == string(config.BackendCustom)
+					return ctx.GetString("type") == string(config.BackendCustom)
 				},
 			},
 			{
-				Name:  "password",
-				Label: "Shadowsocks Password",
-				Type:  InputTypePassword,
+				Name:        "password",
+				Label:       "Password",
+				ShortFlag:   'p',
+				Type:        InputTypePassword,
+				Description: "Shadowsocks password (auto-generated if empty)",
 				ShowIf: func(ctx *Context) bool {
 					return ctx.GetString("type") == string(config.BackendShadowsocks)
 				},
 			},
 			{
-				Name:    "method",
-				Label:   "Encryption Method",
-				Type:    InputTypeSelect,
-				Options: EncryptionMethodOptions(),
+				Name:        "method",
+				Label:       "Encryption Method",
+				ShortFlag:   'm',
+				Type:        InputTypeSelect,
+				Options:     EncryptionMethodOptions(),
+				Description: "Shadowsocks encryption method",
 				ShowIf: func(ctx *Context) bool {
 					return ctx.GetString("type") == string(config.BackendShadowsocks)
 				},
@@ -168,24 +176,14 @@ func BackendPicker(ctx *Context) (string, error) {
 	return "", nil
 }
 
-// BackendTypeOptions returns the available backend type options.
+// BackendTypeOptions returns the available backend type options for adding new backends.
+// Note: SOCKS and SSH are built-in backends and cannot be added manually.
 func BackendTypeOptions() []SelectOption {
 	return []SelectOption{
 		{
-			Label:       "SOCKS5",
-			Value:       string(config.BackendSOCKS),
-			Description: "SOCKS5 proxy (microsocks)",
-		},
-		{
-			Label:       "SSH",
-			Value:       string(config.BackendSSH),
-			Description: "System SSH server",
-		},
-		{
-			Label:       "Shadowsocks",
+			Label:       "Shadowsocks (SIP003)",
 			Value:       string(config.BackendShadowsocks),
-			Description: "Shadowsocks proxy (SIP003)",
-			Recommended: true,
+			Description: "Shadowsocks proxy with plugin support",
 		},
 		{
 			Label:       "Custom",

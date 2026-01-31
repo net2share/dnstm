@@ -103,7 +103,7 @@ Manage backend services that tunnels forward traffic to.
 ```bash
 dnstm backend list                         # List all backends
 dnstm backend available                    # Show available backend types
-dnstm backend add <tag> [flags]            # Add new backend
+dnstm backend add [flags]                  # Add new backend
 dnstm backend remove <tag>                 # Remove backend
 dnstm backend status <tag>                 # Show backend status
 ```
@@ -112,39 +112,39 @@ dnstm backend status <tag>                 # Show backend status
 
 ```bash
 # Add a Shadowsocks backend
-dnstm backend add ss-primary \
+dnstm backend add \
   --type shadowsocks \
+  --tag ss-primary \
   --password "my-password" \
   --method aes-256-gcm
 
-# Add a custom SOCKS backend
-dnstm backend add my-proxy \
-  --type socks \
-  --address 192.168.1.100:1080
-
 # Add a custom target backend
-dnstm backend add web-server \
+dnstm backend add \
   --type custom \
+  --tag web-server \
   --address 127.0.0.1:8080
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--type`, `-t` | Backend type: `socks`, `ssh`, `shadowsocks`, `custom` |
-| `--address`, `-a` | Target address (for socks/ssh/custom) |
-| `--password` | Shadowsocks password (auto-generated if empty) |
-| `--method` | Shadowsocks encryption method |
+| `--type`, `-t` | Backend type: `shadowsocks` or `custom` |
+| `--tag`, `-n` | Unique identifier for the backend |
+| `--address`, `-a` | Target address (for custom backends) |
+| `--password`, `-p` | Shadowsocks password (auto-generated if empty) |
+| `--method`, `-m` | Shadowsocks encryption method |
 
 ### Backend Types
 
-| Type | Description |
-|------|-------------|
-| `socks` | SOCKS5 proxy (default: microsocks at 127.0.0.1:1080) |
-| `ssh` | SSH server (default: 127.0.0.1:22) |
-| `shadowsocks` | Shadowsocks server (slipstream only, uses SIP003 plugin) |
-| `custom` | Custom target address |
+| Type | Description | Addable |
+|------|-------------|---------|
+| `socks` | Built-in SOCKS5 proxy (microsocks at 127.0.0.1:1080) | No (built-in) |
+| `ssh` | Built-in SSH server (127.0.0.1:22) | No (built-in) |
+| `shadowsocks` | Shadowsocks server (slipstream only, uses SIP003 plugin) | Yes |
+| `custom` | Custom target address | Yes |
 
-**Note:** DNSTT transport does not support the `shadowsocks` backend type.
+**Notes:**
+- SOCKS and SSH backends are created automatically during installation and cannot be added manually.
+- DNSTT transport does not support the `shadowsocks` backend type.
 
 ## Config Commands
 
@@ -242,8 +242,9 @@ This removes:
 sudo dnstm install --mode single
 
 # Add Shadowsocks backend
-sudo dnstm backend add ss-primary \
+sudo dnstm backend add \
   --type shadowsocks \
+  --tag ss-primary \
   --password "my-password"
 
 # Add Slipstream tunnel

@@ -33,7 +33,6 @@ func OperatingModeOptions() []SelectOption {
 			Label:       "Single-tunnel",
 			Value:       "single",
 			Description: "One tunnel at a time, lower overhead",
-			Recommended: true,
 		},
 		{
 			Label:       "Multi-tunnel",
