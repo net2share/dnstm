@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.0](https://github.com/net2share/dnstm/compare/v0.5.0...v0.6.0) (2026-01-31)
+
+
+### ⚠ BREAKING CHANGES
+
+* separate tunnels from backends
+* migrate to action-based architecture
+
+### Code Refactoring
+
+* migrate to action-based architecture ([3f43347](https://github.com/net2share/dnstm/commit/3f4334779a6f1ef892f87f934cf242b05d565e00))
+* separate tunnels from backends ([dca42e7](https://github.com/net2share/dnstm/commit/dca42e79d2355833c1284629d0d73719ee02ba8f))
+
 ## [0.5.0](https://github.com/net2share/dnstm/compare/v0.4.1...v0.5.0) (2026-01-29)
 
 
