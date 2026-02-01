@@ -36,9 +36,9 @@ func HandleInstall(ctx *actions.Context) error {
 		all = true
 	}
 
-	// Mode is required
+	// Default to single mode if not specified
 	if modeStr == "" {
-		return fmt.Errorf("operating mode is required (use --mode single or --mode multi)")
+		modeStr = "single"
 	}
 	if modeStr != "single" && modeStr != "multi" {
 		return fmt.Errorf("invalid mode: %s (must be 'single' or 'multi')", modeStr)
@@ -167,14 +167,19 @@ func HandleInstall(ctx *actions.Context) error {
 	}
 
 	ctx.Output.Success("Installation complete!")
-	ctx.Output.Println()
-	ctx.Output.Info("Next steps:")
-	ctx.Output.Println("  1. Add tunnel: dnstm tunnel add")
-	ctx.Output.Println("  2. Start router: dnstm router start")
 
+	// Show next steps (different for CLI vs interactive)
 	if ctx.IsInteractive {
+		ctx.Output.Println()
+		ctx.Output.Info("Next: Select 'Backends' > 'Add' for custom backends (optional)")
+		ctx.Output.Info("Next: Select 'Tunnels' > 'Add' to create a tunnel")
 		ctx.Output.EndProgress()
 	} else {
+		ctx.Output.Println()
+		ctx.Output.Info("Next steps:")
+		ctx.Output.Println("  1. Add backend (optional): dnstm backend add")
+		ctx.Output.Println("  2. Add tunnel: dnstm tunnel add")
+		ctx.Output.Println("  3. Start router: dnstm router start")
 		ctx.Output.Println()
 	}
 

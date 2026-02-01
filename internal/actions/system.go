@@ -22,7 +22,7 @@ func init() {
 		ID:           ActionInstall,
 		Use:          "install",
 		Short:        "Install transport binaries and configure system",
-		Long:         "Install all transport binaries and configure the system for DNS tunneling.\n\nThis will:\n  - Create dnstm system user\n  - Initialize router configuration and directories\n  - Set operating mode (single or multi)\n  - Create DNS router service\n  - Download and install transport binaries\n  - Configure firewall rules (port 53 UDP/TCP)\n\nUse --mode to set the operating mode:\n  single  Single-tunnel mode (default) - one tunnel at a time\n  multi   Multi-tunnel mode - multiple tunnels with DNS router",
+		Long:         "Install all transport binaries and configure the system for DNS tunneling.\n\nThis will:\n  - Create dnstm system user\n  - Initialize router configuration and directories\n  - Set operating mode (defaults to single)\n  - Create DNS router service\n  - Download and install transport binaries\n  - Configure firewall rules (port 53 UDP/TCP)\n\nOptionally use --mode to set the operating mode:\n  single  Single-tunnel mode (default) - one tunnel at a time\n  multi   Multi-tunnel mode - multiple tunnels with DNS router",
 		MenuLabel:    "Install",
 		RequiresRoot: true,
 		Inputs: []InputField{
@@ -32,7 +32,10 @@ func init() {
 				ShortFlag: 'm',
 				Type:      InputTypeSelect,
 				Options:   OperatingModeOptions(),
-				Required:  true,
+				Default:   "single",
+				// Skip mode selection in interactive mode - defaults to single,
+				// user will be prompted to switch to multi when adding second tunnel
+				ShowIf: func(ctx *Context) bool { return !ctx.IsInteractive },
 			},
 			// CLI-only boolean flags for selective installation (not shown in interactive mode)
 			{

@@ -17,8 +17,8 @@ The menu structure mirrors the CLI commands exactly. When optional arguments are
 Install all components and configure the system.
 
 ```bash
-dnstm install                              # Install all (interactive mode selection)
-dnstm install --mode single                # Install with single-tunnel mode
+dnstm install                              # Install (defaults to single-tunnel mode)
+dnstm install --mode single                # Explicitly set single-tunnel mode
 dnstm install --mode multi                 # Install with multi-tunnel mode
 dnstm install --dnstt                      # Install dnstt-server only
 dnstm install --slipstream                 # Install slipstream-server only

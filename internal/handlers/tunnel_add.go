@@ -243,7 +243,76 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 	return createTunnel(ctx, tunnelCfg, cfg)
 }
 
+// promptModeSwitch prompts the user to switch from single to multi mode when adding a second tunnel.
+// Returns true if mode was switched, false if user declined.
+func promptModeSwitch(ctx *actions.Context, cfg *config.Config) (bool, error) {
+	existingTunnel := cfg.Tunnels[0].Tag
+
+	// Show info about the situation
+	ctx.Output.Println()
+	ctx.Output.Info("You already have a tunnel configured: " + existingTunnel)
+	ctx.Output.Info("Single mode only allows one active tunnel at a time.")
+	ctx.Output.Println()
+
+	// Ask user if they want to switch to multi mode
+	confirm, err := tui.RunConfirm(tui.ConfirmConfig{
+		Title:       "Switch to multi mode?",
+		Description: "Multi mode allows running multiple tunnels simultaneously with DNS-based routing.",
+	})
+	if err != nil {
+		return false, err
+	}
+
+	if !confirm {
+		ctx.Output.Info("Staying in single mode. New tunnel will be added but only one can be active.")
+		ctx.Output.Println()
+		return false, nil
+	}
+
+	// Switch to multi mode
+	ctx.Output.Info("Switching to multi mode...")
+
+	r, err := router.New(cfg)
+	if err != nil {
+		return false, fmt.Errorf("failed to create router: %w", err)
+	}
+
+	if err := r.SwitchMode("multi"); err != nil {
+		return false, fmt.Errorf("failed to switch mode: %w", err)
+	}
+
+	ctx.Output.Success("Switched to multi mode!")
+	ctx.Output.Println()
+
+	return true, nil
+}
+
 func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *config.Config) error {
+	// Check if we need to switch to multi mode
+	// This happens when adding a second tunnel while in single mode
+	if cfg.IsSingleMode() && len(cfg.Tunnels) > 0 {
+		if ctx.IsInteractive {
+			switchedMode, err := promptModeSwitch(ctx, cfg)
+			if err != nil {
+				return err
+			}
+			if switchedMode {
+				// Reload config after mode switch (services were regenerated)
+				newCfg, err := config.Load()
+				if err != nil {
+					return fmt.Errorf("failed to reload config after mode switch: %w", err)
+				}
+				*cfg = *newCfg
+			}
+		} else {
+			// Non-interactive mode: just inform the user
+			existingTunnel := cfg.Tunnels[0].Tag
+			ctx.Output.Info("Adding tunnel to single mode. Existing active tunnel: " + existingTunnel)
+			ctx.Output.Info("New tunnel will be added but not activated. Use 'dnstm router switch' to activate it.")
+			ctx.Output.Println()
+		}
+	}
+
 	// Start progress view in interactive mode
 	if ctx.IsInteractive {
 		ctx.Output.BeginProgress(fmt.Sprintf("Add Tunnel: %s", tunnelCfg.Tag))
