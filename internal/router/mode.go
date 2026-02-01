@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/net2share/dnstm/internal/network"
+	"github.com/net2share/dnstm/internal/transport"
 )
 
 // ModeSnapshot captures the state before a mode switch for rollback.
@@ -135,12 +136,31 @@ func (r *Router) switchToSingleMode() error {
 	// 6. Update config mode
 	r.config.Route.Mode = "single"
 
-	// 7. Save config
+	// 7. Regenerate active tunnel's service with single-mode binding (EXTERNAL_IP:53)
+	if active != "" {
+		tunnelCfg := r.config.GetTunnelByTag(active)
+		if tunnelCfg != nil {
+			backend := r.config.GetBackendByTag(tunnelCfg.Backend)
+			if backend != nil {
+				builder := transport.NewBuilder()
+				sg := NewServiceGenerator()
+				singleOpts, err := sg.GetBindOptions(tunnelCfg, ServiceModeSingle)
+				if err != nil {
+					return r.rollback(snapshot, fmt.Sprintf("failed to get bind options: %v", err))
+				}
+				if err := builder.RegenerateTunnelService(tunnelCfg, backend, singleOpts); err != nil {
+					return r.rollback(snapshot, fmt.Sprintf("failed to regenerate tunnel service: %v", err))
+				}
+			}
+		}
+	}
+
+	// 8. Save config
 	if err := r.config.Save(); err != nil {
 		return r.rollback(snapshot, fmt.Sprintf("failed to save config: %v", err))
 	}
 
-	// 8. Start active tunnel if any
+	// 9. Start active tunnel if any
 	if active != "" {
 		if tunnel, ok := r.tunnels[active]; ok {
 			if err := tunnel.Start(); err != nil {
@@ -207,24 +227,41 @@ func (r *Router) switchToMultiMode() error {
 		}
 	}
 
-	// 6. Regenerate DNS router config
+	// 6. Regenerate all tunnel services with multi-mode binding (127.0.0.1:port)
+	builder := transport.NewBuilder()
+	sg := NewServiceGenerator()
+	for _, tunnelCfg := range r.config.Tunnels {
+		backend := r.config.GetBackendByTag(tunnelCfg.Backend)
+		if backend == nil {
+			continue
+		}
+		multiOpts, err := sg.GetBindOptions(&tunnelCfg, ServiceModeMulti)
+		if err != nil {
+			return r.rollback(snapshot, fmt.Sprintf("failed to get bind options for %s: %v", tunnelCfg.Tag, err))
+		}
+		if err := builder.RegenerateTunnelService(&tunnelCfg, backend, multiOpts); err != nil {
+			return r.rollback(snapshot, fmt.Sprintf("failed to regenerate tunnel service %s: %v", tunnelCfg.Tag, err))
+		}
+	}
+
+	// 7. Regenerate DNS router config
 	if err := r.regenerateDNSRouterConfig(); err != nil {
 		return r.rollback(snapshot, fmt.Sprintf("failed to generate DNS router config: %v", err))
 	}
 
-	// 7. Save config
+	// 8. Save config
 	if err := r.config.Save(); err != nil {
 		return r.rollback(snapshot, fmt.Sprintf("failed to save config: %v", err))
 	}
 
-	// 8. Create DNS router service if needed
+	// 9. Create DNS router service if needed
 	if !r.dnsrouter.IsServiceInstalled() {
 		if err := r.dnsrouter.CreateService(); err != nil {
 			return r.rollback(snapshot, fmt.Sprintf("failed to create DNS router service: %v", err))
 		}
 	}
 
-	// 9. Start all enabled tunnels FIRST (before dnsrouter)
+	// 10. Start all enabled tunnels FIRST (before dnsrouter)
 	for tag, tunnel := range r.tunnels {
 		if tunnel.Config.IsEnabled() {
 			if err := tunnel.Start(); err != nil {
@@ -233,7 +270,7 @@ func (r *Router) switchToMultiMode() error {
 		}
 	}
 
-	// 10. Start DNS router AFTER tunnels are ready
+	// 11. Start DNS router AFTER tunnels are ready
 	if err := r.dnsrouter.Start(); err != nil {
 		return r.rollback(snapshot, fmt.Sprintf("failed to start DNS router: %v", err))
 	}
@@ -248,7 +285,8 @@ func (r *Router) SwitchActiveTunnel(tag string) error {
 	}
 
 	// Validate tunnel exists
-	if r.config.GetTunnelByTag(tag) == nil {
+	newTunnelCfg := r.config.GetTunnelByTag(tag)
+	if newTunnelCfg == nil {
 		return fmt.Errorf("tunnel '%s' does not exist", tag)
 	}
 
@@ -264,12 +302,22 @@ func (r *Router) SwitchActiveTunnel(tag string) error {
 		return nil
 	}
 
-	// 1. Stop current active tunnel
+	builder := transport.NewBuilder()
+	sg := NewServiceGenerator()
+
+	// 1. Regenerate old active tunnel's service with multi-mode binding
 	if currentActive != "" {
-		if oldTunnel, ok := r.tunnels[currentActive]; ok {
-			if oldTunnel.IsActive() {
-				if err := oldTunnel.Stop(); err != nil {
-					return fmt.Errorf("failed to stop current tunnel %s: %w", currentActive, err)
+		oldTunnelCfg := r.config.GetTunnelByTag(currentActive)
+		if oldTunnelCfg != nil {
+			oldBackend := r.config.GetBackendByTag(oldTunnelCfg.Backend)
+			if oldBackend != nil {
+				// Get multi-mode bind options (127.0.0.1:port)
+				multiOpts, err := sg.GetBindOptions(oldTunnelCfg, ServiceModeMulti)
+				if err != nil {
+					return fmt.Errorf("failed to get bind options for old tunnel: %w", err)
+				}
+				if err := builder.RegenerateTunnelService(oldTunnelCfg, oldBackend, multiOpts); err != nil {
+					return fmt.Errorf("failed to regenerate old tunnel service: %w", err)
 				}
 			}
 		}
@@ -284,13 +332,27 @@ func (r *Router) SwitchActiveTunnel(tag string) error {
 		}
 	}
 
-	// 3. Update config
+	// 3. Regenerate new tunnel's service with single-mode binding (EXTERNAL_IP:53)
+	newBackend := r.config.GetBackendByTag(newTunnelCfg.Backend)
+	if newBackend == nil {
+		return fmt.Errorf("backend '%s' not found for tunnel '%s'", newTunnelCfg.Backend, tag)
+	}
+
+	singleOpts, err := sg.GetBindOptions(newTunnelCfg, ServiceModeSingle)
+	if err != nil {
+		return fmt.Errorf("failed to get bind options for new tunnel: %w", err)
+	}
+	if err := builder.RegenerateTunnelService(newTunnelCfg, newBackend, singleOpts); err != nil {
+		return fmt.Errorf("failed to regenerate new tunnel service: %w", err)
+	}
+
+	// 4. Update config
 	r.config.Route.Active = tag
 	if err := r.config.Save(); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	// 4. Start new active tunnel
+	// 5. Start new active tunnel
 	if err := newTunnel.Start(); err != nil {
 		return fmt.Errorf("failed to start tunnel %s: %w", tag, err)
 	}

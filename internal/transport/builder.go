@@ -483,3 +483,35 @@ func (b *Builder) buildDNSTTTunnel(tunnel *config.TunnelConfig, backend *config.
 	result.ExecStart = fmt.Sprintf("%s %s", DNSTTBinaryPath(), strings.Join(args, " "))
 	return result, nil
 }
+
+// RegenerateTunnelService regenerates a tunnel's systemd service with new bind options.
+// This is used when switching active tunnels in single mode.
+func (b *Builder) RegenerateTunnelService(tunnel *config.TunnelConfig, backend *config.BackendConfig, opts *BuildOptions) error {
+	serviceName := fmt.Sprintf("dnstm-%s", tunnel.Tag)
+
+	// Stop the service if it's running
+	if service.IsServiceActive(serviceName) {
+		if err := service.StopService(serviceName); err != nil {
+			return fmt.Errorf("failed to stop service: %w", err)
+		}
+	}
+
+	// Remove the old service
+	if service.IsServiceInstalled(serviceName) {
+		if err := service.RemoveService(serviceName); err != nil {
+			return fmt.Errorf("failed to remove old service: %w", err)
+		}
+	}
+
+	// Build and create the new service
+	result, err := b.BuildTunnelService(tunnel, backend, opts)
+	if err != nil {
+		return fmt.Errorf("failed to build service: %w", err)
+	}
+
+	if err := result.CreateService(serviceName); err != nil {
+		return fmt.Errorf("failed to create service: %w", err)
+	}
+
+	return nil
+}

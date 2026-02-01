@@ -305,3 +305,77 @@ dnstm config validate backup.json
 # Load config from file
 dnstm config load backup.json
 ```
+
+## Loading Configuration from File
+
+The `config load` command provides a quick way to deploy a complete configuration.
+
+**Prerequisites:** Run `dnstm install` first to set up the system user, directories, and services.
+
+### Behavior
+
+1. **Cleanup**: Existing tunnel services are stopped and removed
+2. **Validation**: Config file is validated before applying
+3. **Crypto Material**:
+   - If cert/key paths are provided, they are validated (must exist and be readable by dnstm user)
+   - If no paths provided, certificates (Slipstream) or keys (DNSTT) are auto-generated
+4. **Services**: Tunnel services are created and the router is started automatically
+5. **Output**: Displays connection info (fingerprints/public keys) and file paths
+
+### Example Workflow
+
+```bash
+# 1. Install dnstm
+dnstm install --mode multi
+
+# 2. Load config (tunnels start immediately)
+dnstm config load config.json
+```
+
+### Example Config (No Cert/Key Paths)
+
+When cert/key paths are omitted, they are auto-generated:
+
+```json
+{
+  "tunnels": [
+    {
+      "tag": "my-slip",
+      "transport": "slipstream",
+      "backend": "socks",
+      "domain": "t.example.com",
+      "port": 5310
+    }
+  ],
+  "route": {
+    "mode": "multi"
+  }
+}
+```
+
+### Example Config (With Existing Certs)
+
+Provide paths to use existing certificates:
+
+```json
+{
+  "tunnels": [
+    {
+      "tag": "my-slip",
+      "transport": "slipstream",
+      "backend": "socks",
+      "domain": "t.example.com",
+      "port": 5310,
+      "slipstream": {
+        "cert": "/path/to/cert.pem",
+        "key": "/path/to/key.pem"
+      }
+    }
+  ],
+  "route": {
+    "mode": "multi"
+  }
+}
+```
+
+**Note:** Both `cert` and `key` must be provided together. Files must be readable by the dnstm user.

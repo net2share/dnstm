@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"os/user"
 	"strconv"
+	"syscall"
 )
 
 const (
@@ -167,4 +168,41 @@ func ShadowsocksUserExists() bool {
 // RemoveShadowsocksUser removes the shadowsocks user.
 func RemoveShadowsocksUser() {
 	RemoveSystemUser(ShadowsocksUser)
+}
+
+// CanDnstmUserReadFile checks if the dnstm user can read the specified file.
+// Returns true if the file exists and is readable by the dnstm user.
+func CanDnstmUserReadFile(path string) (bool, error) {
+	u, err := user.Lookup(DnstmUser)
+	if err != nil {
+		return false, fmt.Errorf("user %s not found: %w", DnstmUser, err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+
+	// Get file owner info
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return false, fmt.Errorf("failed to get file stat")
+	}
+
+	uid, _ := strconv.Atoi(u.Uid)
+	gid, _ := strconv.Atoi(u.Gid)
+	mode := info.Mode()
+
+	// Check if dnstm user owns the file
+	if int(stat.Uid) == uid {
+		return mode&0400 != 0, nil // Owner read permission
+	}
+
+	// Check if dnstm group owns the file
+	if int(stat.Gid) == gid {
+		return mode&0040 != 0, nil // Group read permission
+	}
+
+	// Check world read permission
+	return mode&0004 != 0, nil
 }

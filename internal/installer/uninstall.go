@@ -7,7 +7,6 @@ import (
 	"github.com/net2share/dnstm/internal/dnsrouter"
 	"github.com/net2share/dnstm/internal/network"
 	"github.com/net2share/dnstm/internal/proxy"
-	"github.com/net2share/dnstm/internal/router"
 	"github.com/net2share/dnstm/internal/system"
 )
 
@@ -28,13 +27,8 @@ func PerformFullUninstall(output actions.OutputWriter, isInteractive bool) error
 	// Step 1: Remove all tunnels (stops, disables, removes services)
 	currentStep++
 	output.Step(currentStep, totalSteps, "Removing all tunnels...")
-	cfg, _ := router.Load()
-	if cfg != nil {
-		for _, t := range cfg.Tunnels {
-			tunnel := router.NewTunnel(&t)
-			tunnel.RemoveService() // Stops, disables, and removes systemd service
-		}
-	}
+	cleanupResult := CleanupTunnelsAndRouter(false) // Don't remove dirs, will be done with /etc/dnstm
+	_ = cleanupResult // Result used for logging if needed
 	output.Status("Tunnels removed")
 
 	// Step 2: Remove DNS router service
