@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/net2share/dnstm/compare/v0.6.1...v0.6.2) (2026-02-01)
+
+
+### Bug Fixes
+
+* improve install UX and fix uninstall/tunnel-add bugs ([49b0955](https://github.com/net2share/dnstm/commit/49b0955d5fac7b180457fd3dee94b73405706f4a))
+
 ## [0.6.1](https://github.com/net2share/dnstm/compare/v0.6.0...v0.6.1) (2026-02-01)
 
 
