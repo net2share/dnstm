@@ -2,7 +2,7 @@
 
 ## Overview
 
-dnstm manages DNS tunnel services on Linux servers. It supports two transport protocols (Slipstream and DNSTT) with five transport types.
+dnstm manages DNS tunnel services on Linux servers. It supports two transport protocols (Slipstream and DNSTT) and four backend types.
 
 ## Transport Types
 

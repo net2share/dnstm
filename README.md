@@ -47,15 +47,16 @@ flowchart TB
 
         subgraph MultiMode["Multi-Tunnel Mode"]
             DR[DNS Router<br/>:53]
-            T2[Transport 1<br/>:5300]
-            T3[Transport 2<br/>:5301]
-            T4[Transport N<br/>:530N]
+            T2[Transport 1<br/>:5310]
+            T3[Transport 2<br/>:5311]
+            T4[Transport N<br/>:531N]
         end
 
-        subgraph Targets["Targets"]
+        subgraph Backends["Backends"]
             SSH[SSH Server<br/>:22]
-            SOCKS[SOCKS Proxy<br/>:1080]
+            SOCKS[microsocks<br/>SOCKS5]
             SS[Shadowsocks]
+            CUSTOM[Custom]
         end
     end
 
@@ -67,10 +68,10 @@ flowchart TB
     DR --> T3
     DR --> T4
 
-    T1 --> SOCKS
-    T2 --> SS
-    T3 --> SSH
-    T4 --> SOCKS
+    T1 --> Backends
+    T2 --> Backends
+    T3 --> Backends
+    T4 --> Backends
 ```
 
 ## Quick Start
