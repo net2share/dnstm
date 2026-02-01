@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/net2share/dnstm/compare/v0.6.0...v0.6.1) (2026-02-01)
+
+
+### Features
+
+* enhance config load with cleanup and path validation ([98c70d1](https://github.com/net2share/dnstm/commit/98c70d17e0ea7c9467c10fe836f758d1f0c7be0b))
+
 ## [0.6.0](https://github.com/net2share/dnstm/compare/v0.5.0...v0.6.0) (2026-02-01)
 
 
