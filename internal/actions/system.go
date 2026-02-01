@@ -32,7 +32,7 @@ func init() {
 				ShortFlag: 'm',
 				Type:      InputTypeSelect,
 				Options:   OperatingModeOptions(),
-				Default:   "single",
+				Required:  true,
 			},
 			// CLI-only boolean flags for selective installation (not shown in interactive mode)
 			{

@@ -11,6 +11,24 @@ import (
 	"github.com/net2share/go-corelib/tui"
 )
 
+// isInfoViewAction checks if an action uses TUI info/progress view and shouldn't require WaitForEnter.
+func isInfoViewAction(actionID string) bool {
+	switch actionID {
+	// Info views
+	case actions.ActionRouterStatus, actions.ActionTunnelStatus, actions.ActionBackendStatus, actions.ActionBackendAvailable:
+		return true
+	// Progress views
+	case actions.ActionRouterSwitch, actions.ActionRouterStart, actions.ActionRouterStop,
+		actions.ActionRouterMode,
+		actions.ActionTunnelAdd, actions.ActionTunnelRemove,
+		actions.ActionTunnelStart, actions.ActionTunnelStop, actions.ActionTunnelRestart,
+		actions.ActionTunnelEnable, actions.ActionTunnelDisable,
+		actions.ActionInstall, actions.ActionUninstall:
+		return true
+	}
+	return false
+}
+
 // newActionContext creates a new action context with args.
 func newActionContext(args []string) *actions.Context {
 	ctx := &actions.Context{
@@ -106,14 +124,11 @@ func RunAction(actionID string) error {
 				}
 				return err
 			}
+			// For pickers, empty selection always means user cancelled (selected Back or pressed ESC)
 			if selected == "" {
-				if action.Args.Required {
-					return errCancelled
-				}
-				// Optional arg - continue without selection
-			} else {
-				ctx.Args = []string{selected}
+				return errCancelled
 			}
+			ctx.Args = []string{selected}
 		} else if action.Args.Required {
 			// Prompt for text input when no picker is available and arg is required
 			value, confirmed, err := tui.RunInput(tui.InputConfig{
@@ -148,70 +163,118 @@ func RunAction(actionID string) error {
 		case actions.InputTypeText, actions.InputTypePassword:
 			var val string
 			var confirmed bool
-			description := input.Description
+			baseDescription := input.Description
 			defaultVal := input.Default
 			if input.DefaultFunc != nil {
 				defaultVal = input.DefaultFunc(ctx)
 			}
-			if defaultVal != "" && description != "" {
-				description = fmt.Sprintf("%s (default: %s)", description, defaultVal)
-			} else if defaultVal != "" {
-				description = fmt.Sprintf("Default: %s", defaultVal)
-			}
-			val, confirmed, err = tui.RunInput(tui.InputConfig{
-				Title:       input.Label,
-				Description: description,
-				Placeholder: input.Placeholder,
-				Value:       defaultVal,
-			})
-			if err != nil {
-				return err
-			}
-			if !confirmed {
-				return errCancelled
-			}
-			// Apply default if empty
-			if val == "" && defaultVal != "" {
-				val = defaultVal
-			}
-			// Check if required and still empty
-			if input.Required && val == "" {
-				return fmt.Errorf("%s is required", input.Label)
+
+			// Loop until valid input or cancel
+			var validationErr error
+			for {
+				description := baseDescription
+				if defaultVal != "" && description != "" {
+					description = fmt.Sprintf("%s (default: %s)", description, defaultVal)
+				} else if defaultVal != "" {
+					description = fmt.Sprintf("Default: %s", defaultVal)
+				}
+				// Show validation error from previous attempt
+				if validationErr != nil {
+					errMsg := tui.WarnStyle.Render("⚠ " + validationErr.Error())
+					if description != "" {
+						description = fmt.Sprintf("%s\n%s", description, errMsg)
+					} else {
+						description = errMsg
+					}
+				}
+
+				val, confirmed, err = tui.RunInput(tui.InputConfig{
+					Title:       input.Label,
+					Description: description,
+					Placeholder: input.Placeholder,
+					Value:       defaultVal,
+				})
+				if err != nil {
+					return err
+				}
+				if !confirmed {
+					return errCancelled
+				}
+				// Apply default if empty
+				if val == "" && defaultVal != "" {
+					val = defaultVal
+				}
+				// Check if required and still empty
+				if input.Required && val == "" {
+					validationErr = fmt.Errorf("%s is required", input.Label)
+					continue
+				}
+				// Run custom validation if defined
+				if input.Validate != nil && val != "" {
+					if validationErr = input.Validate(val); validationErr != nil {
+						continue
+					}
+				}
+				break
 			}
 			value = val
 
 		case actions.InputTypeNumber:
 			var val string
 			var confirmed bool
-			description := input.Description
+			baseDescription := input.Description
 			defaultVal := input.Default
 			if input.DefaultFunc != nil {
 				defaultVal = input.DefaultFunc(ctx)
 			}
-			if defaultVal != "" && description != "" {
-				description = fmt.Sprintf("%s (default: %s)", description, defaultVal)
-			} else if defaultVal != "" {
-				description = fmt.Sprintf("Default: %s", defaultVal)
-			}
-			val, confirmed, err = tui.RunInput(tui.InputConfig{
-				Title:       input.Label,
-				Description: description,
-				Placeholder: defaultVal,
-				Value:       defaultVal,
-			})
-			if err != nil {
-				return err
-			}
-			if !confirmed {
-				return errCancelled
-			}
-			// Apply default if empty
-			if val == "" && defaultVal != "" {
-				val = defaultVal
-			}
-			// Check if required and still empty
-			if input.Required && val == "" {
-				return fmt.Errorf("%s is required", input.Label)
+
+			// Loop until valid input or cancel
+			var validationErr error
+			for {
+				description := baseDescription
+				if defaultVal != "" && description != "" {
+					description = fmt.Sprintf("%s (default: %s)", description, defaultVal)
+				} else if defaultVal != "" {
+					description = fmt.Sprintf("Default: %s", defaultVal)
+				}
+				// Show validation error from previous attempt
+				if validationErr != nil {
+					errMsg := tui.WarnStyle.Render("⚠ " + validationErr.Error())
+					if description != "" {
+						description = fmt.Sprintf("%s\n%s", description, errMsg)
+					} else {
+						description = errMsg
+					}
+				}
+
+				val, confirmed, err = tui.RunInput(tui.InputConfig{
+					Title:       input.Label,
+					Description: description,
+					Placeholder: defaultVal,
+					Value:       defaultVal,
+				})
+				if err != nil {
+					return err
+				}
+				if !confirmed {
+					return errCancelled
+				}
+				// Apply default if empty
+				if val == "" && defaultVal != "" {
+					val = defaultVal
+				}
+				// Check if required and still empty
+				if input.Required && val == "" {
+					validationErr = fmt.Errorf("%s is required", input.Label)
+					continue
+				}
+				// Run custom validation if defined
+				if input.Validate != nil && val != "" {
+					if validationErr = input.Validate(val); validationErr != nil {
+						continue
+					}
+				}
+				break
 			}
 			var intVal int
 			fmt.Sscanf(val, "%d", &intVal)
@@ -240,18 +303,25 @@ func RunAction(actionID string) error {
 					Value: "",
 				})
 			}
+			// Get description (static or dynamic)
+			selectDescription := input.Description
+			if input.DescriptionFunc != nil {
+				selectDescription = input.DescriptionFunc(ctx)
+			}
 			val, err := tui.RunMenu(tui.MenuConfig{
 				Title:       input.Label,
-				Description: input.Description,
+				Description: selectDescription,
 				Options:     tuiOptions,
 			})
 			if err != nil {
 				return err
 			}
-			if val == "" && input.Required {
-				return fmt.Errorf("%s is required", input.Label)
-			}
-			if val == "" && !input.Required {
+			// For required fields, empty value means user cancelled (no Skip option available)
+			// For optional fields, empty value means user selected Skip
+			if val == "" {
+				if input.Required {
+					return errCancelled
+				}
 				continue // Skip this optional field
 			}
 			value = val
@@ -276,7 +346,6 @@ func RunAction(actionID string) error {
 			return err
 		}
 		if !confirm {
-			tui.PrintInfo("Cancelled")
 			return errCancelled
 		}
 	}
@@ -333,8 +402,6 @@ func RunSubmenu(parentID string) error {
 	}
 
 	for {
-		fmt.Println()
-
 		// Build options dynamically based on current state
 		var options []tui.MenuOption
 
@@ -406,10 +473,12 @@ func RunSubmenu(parentID string) error {
 			if err == errCancelled {
 				continue
 			}
-			tui.PrintError(err.Error())
-			tui.WaitForEnter()
+			_ = tui.ShowMessage(tui.AppMessage{Type: "error", Message: err.Error()})
 		} else {
-			tui.WaitForEnter()
+			// Skip WaitForEnter for actions that use TUI info view
+			if !isInfoViewAction(choice) {
+				tui.WaitForEnter()
+			}
 		}
 	}
 }

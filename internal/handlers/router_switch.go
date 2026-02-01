@@ -68,29 +68,39 @@ func HandleRouterSwitch(ctx *actions.Context) error {
 		return fmt.Errorf("failed to create router: %w", err)
 	}
 
-	ctx.Output.Println()
+	// Start progress view in interactive mode
+	if ctx.IsInteractive {
+		ctx.Output.BeginProgress("Switch Active Tunnel")
+	} else {
+		ctx.Output.Println()
+	}
+
 	ctx.Output.Info(fmt.Sprintf("Switching to '%s'...", tunnelTag))
-	ctx.Output.Println()
 
 	if err := r.SwitchActiveTunnel(tunnelTag); err != nil {
+		if ctx.IsInteractive {
+			ctx.Output.Error(fmt.Sprintf("Failed: %v", err))
+			ctx.Output.EndProgress()
+			return nil // Error already shown in progress view
+		}
 		return fmt.Errorf("failed to switch tunnel: %w", err)
 	}
 
 	// Show success
 	transportName := config.GetTransportTypeDisplayName(tunnel.Transport)
 
+	ctx.Output.Success(fmt.Sprintf("Switched to '%s'", tunnelTag))
 	ctx.Output.Println()
-	ctx.Output.Success(fmt.Sprintf("Switched to '%s'!", tunnelTag))
-	ctx.Output.Println()
+	ctx.Output.Status(fmt.Sprintf("Transport: %s", transportName))
+	ctx.Output.Status(fmt.Sprintf("Backend: %s", tunnel.Backend))
+	ctx.Output.Status(fmt.Sprintf("Domain: %s", tunnel.Domain))
+	ctx.Output.Status(fmt.Sprintf("Port: %d", tunnel.Port))
 
-	var lines []string
-	lines = append(lines, ctx.Output.KV("Tunnel:    ", tunnelTag))
-	lines = append(lines, ctx.Output.KV("Transport: ", transportName))
-	lines = append(lines, ctx.Output.KV("Backend:   ", tunnel.Backend))
-	lines = append(lines, ctx.Output.KV("Domain:    ", tunnel.Domain))
-	lines = append(lines, ctx.Output.KV("Port:      ", fmt.Sprintf("%d", tunnel.Port)))
-	ctx.Output.Box("Active Tunnel", lines)
-	ctx.Output.Println()
+	if ctx.IsInteractive {
+		ctx.Output.EndProgress()
+	} else {
+		ctx.Output.Println()
+	}
 
 	return nil
 }

@@ -92,9 +92,9 @@ sudo dnstm
 sudo dnstm install
 # CLI: sudo dnstm install --mode single
 
-# Add a transport instance (interactive)
-sudo dnstm instance add
-# CLI: sudo dnstm instance add myinstance --type slipstream-shadowsocks --domain t.example.com
+# Add a tunnel (interactive)
+sudo dnstm tunnel add
+# CLI: sudo dnstm tunnel add my-tunnel --transport slipstream --backend socks --domain t.example.com
 
 # Start the router
 sudo dnstm router start
@@ -113,7 +113,7 @@ One tunnel active at a time. The active transport binds directly to port 53.
 
 ```bash
 sudo dnstm router mode single
-sudo dnstm router switch <instance-name>
+sudo dnstm router switch <tag>
 ```
 
 ### Multi-Tunnel Mode

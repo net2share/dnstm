@@ -6,13 +6,19 @@ dnstm manages DNS tunnel services on Linux servers. It supports two transport pr
 
 ## Transport Types
 
-| Type | Protocol | Target | Use Case |
-|------|----------|--------|----------|
-| `slipstream-shadowsocks` | Slipstream | Shadowsocks | Encrypted proxy with obfuscation |
-| `slipstream-socks` | Slipstream | SOCKS proxy | Direct SOCKS5 access |
-| `slipstream-ssh` | Slipstream | SSH server | SSH tunneling |
-| `dnstt-socks` | DNSTT | SOCKS proxy | Direct SOCKS5 access |
-| `dnstt-ssh` | DNSTT | SSH server | SSH tunneling |
+| Transport | Description |
+|-----------|-------------|
+| `slipstream` | High-performance DNS tunnel with TLS encryption |
+| `dnstt` | Classic DNS tunnel with Curve25519 encryption |
+
+Transports forward traffic to backends:
+
+| Backend Type | Description | Transport Support |
+|--------------|-------------|-------------------|
+| `socks` | Built-in SOCKS5 proxy (microsocks) | Both |
+| `ssh` | Built-in SSH server | Both |
+| `shadowsocks` | Shadowsocks server (SIP003 plugin) | Slipstream only |
+| `custom` | Custom target address | Both |
 
 ## Operating Modes
 
@@ -34,7 +40,7 @@ dnstm manages DNS tunnel services on Linux servers. It supports two transport pr
 - One transport handles DNS queries at a time
 - Active transport binds directly to port 53 on the external IP
 - Lower overhead (no router process, no NAT)
-- Switch transports with `dnstm router switch <name>`
+- Switch tunnels with `dnstm router switch <tag>`
 
 ### Multi-Tunnel Mode
 
@@ -60,20 +66,20 @@ dnstm manages DNS tunnel services on Linux servers. It supports two transport pr
 
 ## Components
 
-### Router (`/etc/dnstm/config.yaml`)
+### Router (`/etc/dnstm/config.json`)
 
 Central configuration managing:
 - Operating mode (single/multi)
-- Transport instances
+- Tunnels and backends
 - Routing rules
 
 ### DNS Router Service (`dnstm-dnsrouter`)
 
-Runs in multi-mode only. Listens on port 53 and routes DNS queries to appropriate transport instances.
+Runs in multi-mode only. Listens on port 53 and routes DNS queries to appropriate tunnels.
 
-### Transport Instances (`dnstm-<name>`)
+### Tunnel Services (`dnstm-<tag>`)
 
-Individual systemd services for each configured transport. Each runs on an auto-allocated port (5300+).
+Individual systemd services for each configured tunnel. Each runs on an auto-allocated port (5300+).
 
 ### Certificate Manager (`/etc/dnstm/certs/`)
 
@@ -92,7 +98,7 @@ Manages Curve25519 key pairs for DNSTT transports:
 
 ```
 /etc/dnstm/
-├── config.yaml           # Main router configuration
+├── config.json           # Main router configuration
 ├── dnsrouter.yaml        # DNS router config (multi-mode)
 ├── certs/                # TLS certificates
 │   ├── domain_cert.pem
@@ -100,8 +106,8 @@ Manages Curve25519 key pairs for DNSTT transports:
 ├── keys/                 # DNSTT keys
 │   ├── domain_server.key
 │   └── domain_server.pub
-└── instances/            # Per-instance configs
-    └── <name>/
+└── tunnels/              # Per-tunnel configs
+    └── <tag>/
 
 /usr/local/bin/
 ├── dnstm                 # CLI binary

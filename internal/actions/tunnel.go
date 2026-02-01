@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/net2share/dnstm/internal/config"
+	"github.com/net2share/dnstm/internal/router"
+	"github.com/net2share/go-corelib/tui"
 )
 
 func init() {
@@ -220,7 +222,26 @@ func init() {
 				Type:        InputTypeSelect,
 				Required:    true,
 				OptionsFunc: BackendOptions,
-				Description: "The backend to forward traffic to",
+				DescriptionFunc: func(ctx *Context) string {
+					transport := config.TransportType(ctx.GetString("transport"))
+					if transport == config.TransportSlipstream {
+						cfg, err := config.Load()
+						if err == nil {
+							hasShadowsocks := false
+							for _, b := range cfg.Backends {
+								if b.Type == config.BackendShadowsocks {
+									hasShadowsocks = true
+									break
+								}
+							}
+							if !hasShadowsocks {
+								return tui.WarnStyle.Render("⚠ No Shadowsocks backend configured. For best performance with Slipstream, add one via Backends → Add")
+							}
+						}
+						return "Shadowsocks recommended for Slipstream"
+					}
+					return "The backend to forward traffic to"
+				},
 			},
 			{
 				Name:      "domain",
@@ -230,10 +251,22 @@ func init() {
 				Required:  true,
 			},
 			{
-				Name:      "port",
-				Label:     "Port",
-				ShortFlag: 'p',
-				Type:      InputTypeNumber,
+				Name:        "port",
+				Label:       "Port",
+				ShortFlag:   'p',
+				Type:        InputTypeNumber,
+				Description: "Internal port for multi mode (ignored in single mode)",
+				DefaultFunc: func(ctx *Context) string {
+					cfg, err := config.Load()
+					if err != nil {
+						return fmt.Sprintf("%d", config.DefaultPortStart)
+					}
+					port, err := router.AllocatePort(cfg)
+					if err != nil {
+						return fmt.Sprintf("%d", config.DefaultPortStart)
+					}
+					return fmt.Sprintf("%d", port)
+				},
 			},
 			{
 				Name:    "mtu",
@@ -302,7 +335,6 @@ func TransportOptions() []SelectOption {
 			Label:       "Slipstream",
 			Value:       string(config.TransportSlipstream),
 			Description: "High-performance DNS tunnel with TLS",
-			Recommended: true,
 		},
 		{
 			Label:       "DNSTT",

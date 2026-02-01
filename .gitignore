@@ -30,3 +30,7 @@ claude.md
 # Temp directory and files
 temp/
 test-certs/
+
+# Test directories
+tests/.testconfig/
+tests/.testbin/

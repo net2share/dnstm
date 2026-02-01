@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/net2share/dnstm/internal/binary"
 	"github.com/net2share/dnstm/internal/certs"
 	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/keys"
@@ -16,11 +17,45 @@ import (
 )
 
 const (
-	SlipstreamBinary = "/usr/local/bin/slipstream-server"
-	DNSTTBinary      = "/usr/local/bin/dnstt-server"
-	SSServerBinary   = "/usr/local/bin/ssserver"
-	ConfigDir        = "/etc/dnstm"
+	ConfigDir = "/etc/dnstm"
 )
+
+// Binary path getters using the binary manager.
+// These return the path based on the current environment (test vs production).
+var (
+	binManager *binary.Manager
+)
+
+func getBinManager() *binary.Manager {
+	if binManager == nil {
+		binManager = binary.NewDefaultManager()
+	}
+	return binManager
+}
+
+// SlipstreamBinaryPath returns the path to slipstream-server.
+func SlipstreamBinaryPath() string {
+	path, _ := getBinManager().GetPath(binary.BinarySlipstreamServer)
+	return path
+}
+
+// DNSTTBinaryPath returns the path to dnstt-server.
+func DNSTTBinaryPath() string {
+	path, _ := getBinManager().GetPath(binary.BinaryDNSTTServer)
+	return path
+}
+
+// SSServerBinaryPath returns the path to ssserver.
+func SSServerBinaryPath() string {
+	path, _ := getBinManager().GetPath(binary.BinarySSServer)
+	return path
+}
+
+// SSHTunUserBinaryPath returns the path to sshtun-user.
+func SSHTunUserBinaryPath() string {
+	path, _ := getBinManager().GetPath(binary.BinarySSHTunUser)
+	return path
+}
 
 // BuildOptions configures how the transport should bind.
 type BuildOptions struct {
@@ -109,7 +144,7 @@ func (b *Builder) buildSlipstreamShadowsocks(name string, cfg *types.TransportCo
 		"password":    cfg.Shadowsocks.Password,
 		"method":      method,
 		"mode":        "tcp_only",
-		"plugin":      SlipstreamBinary,
+		"plugin":      SlipstreamBinaryPath(),
 		"plugin_opts": pluginOpts,
 		"plugin_mode": "tcp_only",
 	}
@@ -128,10 +163,10 @@ func (b *Builder) buildSlipstreamShadowsocks(name string, cfg *types.TransportCo
 		return nil, fmt.Errorf("failed to set config file ownership: %w", err)
 	}
 
-	execStart := fmt.Sprintf("%s -c %s", SSServerBinary, configPath)
+	execStart := fmt.Sprintf("%s -c %s", SSServerBinaryPath(), configPath)
 
 	return &BuildResult{
-		Binary:    SSServerBinary,
+		Binary:    SSServerBinaryPath(),
 		Args:      []string{"-c", configPath},
 		ConfigDir: configDir,
 		ExecStart: execStart,
@@ -166,10 +201,10 @@ func (b *Builder) buildSlipstreamSocks(name string, cfg *types.TransportConfig, 
 		"--key", certInfo.KeyPath,
 	}
 
-	execStart := fmt.Sprintf("%s %s", SlipstreamBinary, formatArgs(args))
+	execStart := fmt.Sprintf("%s %s", SlipstreamBinaryPath(), formatArgs(args))
 
 	return &BuildResult{
-		Binary:    SlipstreamBinary,
+		Binary:    SlipstreamBinaryPath(),
 		Args:      args,
 		ConfigDir: configDir,
 		ExecStart: execStart,
@@ -214,10 +249,10 @@ func (b *Builder) buildDNSTTSocks(name string, cfg *types.TransportConfig, opts 
 		cfg.Target.Address,
 	}
 
-	execStart := fmt.Sprintf("%s %s", DNSTTBinary, formatArgs(args))
+	execStart := fmt.Sprintf("%s %s", DNSTTBinaryPath(), formatArgs(args))
 
 	return &BuildResult{
-		Binary:    DNSTTBinary,
+		Binary:    DNSTTBinaryPath(),
 		Args:      args,
 		ConfigDir: configDir,
 		ExecStart: execStart,
@@ -249,20 +284,20 @@ func formatArgs(args []string) string {
 func RequiresBinary(t types.TransportType) (string, bool) {
 	switch t {
 	case types.TypeSlipstreamShadowsocks:
-		if _, err := os.Stat(SSServerBinary); err != nil {
+		if _, err := os.Stat(SSServerBinaryPath()); err != nil {
 			return "ssserver", false
 		}
-		if _, err := os.Stat(SlipstreamBinary); err != nil {
+		if _, err := os.Stat(SlipstreamBinaryPath()); err != nil {
 			return "slipstream-server", false
 		}
 		return "", true
 	case types.TypeSlipstreamSocks, types.TypeSlipstreamSSH:
-		if _, err := os.Stat(SlipstreamBinary); err != nil {
+		if _, err := os.Stat(SlipstreamBinaryPath()); err != nil {
 			return "slipstream-server", false
 		}
 		return "", true
 	case types.TypeDNSTTSocks, types.TypeDNSTTSSH:
-		if _, err := os.Stat(DNSTTBinary); err != nil {
+		if _, err := os.Stat(DNSTTBinaryPath()); err != nil {
 			return "dnstt-server", false
 		}
 		return "", true
@@ -366,7 +401,7 @@ func (b *Builder) buildSlipstreamTunnel(tunnel *config.TunnelConfig, backend *co
 		"--key", certInfo.KeyPath,
 	}
 
-	result.ExecStart = fmt.Sprintf("%s %s", SlipstreamBinary, strings.Join(args, " "))
+	result.ExecStart = fmt.Sprintf("%s %s", SlipstreamBinaryPath(), strings.Join(args, " "))
 	return result, nil
 }
 
@@ -392,7 +427,7 @@ func (b *Builder) buildSlipstreamShadowsocksTunnel(tunnel *config.TunnelConfig, 
 		"password":    backend.Shadowsocks.Password,
 		"method":      method,
 		"mode":        "tcp_only",
-		"plugin":      SlipstreamBinary,
+		"plugin":      SlipstreamBinaryPath(),
 		"plugin_opts": pluginOpts,
 		"plugin_mode": "tcp_only",
 	}
@@ -410,7 +445,7 @@ func (b *Builder) buildSlipstreamShadowsocksTunnel(tunnel *config.TunnelConfig, 
 		return nil, fmt.Errorf("failed to set config file ownership: %w", err)
 	}
 
-	result.ExecStart = fmt.Sprintf("%s -c %s", SSServerBinary, configPath)
+	result.ExecStart = fmt.Sprintf("%s -c %s", SSServerBinaryPath(), configPath)
 	result.ReadPaths = append(result.ReadPaths, configPath)
 
 	return result, nil
@@ -445,6 +480,6 @@ func (b *Builder) buildDNSTTTunnel(tunnel *config.TunnelConfig, backend *config.
 		targetAddr,
 	}
 
-	result.ExecStart = fmt.Sprintf("%s %s", DNSTTBinary, strings.Join(args, " "))
+	result.ExecStart = fmt.Sprintf("%s %s", DNSTTBinaryPath(), strings.Join(args, " "))
 	return result, nil
 }

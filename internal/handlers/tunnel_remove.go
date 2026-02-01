@@ -48,9 +48,14 @@ func HandleTunnelRemove(ctx *actions.Context) error {
 	// Confirmation is handled by the adapter (CLI or menu)
 	// The handler assumes confirmation has already been obtained
 
-	ctx.Output.Println()
+	// Start progress view in interactive mode
+	if ctx.IsInteractive {
+		ctx.Output.BeginProgress(fmt.Sprintf("Remove Tunnel: %s", tag))
+	} else {
+		ctx.Output.Println()
+	}
+
 	ctx.Output.Info("Removing tunnel...")
-	ctx.Output.Println()
 
 	totalSteps := 3
 	currentStep := 0
@@ -104,13 +109,22 @@ func HandleTunnelRemove(ctx *actions.Context) error {
 	}
 
 	if err := cfg.Save(); err != nil {
+		if ctx.IsInteractive {
+			ctx.Output.Error(fmt.Sprintf("Failed: %v", err))
+			ctx.Output.EndProgress()
+			return nil // Error already shown in progress view
+		}
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 	ctx.Output.Status("Configuration updated")
 
-	ctx.Output.Println()
 	ctx.Output.Success(fmt.Sprintf("Tunnel '%s' removed!", tag))
-	ctx.Output.Println()
+
+	if ctx.IsInteractive {
+		ctx.Output.EndProgress()
+	} else {
+		ctx.Output.Println()
+	}
 
 	return nil
 }

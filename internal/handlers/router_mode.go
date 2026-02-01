@@ -23,13 +23,20 @@ func HandleRouterMode(ctx *actions.Context) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// No args - show current mode
-	if !ctx.HasArg(0) {
+	// Get mode from input (interactive) or args (CLI)
+	var modeStr string
+	if ctx.IsInteractive {
+		modeStr = ctx.GetString("mode")
+	} else if ctx.HasArg(0) {
+		modeStr = ctx.GetArg(0)
+	}
+
+	// No mode specified - show current mode (CLI only)
+	if modeStr == "" {
 		return showCurrentMode(ctx, cfg)
 	}
 
-	// Switch mode
-	modeStr := ctx.GetArg(0)
+	// Validate mode
 	if modeStr != "single" && modeStr != "multi" {
 		return actions.NewActionError(
 			fmt.Sprintf("invalid mode '%s'", modeStr),
@@ -72,9 +79,10 @@ func showCurrentMode(ctx *actions.Context, cfg *config.Config) error {
 }
 
 func switchMode(ctx *actions.Context, cfg *config.Config, newMode string) error {
+	newModeName := GetModeDisplayName(newMode)
+
 	if cfg.Route.Mode == newMode {
-		modeName := GetModeDisplayName(newMode)
-		ctx.Output.Info(fmt.Sprintf("Already in %s mode", modeName))
+		ctx.Output.Info(fmt.Sprintf("Already in %s mode", newModeName))
 		return nil
 	}
 
@@ -83,34 +91,49 @@ func switchMode(ctx *actions.Context, cfg *config.Config, newMode string) error 
 		return fmt.Errorf("failed to create router: %w", err)
 	}
 
-	ctx.Output.Println()
-
-	newModeName := GetModeDisplayName(newMode)
 	oldModeName := GetModeDisplayName(cfg.Route.Mode)
-	ctx.Output.Info(fmt.Sprintf("Switching from %s to %s mode...", oldModeName, newModeName))
-	ctx.Output.Println()
+
+	// Start progress view in interactive mode
+	if ctx.IsInteractive {
+		ctx.Output.BeginProgress(fmt.Sprintf("Switch to %s", newModeName))
+	} else {
+		ctx.Output.Println()
+	}
+
+	ctx.Output.Info(fmt.Sprintf("Switching from %s to %s...", oldModeName, newModeName))
 
 	if err := r.SwitchMode(newMode); err != nil {
+		if ctx.IsInteractive {
+			ctx.Output.Error(fmt.Sprintf("Failed: %v", err))
+			ctx.Output.EndProgress()
+			return nil // Error already shown in progress view
+		}
 		return fmt.Errorf("failed to switch mode: %w", err)
 	}
 
-	ctx.Output.Println()
-	ctx.Output.Success(fmt.Sprintf("Switched to %s mode!", newModeName))
-	ctx.Output.Println()
+	ctx.Output.Success(fmt.Sprintf("Switched to %s!", newModeName))
 
-	// Show next steps
-	if newMode == "single" {
-		ctx.Output.Info("Commands for single-tunnel mode:")
-		ctx.Output.Println("  dnstm router switch <tag>  - Switch active tunnel")
-		ctx.Output.Println("  dnstm router start         - Start active tunnel")
-		ctx.Output.Println("  dnstm router stop          - Stop active tunnel")
+	// Show next steps (different for CLI vs TUI)
+	if ctx.IsInteractive {
+		ctx.Output.Println()
+		if newMode == "single" {
+			ctx.Output.Info("Next: Select 'Switch Active' to choose a tunnel")
+		} else {
+			ctx.Output.Info("Next: Select 'Start/Restart' to start all tunnels")
+		}
+		ctx.Output.EndProgress()
 	} else {
-		ctx.Output.Info("Commands for multi-tunnel mode:")
-		ctx.Output.Println("  dnstm router status      - Show router and tunnel status")
-		ctx.Output.Println("  dnstm router start       - Start router and all tunnels")
-		ctx.Output.Println("  dnstm router stop        - Stop router and all tunnels")
+		ctx.Output.Println()
+		ctx.Output.Info("Next steps:")
+		if newMode == "single" {
+			ctx.Output.Println("  dnstm router switch <tag>  - Select active tunnel")
+			ctx.Output.Println("  dnstm router start         - Start the tunnel")
+		} else {
+			ctx.Output.Println("  dnstm router start   - Start all tunnels")
+			ctx.Output.Println("  dnstm router status  - View status")
+		}
+		ctx.Output.Println()
 	}
-	ctx.Output.Println()
 
 	return nil
 }

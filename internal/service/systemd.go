@@ -19,6 +19,83 @@ type ServiceConfig struct {
 	BindToPrivileged bool     // Whether service needs CAP_NET_BIND_SERVICE
 }
 
+// RealSystemdManager implements SystemdManager using actual systemd commands.
+type RealSystemdManager struct{}
+
+// NewRealSystemdManager creates a new RealSystemdManager.
+func NewRealSystemdManager() *RealSystemdManager {
+	return &RealSystemdManager{}
+}
+
+// CreateService implements SystemdManager.
+func (m *RealSystemdManager) CreateService(name string, cfg ServiceConfig) error {
+	cfg.Name = name
+	return CreateGenericService(&cfg)
+}
+
+// RemoveService implements SystemdManager.
+func (m *RealSystemdManager) RemoveService(name string) error {
+	return RemoveService(name)
+}
+
+// StartService implements SystemdManager.
+func (m *RealSystemdManager) StartService(name string) error {
+	return StartService(name)
+}
+
+// StopService implements SystemdManager.
+func (m *RealSystemdManager) StopService(name string) error {
+	return StopService(name)
+}
+
+// RestartService implements SystemdManager.
+func (m *RealSystemdManager) RestartService(name string) error {
+	return RestartService(name)
+}
+
+// EnableService implements SystemdManager.
+func (m *RealSystemdManager) EnableService(name string) error {
+	return EnableService(name)
+}
+
+// DisableService implements SystemdManager.
+func (m *RealSystemdManager) DisableService(name string) error {
+	return DisableService(name)
+}
+
+// IsServiceActive implements SystemdManager.
+func (m *RealSystemdManager) IsServiceActive(name string) bool {
+	return IsServiceActive(name)
+}
+
+// IsServiceEnabled implements SystemdManager.
+func (m *RealSystemdManager) IsServiceEnabled(name string) bool {
+	return IsServiceEnabled(name)
+}
+
+// IsServiceInstalled implements SystemdManager.
+func (m *RealSystemdManager) IsServiceInstalled(name string) bool {
+	return IsServiceInstalled(name)
+}
+
+// GetServiceStatus implements SystemdManager.
+func (m *RealSystemdManager) GetServiceStatus(name string) (string, error) {
+	return GetServiceStatus(name)
+}
+
+// GetServiceLogs implements SystemdManager.
+func (m *RealSystemdManager) GetServiceLogs(name string, lines int) (string, error) {
+	return GetServiceLogs(name, lines)
+}
+
+// DaemonReload implements SystemdManager.
+func (m *RealSystemdManager) DaemonReload() error {
+	return DaemonReload()
+}
+
+// Ensure RealSystemdManager implements SystemdManager.
+var _ SystemdManager = (*RealSystemdManager)(nil)
+
 // GetServicePath returns the systemd service file path for a service name.
 func GetServicePath(serviceName string) string {
 	return fmt.Sprintf("/etc/systemd/system/%s.service", serviceName)

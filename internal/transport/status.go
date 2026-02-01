@@ -1,19 +1,20 @@
 package transport
 
 import (
-	"os"
+	"github.com/net2share/dnstm/internal/binary"
 )
 
 // IsInstalled checks if all required transport binaries are installed.
 func IsInstalled() bool {
-	binaries := []string{
-		DNSTTBinary,
-		SlipstreamBinary,
-		SSServerBinary,
+	mgr := binary.NewDefaultManager()
+	binaries := []binary.BinaryType{
+		binary.BinaryDNSTTServer,
+		binary.BinarySlipstreamServer,
+		binary.BinarySSServer,
 	}
 
 	for _, bin := range binaries {
-		if _, err := os.Stat(bin); err != nil {
+		if _, err := mgr.GetPath(bin); err != nil {
 			return false
 		}
 	}
@@ -23,17 +24,18 @@ func IsInstalled() bool {
 
 // GetMissingBinaries returns a list of missing transport binaries.
 func GetMissingBinaries() []string {
+	mgr := binary.NewDefaultManager()
 	var missing []string
 
-	binaries := map[string]string{
-		"dnstt-server":      DNSTTBinary,
-		"slipstream-server": SlipstreamBinary,
-		"ssserver":          SSServerBinary,
+	binaries := []binary.BinaryType{
+		binary.BinaryDNSTTServer,
+		binary.BinarySlipstreamServer,
+		binary.BinarySSServer,
 	}
 
-	for name, path := range binaries {
-		if _, err := os.Stat(path); err != nil {
-			missing = append(missing, name)
+	for _, bin := range binaries {
+		if _, err := mgr.GetPath(bin); err != nil {
+			missing = append(missing, string(bin))
 		}
 	}
 

@@ -22,7 +22,7 @@ func HandleSSHUsers(ctx *actions.Context) error {
 	}
 
 	// Get the binary path
-	binary := transport.SSHTunUserBinary
+	binary := transport.SSHTunUserBinaryPath()
 
 	// Use syscall.Exec to replace the current process with sshtun-user
 	// This allows sshtun-user to run in fully interactive mode

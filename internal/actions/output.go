@@ -33,6 +33,39 @@ type OutputWriter interface {
 	Table(headers []string, rows [][]string)
 	// Separator outputs a horizontal separator line.
 	Separator(length int)
+
+	// ShowInfo displays information in a fullscreen TUI view (interactive mode)
+	// or prints to console (CLI mode).
+	ShowInfo(cfg InfoConfig) error
+
+	// BeginProgress starts a progress view with the given title.
+	// All subsequent output calls will be shown in the progress view.
+	// Call EndProgress() when done to wait for user dismissal.
+	BeginProgress(title string)
+	// EndProgress signals progress is complete and waits for user dismissal.
+	EndProgress()
+	// IsProgressActive returns true if a progress view is currently active.
+	IsProgressActive() bool
+}
+
+// InfoConfig configures an info display.
+type InfoConfig struct {
+	Title       string
+	Description string
+	Sections    []InfoSection
+}
+
+// InfoSection represents a section in the info view.
+type InfoSection struct {
+	Title string
+	Rows  []InfoRow
+}
+
+// InfoRow represents a single row in an info section.
+type InfoRow struct {
+	Key     string
+	Value   string
+	Columns []string // If set, renders as aligned columns (ignores Key/Value)
 }
 
 // Standard symbols for output.

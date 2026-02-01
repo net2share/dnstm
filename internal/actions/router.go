@@ -91,10 +91,14 @@ func init() {
 		MenuLabel:         "Mode",
 		RequiresRoot:      true,
 		RequiresInstalled: true,
-		Args: &ArgsSpec{
-			Name:        "mode",
-			Description: "Operating mode: single or multi",
-			Required:    false,
+		Inputs: []InputField{
+			{
+				Name:     "mode",
+				Label:    "Operating Mode",
+				Type:     InputTypeSelect,
+				Required: true,
+				Options:  OperatingModeOptions(),
+			},
 		},
 	})
 

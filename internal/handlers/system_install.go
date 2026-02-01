@@ -36,14 +36,22 @@ func HandleInstall(ctx *actions.Context) error {
 		all = true
 	}
 
-	// Default mode
+	// Mode is required
 	if modeStr == "" {
-		modeStr = "single"
+		return fmt.Errorf("operating mode is required (use --mode single or --mode multi)")
+	}
+	if modeStr != "single" && modeStr != "multi" {
+		return fmt.Errorf("invalid mode: %s (must be 'single' or 'multi')", modeStr)
 	}
 
-	ctx.Output.Println()
+	// Start progress view in interactive mode
+	if ctx.IsInteractive {
+		ctx.Output.BeginProgress("Install dnstm")
+	} else {
+		ctx.Output.Println()
+	}
+
 	ctx.Output.Info("Installing dnstm components...")
-	ctx.Output.Println()
 
 	// Step 0: Ensure dnstm binary is installed at the standard path
 	if err := ensureDnstmInstalled(ctx); err != nil {
@@ -87,28 +95,30 @@ func HandleInstall(ctx *actions.Context) error {
 	// Step 5: Install binaries
 	ctx.Output.Println()
 	ctx.Output.Info("Installing transport binaries...")
-	ctx.Output.Println()
+
+	// Status callback routes output through the context
+	statusFn := func(msg string) { ctx.Output.Status(msg) }
 
 	if all || dnstt {
-		if err := transport.EnsureDnsttInstalled(); err != nil {
+		if err := transport.EnsureDnsttInstalledWithStatus(statusFn); err != nil {
 			return fmt.Errorf("failed to install dnstt-server: %w", err)
 		}
 	}
 
 	if all || slipstream {
-		if err := transport.EnsureSlipstreamInstalled(); err != nil {
+		if err := transport.EnsureSlipstreamInstalledWithStatus(statusFn); err != nil {
 			return fmt.Errorf("failed to install slipstream-server: %w", err)
 		}
 	}
 
 	if all || shadowsocks {
-		if err := transport.EnsureShadowsocksInstalled(); err != nil {
+		if err := transport.EnsureShadowsocksInstalledWithStatus(statusFn); err != nil {
 			return fmt.Errorf("failed to install ssserver: %w", err)
 		}
 	}
 
 	// Always install sshtun-user
-	if err := transport.EnsureSSHTunUserInstalled(); err != nil {
+	if err := transport.EnsureSSHTunUserInstalledWithStatus(statusFn); err != nil {
 		ctx.Output.Warning("sshtun-user: " + err.Error())
 	}
 
@@ -156,13 +166,17 @@ func HandleInstall(ctx *actions.Context) error {
 		ctx.Output.Status("Firewall configured (port 53 UDP/TCP)")
 	}
 
-	ctx.Output.Println()
 	ctx.Output.Success("Installation complete!")
 	ctx.Output.Println()
 	ctx.Output.Info("Next steps:")
 	ctx.Output.Println("  1. Add tunnel: dnstm tunnel add")
 	ctx.Output.Println("  2. Start router: dnstm router start")
-	ctx.Output.Println()
+
+	if ctx.IsInteractive {
+		ctx.Output.EndProgress()
+	} else {
+		ctx.Output.Println()
+	}
 
 	return nil
 }

@@ -12,7 +12,7 @@ Download client binaries:
 Get connection details from the server:
 
 ```bash
-dnstm instance status <name>
+dnstm tunnel status <name>
 ```
 
 This shows:
@@ -36,7 +36,7 @@ Domain names use underscores (e.g., `a.example.com` → `a_example_com_cert.pem`
 
 ```bash
 # On server
-dnstm instance status <name>
+dnstm tunnel status <name>
 ```
 
 Note the domain, password, and encryption method.
@@ -129,7 +129,7 @@ curl -x socks5h://127.0.0.1:1080 https://httpbin.org/ip
 
 From server:
 ```bash
-dnstm instance status <name>
+dnstm tunnel status <name>
 ```
 
 Copy the public key (64 hex digits).
@@ -157,7 +157,7 @@ curl -x socks5h://127.0.0.1:1080 https://httpbin.org/ip
 ### 1. Get Public Key
 
 ```bash
-dnstm instance status <name>
+dnstm tunnel status <name>
 ```
 
 ### 2. Start Tunnel
@@ -215,7 +215,7 @@ If UDP is blocked, use DNS-over-TLS or DNS-over-HTTPS:
 
 2. Check server logs:
    ```bash
-   dnstm instance logs <name>
+   dnstm tunnel logs <name>
    ```
 
 3. Try a different DNS resolver (8.8.8.8 vs 1.1.1.1)
@@ -231,7 +231,7 @@ scp root@server:/etc/dnstm/certs/<domain>_cert.pem ./cert.pem
 
 Get the correct key:
 ```bash
-dnstm instance status <name>
+dnstm tunnel status <name>
 ```
 
 ### Slow Connection

@@ -2,8 +2,10 @@ package actions
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/net2share/dnstm/internal/config"
+	"github.com/net2share/dnstm/internal/router"
 )
 
 func init() {
@@ -88,6 +90,14 @@ func init() {
 				Type:        InputTypeText,
 				Required:    true,
 				Description: "Unique identifier for this backend",
+				Validate: func(value string) error {
+					normalized := router.NormalizeName(value)
+					if err := router.ValidateName(normalized); err != nil {
+						// Replace "name" with "tag" in error message
+						return fmt.Errorf("%s", strings.ReplaceAll(err.Error(), "name", "tag"))
+					}
+					return nil
+				},
 			},
 			{
 				Name:        "address",

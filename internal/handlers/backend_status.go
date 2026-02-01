@@ -37,7 +37,59 @@ func HandleBackendStatus(ctx *actions.Context) error {
 	// Get tunnels using this backend
 	tunnelsUsing := cfg.GetTunnelsUsingBackend(tag)
 
-	// Display backend info
+	// Build info config
+	infoCfg := actions.InfoConfig{
+		Title: fmt.Sprintf("Backend: %s", tag),
+	}
+
+	// Main info section
+	mainSection := actions.InfoSection{
+		Rows: []actions.InfoRow{
+			{Key: "Type", Value: config.GetBackendTypeDisplayName(backend.Type)},
+			{Key: "Address", Value: getBackendAddress(backend)},
+			{Key: "Category", Value: getBackendCategory(backend)},
+			{Key: "Removable", Value: fmt.Sprintf("%v", !backend.IsBuiltIn() || (tag != "socks" && tag != "ssh"))},
+		},
+	}
+	infoCfg.Sections = append(infoCfg.Sections, mainSection)
+
+	// Show shadowsocks config if applicable
+	if backend.Shadowsocks != nil {
+		ssSection := actions.InfoSection{
+			Title: "Shadowsocks Configuration",
+			Rows: []actions.InfoRow{
+				{Key: "Method", Value: backend.Shadowsocks.Method},
+				{Key: "Password", Value: backend.Shadowsocks.Password},
+			},
+		}
+		infoCfg.Sections = append(infoCfg.Sections, ssSection)
+	}
+
+	// Show tunnels using this backend
+	tunnelSection := actions.InfoSection{
+		Title: fmt.Sprintf("Tunnels Using This Backend (%d)", len(tunnelsUsing)),
+	}
+	if len(tunnelsUsing) == 0 {
+		tunnelSection.Rows = []actions.InfoRow{{Value: "None"}}
+	} else {
+		for _, t := range tunnelsUsing {
+			status := "disabled"
+			if t.IsEnabled() {
+				status = "enabled"
+			}
+			tunnelSection.Rows = append(tunnelSection.Rows, actions.InfoRow{
+				Value: fmt.Sprintf("• %s (%s, %s)", t.Tag, t.Domain, status),
+			})
+		}
+	}
+	infoCfg.Sections = append(infoCfg.Sections, tunnelSection)
+
+	// Display using TUI in interactive mode
+	if ctx.IsInteractive {
+		return ctx.Output.ShowInfo(infoCfg)
+	}
+
+	// CLI mode - print to console
 	ctx.Output.Println()
 	ctx.Output.Box(fmt.Sprintf("Backend: %s", tag), []string{
 		ctx.Output.KV("Type", config.GetBackendTypeDisplayName(backend.Type)),
@@ -46,7 +98,6 @@ func HandleBackendStatus(ctx *actions.Context) error {
 		ctx.Output.KV("Removable", fmt.Sprintf("%v", !backend.IsBuiltIn() || (tag != "socks" && tag != "ssh"))),
 	})
 
-	// Show shadowsocks config if applicable
 	if backend.Shadowsocks != nil {
 		ctx.Output.Println()
 		ctx.Output.Println("Shadowsocks Configuration:")
@@ -54,7 +105,6 @@ func HandleBackendStatus(ctx *actions.Context) error {
 		ctx.Output.Printf("  Password: %s\n", backend.Shadowsocks.Password)
 	}
 
-	// Show tunnels using this backend
 	ctx.Output.Println()
 	if len(tunnelsUsing) == 0 {
 		ctx.Output.Println("No tunnels using this backend")

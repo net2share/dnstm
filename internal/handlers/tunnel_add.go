@@ -244,7 +244,12 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 }
 
 func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *config.Config) error {
-	ctx.Output.Println()
+	// Start progress view in interactive mode
+	if ctx.IsInteractive {
+		ctx.Output.BeginProgress(fmt.Sprintf("Add Tunnel: %s", tunnelCfg.Tag))
+	} else {
+		ctx.Output.Println()
+	}
 
 	totalSteps := 5
 	currentStep := 0
@@ -354,31 +359,31 @@ func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *con
 		ctx.Output.Status("Tunnel started")
 	}
 
-	ctx.Output.Println()
 	ctx.Output.Success(fmt.Sprintf("Tunnel '%s' created and started!", tunnelCfg.Tag))
 	ctx.Output.Println()
 
 	// Show connection info
-	var infoLines []string
-	infoLines = append(infoLines, ctx.Output.KV("Tunnel:    ", tunnelCfg.Tag))
-	infoLines = append(infoLines, ctx.Output.KV("Transport: ", config.GetTransportTypeDisplayName(tunnelCfg.Transport)))
-	infoLines = append(infoLines, ctx.Output.KV("Backend:   ", tunnelCfg.Backend))
-	infoLines = append(infoLines, ctx.Output.KV("Domain:    ", tunnelCfg.Domain))
-	infoLines = append(infoLines, ctx.Output.KV("Port:      ", fmt.Sprintf("%d", tunnelCfg.Port)))
+	ctx.Output.Status(fmt.Sprintf("Transport: %s", config.GetTransportTypeDisplayName(tunnelCfg.Transport)))
+	ctx.Output.Status(fmt.Sprintf("Backend: %s", tunnelCfg.Backend))
+	ctx.Output.Status(fmt.Sprintf("Domain: %s", tunnelCfg.Domain))
+	ctx.Output.Status(fmt.Sprintf("Port: %d", tunnelCfg.Port))
 
 	if fingerprint != "" {
-		infoLines = append(infoLines, "")
-		infoLines = append(infoLines, "Certificate Fingerprint:")
-		infoLines = append(infoLines, certs.FormatFingerprint(fingerprint))
+		ctx.Output.Println()
+		ctx.Output.Info("Certificate Fingerprint:")
+		ctx.Output.Println(certs.FormatFingerprint(fingerprint))
 	}
 	if publicKey != "" {
-		infoLines = append(infoLines, "")
-		infoLines = append(infoLines, "Public Key:")
-		infoLines = append(infoLines, publicKey)
+		ctx.Output.Println()
+		ctx.Output.Info("Public Key:")
+		ctx.Output.Println(publicKey)
 	}
 
-	ctx.Output.Box("Connection Info", infoLines)
-	ctx.Output.Println()
+	if ctx.IsInteractive {
+		ctx.Output.EndProgress()
+	} else {
+		ctx.Output.Println()
+	}
 
 	return nil
 }
