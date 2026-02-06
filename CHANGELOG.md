@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.3](https://github.com/net2share/dnstm/compare/v0.6.2...v0.6.3) (2026-02-06)
+
+
+### Features
+
+* add update command with pinned binary versions ([#43](https://github.com/net2share/dnstm/issues/43)) ([0c8fdfd](https://github.com/net2share/dnstm/commit/0c8fdfd690e8aca47e38cd505dec3d14939cf850))
+
+
+### Bug Fixes
+
+* detect correct nobody group for microsocks service ([69c0e35](https://github.com/net2share/dnstm/commit/69c0e35b0ddade5f14b3b184f3c01f182df4b7e0))
+
 ## [0.6.2](https://github.com/net2share/dnstm/compare/v0.6.1...v0.6.2) (2026-02-01)
 
 
