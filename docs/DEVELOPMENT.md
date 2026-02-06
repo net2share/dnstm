@@ -4,6 +4,51 @@ This document describes development practices for dnstm.
 
 For setting up the testing environment and running tests, see the [Testing Guide](TESTING.md).
 
+## Binary Version Pinning
+
+Transport binaries (slipstream-server, ssserver, microsocks, sshtun-user) have their versions pinned in the codebase. Each dnstm release specifies exact binary versions it expects.
+
+### How It Works
+
+Binary definitions in `internal/binary/binary.go` include a `PinnedVersion` field:
+
+```go
+BinarySlipstreamServer: {
+    Type:          BinarySlipstreamServer,
+    URLPattern:    "https://github.com/.../releases/download/{version}/slipstream-server-{os}-{arch}",
+    PinnedVersion: "v2026.02.05",
+    // ...
+},
+```
+
+The update system compares installed versions (from `/etc/dnstm/versions.json`) against these pinned versions. Only dnstm's own version is checked via GitHub API.
+
+### Updating Binary Versions
+
+To update a transport binary version:
+
+1. Update the `PinnedVersion` in `internal/binary/binary.go`
+2. Update the test expectations in `internal/binary/binary_test.go` if URL patterns changed
+3. Release a new dnstm version
+
+Users running `dnstm update` will then receive the new binary versions.
+
+### Version Manifest
+
+The manifest at `/etc/dnstm/versions.json` tracks installed binary versions:
+
+```json
+{
+  "slipstream-server": "v2026.02.05",
+  "ssserver": "v1.24.0",
+  "microsocks": "v1.0.5",
+  "sshtun-user": "v0.3.4",
+  "updated_at": "2026-02-06T10:00:00Z"
+}
+```
+
+This manifest is created during `dnstm install` and updated after each binary update.
+
 ## Building
 
 ```bash

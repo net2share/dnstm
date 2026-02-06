@@ -11,6 +11,7 @@ import (
 
 	"github.com/net2share/dnstm/internal/menu"
 	"github.com/net2share/dnstm/internal/transport"
+	"github.com/net2share/dnstm/internal/version"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"
 	"github.com/spf13/cobra"
@@ -25,12 +26,6 @@ func requireInstalled() error {
 	return nil
 }
 
-// Version and BuildTime are set at build time.
-var (
-	Version   = "dev"
-	BuildTime = "unknown"
-)
-
 var rootCmd = &cobra.Command{
 	Use:   "dnstm",
 	Short: "DNS Tunnel Manager",
@@ -39,15 +34,15 @@ var rootCmd = &cobra.Command{
 		if err := osdetect.RequireRoot(); err != nil {
 			return err
 		}
-		menu.Version = Version
-		menu.BuildTime = BuildTime
-		tui.SetAppInfo("dnstm", Version, BuildTime)
+		menu.Version = version.Version
+		menu.BuildTime = version.BuildTime
+		tui.SetAppInfo("dnstm", version.Version, version.BuildTime)
 		return menu.RunInteractive()
 	},
 }
 
 func init() {
-	rootCmd.Version = Version
+	rootCmd.Version = version.Version
 
 	// Register all action-based commands
 	RegisterActionsWithRoot(rootCmd)
@@ -61,8 +56,7 @@ func Execute() {
 }
 
 // SetVersionInfo sets version information for the CLI.
-func SetVersionInfo(version, buildTime string) {
-	Version = version
-	BuildTime = buildTime
-	rootCmd.Version = version + " (built " + buildTime + ")"
+func SetVersionInfo(ver, buildTime string) {
+	version.Set(ver, buildTime)
+	rootCmd.Version = ver + " (built " + buildTime + ")"
 }

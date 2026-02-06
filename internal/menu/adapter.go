@@ -341,6 +341,7 @@ func RunAction(actionID string) error {
 		confirm, err := tui.RunConfirm(tui.ConfirmConfig{
 			Title:       action.Confirm.Message,
 			Description: action.Confirm.Description,
+			Default:     !action.Confirm.DefaultNo,
 		})
 		if err != nil {
 			return err

@@ -261,6 +261,10 @@ func (o *testOutput) EndProgress() {
 	o.stdout.WriteString("[/PROGRESS]\n")
 }
 
+func (o *testOutput) DismissProgress() {
+	o.stdout.WriteString("[/PROGRESS]\n")
+}
+
 func (o *testOutput) IsProgressActive() bool {
 	return false
 }

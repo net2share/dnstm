@@ -34,30 +34,24 @@ const (
 
 // BinaryDef defines how to obtain a binary.
 type BinaryDef struct {
-	Type       BinaryType
-	EnvVar     string              // Environment variable for custom path
-	URLPattern string              // Download URL pattern with {os}, {arch} placeholders
-	Archive    bool                // If true, URL points to an archive
-	ArchiveDir string              // Directory inside archive where binary is located
-	Platforms  map[string][]string // Supported os -> []arch
+	Type          BinaryType
+	EnvVar        string              // Environment variable for custom path
+	URLPattern    string              // Download URL pattern with {version}, {os}, {arch} placeholders
+	PinnedVersion string              // Expected version for this dnstm release
+	Archive       bool                // If true, URL points to an archive
+	ArchiveDir    string              // Directory inside archive where binary is located
+	Platforms     map[string][]string // Supported os -> []arch
+	SkipUpdate    bool                // If true, skip in update process
 }
 
 // DefaultBinaries contains definitions for all supported binaries.
 var DefaultBinaries = map[BinaryType]BinaryDef{
+	// Server binaries - versions pinned per dnstm release
 	BinaryDNSTTServer: {
 		Type:       BinaryDNSTTServer,
 		EnvVar:     "DNSTM_DNSTT_SERVER_PATH",
 		URLPattern: "https://github.com/net2share/dnstt/releases/download/latest/dnstt-server-{os}-{arch}{ext}",
-		Platforms: map[string][]string{
-			"linux":   {"amd64", "arm64"},
-			"darwin":  {"amd64", "arm64"},
-			"windows": {"amd64", "arm64"},
-		},
-	},
-	BinaryDNSTTClient: {
-		Type:       BinaryDNSTTClient,
-		EnvVar:     "DNSTM_TEST_DNSTT_CLIENT_PATH",
-		URLPattern: "https://github.com/net2share/dnstt/releases/download/latest/dnstt-client-{os}-{arch}{ext}",
+		SkipUpdate: true, // No active maintenance, skip updates
 		Platforms: map[string][]string{
 			"linux":   {"amd64", "arm64"},
 			"darwin":  {"amd64", "arm64"},
@@ -65,55 +59,74 @@ var DefaultBinaries = map[BinaryType]BinaryDef{
 		},
 	},
 	BinarySlipstreamServer: {
-		Type:       BinarySlipstreamServer,
-		EnvVar:     "DNSTM_SLIPSTREAM_SERVER_PATH",
-		URLPattern: "https://github.com/net2share/slipstream-rust-build/releases/download/v2026.02.05/slipstream-server-{os}-{arch}",
-		Platforms: map[string][]string{
-			"linux": {"amd64", "arm64"},
-		},
-	},
-	BinarySlipstreamClient: {
-		Type:       BinarySlipstreamClient,
-		EnvVar:     "DNSTM_TEST_SLIPSTREAM_CLIENT_PATH",
-		URLPattern: "https://github.com/net2share/slipstream-rust-build/releases/download/v2026.02.05/slipstream-client-{os}-{arch}",
+		Type:          BinarySlipstreamServer,
+		EnvVar:        "DNSTM_SLIPSTREAM_SERVER_PATH",
+		URLPattern:    "https://github.com/net2share/slipstream-rust-build/releases/download/{version}/slipstream-server-{os}-{arch}",
+		PinnedVersion: "v2026.02.05",
 		Platforms: map[string][]string{
 			"linux": {"amd64", "arm64"},
 		},
 	},
 	BinarySSServer: {
-		Type:       BinarySSServer,
-		EnvVar:     "DNSTM_SSSERVER_PATH",
-		URLPattern: "https://github.com/shadowsocks/shadowsocks-rust/releases/download/v1.23.0/shadowsocks-v1.23.0.{ssarch}.tar.xz",
-		Archive:    true,
-		Platforms: map[string][]string{
-			"linux":  {"amd64", "arm64"},
-			"darwin": {"amd64", "arm64"},
-		},
-	},
-	BinarySSLocal: {
-		Type:       BinarySSLocal,
-		EnvVar:     "DNSTM_TEST_SSLOCAL_PATH",
-		URLPattern: "https://github.com/shadowsocks/shadowsocks-rust/releases/download/v1.23.0/shadowsocks-v1.23.0.{ssarch}.tar.xz",
-		Archive:    true,
+		Type:          BinarySSServer,
+		EnvVar:        "DNSTM_SSSERVER_PATH",
+		URLPattern:    "https://github.com/shadowsocks/shadowsocks-rust/releases/download/{version}/shadowsocks-{version}.{ssarch}.tar.xz",
+		PinnedVersion: "v1.24.0",
+		Archive:       true,
 		Platforms: map[string][]string{
 			"linux":  {"amd64", "arm64"},
 			"darwin": {"amd64", "arm64"},
 		},
 	},
 	BinaryMicrosocks: {
-		Type:       BinaryMicrosocks,
-		EnvVar:     "DNSTM_MICROSOCKS_PATH",
-		URLPattern: "https://github.com/net2share/microsocks-build/releases/download/v1.0.5/microsocks-{microsocksarch}",
+		Type:          BinaryMicrosocks,
+		EnvVar:        "DNSTM_MICROSOCKS_PATH",
+		URLPattern:    "https://github.com/net2share/microsocks-build/releases/download/{version}/microsocks-{microsocksarch}",
+		PinnedVersion: "v1.0.5",
 		Platforms: map[string][]string{
 			"linux": {"amd64", "arm64"},
 		},
 	},
 	BinarySSHTunUser: {
-		Type:       BinarySSHTunUser,
-		EnvVar:     "DNSTM_SSHTUN_USER_PATH",
-		URLPattern: "https://github.com/net2share/sshtun-user/releases/download/v0.3.4/sshtun-user-linux-{arch}",
+		Type:          BinarySSHTunUser,
+		EnvVar:        "DNSTM_SSHTUN_USER_PATH",
+		URLPattern:    "https://github.com/net2share/sshtun-user/releases/download/{version}/sshtun-user-linux-{arch}",
+		PinnedVersion: "v0.3.4",
 		Platforms: map[string][]string{
 			"linux": {"amd64", "arm64"},
+		},
+	},
+
+	// Client binaries - pinned versions for testing only
+	BinaryDNSTTClient: {
+		Type:          BinaryDNSTTClient,
+		EnvVar:        "DNSTM_TEST_DNSTT_CLIENT_PATH",
+		URLPattern:    "https://github.com/net2share/dnstt/releases/download/latest/dnstt-client-{os}-{arch}{ext}",
+		PinnedVersion: "latest", // Manual bump only
+		Platforms: map[string][]string{
+			"linux":   {"amd64", "arm64"},
+			"darwin":  {"amd64", "arm64"},
+			"windows": {"amd64", "arm64"},
+		},
+	},
+	BinarySlipstreamClient: {
+		Type:          BinarySlipstreamClient,
+		EnvVar:        "DNSTM_TEST_SLIPSTREAM_CLIENT_PATH",
+		URLPattern:    "https://github.com/net2share/slipstream-rust-build/releases/download/{version}/slipstream-client-{os}-{arch}",
+		PinnedVersion: "v2026.02.05", // Manual bump only
+		Platforms: map[string][]string{
+			"linux": {"amd64", "arm64"},
+		},
+	},
+	BinarySSLocal: {
+		Type:          BinarySSLocal,
+		EnvVar:        "DNSTM_TEST_SSLOCAL_PATH",
+		URLPattern:    "https://github.com/shadowsocks/shadowsocks-rust/releases/download/{version}/shadowsocks-{version}.{ssarch}.tar.xz",
+		PinnedVersion: "v1.23.0", // Manual bump only
+		Archive:       true,
+		Platforms: map[string][]string{
+			"linux":  {"amd64", "arm64"},
+			"darwin": {"amd64", "arm64"},
 		},
 	},
 }
@@ -255,7 +268,7 @@ func (m *Manager) EnsureInstalled(binType BinaryType) (string, error) {
 	}
 
 	log.Debug("binary %s: downloading to %s", binType, binPath)
-	if err := m.download(def, binPath); err != nil {
+	if err := m.download(def, binPath, def.PinnedVersion); err != nil {
 		return "", fmt.Errorf("failed to download %s: %w", binType, err)
 	}
 
@@ -286,14 +299,13 @@ func (m *Manager) isPlatformSupported(def BinaryDef) bool {
 	return false
 }
 
-
-// download fetches a binary from its URL.
-func (m *Manager) download(def BinaryDef, destPath string) error {
+// download fetches a binary from its URL using the specified version.
+func (m *Manager) download(def BinaryDef, destPath, version string) error {
 	if err := m.EnsureDir(); err != nil {
 		return err
 	}
 
-	url := m.buildURL(def)
+	url := m.buildURLWithVersion(def, version)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -312,9 +324,14 @@ func (m *Manager) download(def BinaryDef, destPath string) error {
 	return m.saveToFile(resp.Body, destPath)
 }
 
-// buildURL constructs the download URL for current platform.
-func (m *Manager) buildURL(def BinaryDef) string {
+// buildURLWithVersion constructs the download URL with a specific version.
+func (m *Manager) buildURLWithVersion(def BinaryDef, version string) string {
 	url := def.URLPattern
+
+	// Version replacement
+	if version != "" {
+		url = strings.ReplaceAll(url, "{version}", version)
+	}
 
 	// Standard replacements
 	url = strings.ReplaceAll(url, "{os}", m.os)
@@ -451,6 +468,31 @@ func (m *Manager) extractFromArchive(r io.Reader, def BinaryDef, destPath string
 	}
 
 	return fmt.Errorf("binary %s not found in archive", binaryName)
+}
+
+// DownloadVersion downloads a specific version of a binary, replacing any existing one.
+func (m *Manager) DownloadVersion(binType BinaryType, version string) error {
+	def, ok := DefaultBinaries[binType]
+	if !ok {
+		return fmt.Errorf("unknown binary type: %s", binType)
+	}
+
+	if !m.isPlatformSupported(def) {
+		return fmt.Errorf("binary %s not supported on %s/%s", binType, m.os, m.arch)
+	}
+
+	binPath := filepath.Join(m.binDir, string(binType))
+	if m.os == "windows" {
+		binPath += ".exe"
+	}
+
+	return m.download(def, binPath, version)
+}
+
+// GetDef returns the binary definition for a binary type.
+func GetDef(binType BinaryType) (BinaryDef, bool) {
+	def, ok := DefaultBinaries[binType]
+	return def, ok
 }
 
 // CopyToDir copies a binary from srcPath to the manager's binDir.

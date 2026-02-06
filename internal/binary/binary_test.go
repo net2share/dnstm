@@ -38,7 +38,7 @@ func TestIsPlatformSupported(t *testing.T) {
 	}
 }
 
-func TestBuildURL(t *testing.T) {
+func TestBuildURLWithVersion(t *testing.T) {
 	mgr := &Manager{
 		binDir: "/tmp",
 		os:     "linux",
@@ -47,24 +47,42 @@ func TestBuildURL(t *testing.T) {
 
 	tests := []struct {
 		binType BinaryType
+		version string
 		want    string
 	}{
 		{
 			BinaryDNSTTClient,
+			"latest",
 			"https://github.com/net2share/dnstt/releases/download/latest/dnstt-client-linux-amd64",
 		},
 		{
 			BinarySlipstreamServer,
+			"v2026.02.05",
 			"https://github.com/net2share/slipstream-rust-build/releases/download/v2026.02.05/slipstream-server-linux-amd64",
+		},
+		{
+			BinarySSServer,
+			"v1.23.0",
+			"https://github.com/shadowsocks/shadowsocks-rust/releases/download/v1.23.0/shadowsocks-v1.23.0.x86_64-unknown-linux-gnu.tar.xz",
+		},
+		{
+			BinaryMicrosocks,
+			"v1.0.5",
+			"https://github.com/net2share/microsocks-build/releases/download/v1.0.5/microsocks-x86_64-linux-gnu",
+		},
+		{
+			BinarySSHTunUser,
+			"v0.3.4",
+			"https://github.com/net2share/sshtun-user/releases/download/v0.3.4/sshtun-user-linux-amd64",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(string(tt.binType), func(t *testing.T) {
 			def := DefaultBinaries[tt.binType]
-			got := mgr.buildURL(def)
+			got := mgr.buildURLWithVersion(def, tt.version)
 			if got != tt.want {
-				t.Errorf("buildURL() = %s, want %s", got, tt.want)
+				t.Errorf("buildURLWithVersion() = %s, want %s", got, tt.want)
 			}
 		})
 	}

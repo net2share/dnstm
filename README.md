@@ -196,6 +196,7 @@ sudo dnstm router status          # View router and tunnel status
 sudo dnstm tunnel list            # List all tunnels
 sudo dnstm tunnel logs <tag>      # View tunnel logs
 sudo dnstm router logs            # View router logs (multi-mode)
+sudo dnstm update                 # Check for and install updates
 sudo dnstm uninstall              # Remove all components
 ```
 

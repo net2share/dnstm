@@ -44,6 +44,8 @@ type OutputWriter interface {
 	BeginProgress(title string)
 	// EndProgress signals progress is complete and waits for user dismissal.
 	EndProgress()
+	// DismissProgress closes the progress view immediately without waiting.
+	DismissProgress()
 	// IsProgressActive returns true if a progress view is currently active.
 	IsProgressActive() bool
 }
