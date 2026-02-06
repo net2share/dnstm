@@ -15,7 +15,8 @@ import (
 func isInfoViewAction(actionID string) bool {
 	switch actionID {
 	// Info views
-	case actions.ActionRouterStatus, actions.ActionTunnelStatus, actions.ActionBackendStatus, actions.ActionBackendAvailable:
+	case actions.ActionRouterStatus, actions.ActionTunnelStatus, actions.ActionBackendStatus, actions.ActionBackendAvailable,
+		actions.ActionBackendAdd:
 		return true
 	// Progress views
 	case actions.ActionRouterSwitch, actions.ActionRouterStart, actions.ActionRouterStop,
@@ -23,6 +24,7 @@ func isInfoViewAction(actionID string) bool {
 		actions.ActionTunnelAdd, actions.ActionTunnelRemove,
 		actions.ActionTunnelStart, actions.ActionTunnelStop, actions.ActionTunnelRestart,
 		actions.ActionTunnelEnable, actions.ActionTunnelDisable,
+		actions.ActionBackendRemove,
 		actions.ActionInstall, actions.ActionUninstall:
 		return true
 	}
@@ -128,7 +130,7 @@ func RunAction(actionID string) error {
 			if selected == "" {
 				return errCancelled
 			}
-			ctx.Args = []string{selected}
+			ctx.Values[action.Args.Name] = selected
 		} else if action.Args.Required {
 			// Prompt for text input when no picker is available and arg is required
 			value, confirmed, err := tui.RunInput(tui.InputConfig{
@@ -144,7 +146,7 @@ func RunAction(actionID string) error {
 			if value == "" {
 				return fmt.Errorf("%s is required", action.Args.Name)
 			}
-			ctx.Args = []string{value}
+			ctx.Values[action.Args.Name] = value
 		}
 		// For optional args without picker, let the handler deal with it
 	}

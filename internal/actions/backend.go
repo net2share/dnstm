@@ -2,7 +2,6 @@ package actions
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/router"
@@ -48,7 +47,7 @@ func init() {
 	Register(&Action{
 		ID:                ActionBackendStatus,
 		Parent:            ActionBackend,
-		Use:               "status <tag>",
+		Use:               "status",
 		Short:             "Show backend status",
 		Long:              "Show status and configuration for a backend",
 		MenuLabel:         "Status",
@@ -77,7 +76,6 @@ func init() {
 			{
 				Name:        "type",
 				Label:       "Backend Type",
-				ShortFlag:   't',
 				Type:        InputTypeSelect,
 				Required:    true,
 				Options:     BackendTypeOptions(),
@@ -86,17 +84,15 @@ func init() {
 			{
 				Name:        "tag",
 				Label:       "Tag",
-				ShortFlag:   'n',
+				ShortFlag:   't',
 				Type:        InputTypeText,
-				Required:    true,
 				Description: "Unique identifier for this backend",
-				Validate: func(value string) error {
-					normalized := router.NormalizeName(value)
-					if err := router.ValidateName(normalized); err != nil {
-						// Replace "name" with "tag" in error message
-						return fmt.Errorf("%s", strings.ReplaceAll(err.Error(), "name", "tag"))
+				DefaultFunc: func(ctx *Context) string {
+					cfg, err := config.Load()
+					if err != nil {
+						return router.GenerateName()
 					}
-					return nil
+					return router.GenerateUniqueBackendTag(cfg.Backends)
 				},
 			},
 			{
@@ -138,7 +134,7 @@ func init() {
 	Register(&Action{
 		ID:                ActionBackendRemove,
 		Parent:            ActionBackend,
-		Use:               "remove <tag>",
+		Use:               "remove",
 		Short:             "Remove a backend",
 		Long:              "Remove a backend (fails if in use by tunnels)",
 		MenuLabel:         "Remove",

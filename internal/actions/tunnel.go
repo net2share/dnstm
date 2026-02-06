@@ -36,7 +36,7 @@ func init() {
 	Register(&Action{
 		ID:                ActionTunnelStatus,
 		Parent:            ActionTunnel,
-		Use:               "status <tag>",
+		Use:               "status",
 		Short:             "Show tunnel status",
 		Long:              "Show status and configuration for a tunnel",
 		MenuLabel:         "Status",
@@ -54,7 +54,7 @@ func init() {
 	Register(&Action{
 		ID:                ActionTunnelLogs,
 		Parent:            ActionTunnel,
-		Use:               "logs <tag>",
+		Use:               "logs",
 		Short:             "Show tunnel logs",
 		Long:              "Show recent logs from a tunnel",
 		MenuLabel:         "Logs",
@@ -81,7 +81,7 @@ func init() {
 	Register(&Action{
 		ID:                ActionTunnelStart,
 		Parent:            ActionTunnel,
-		Use:               "start <tag>",
+		Use:               "start",
 		Short:             "Start a tunnel",
 		Long:              "Start or restart a tunnel. If already running, restarts to pick up changes.",
 		MenuLabel:         "Start/Restart",
@@ -99,7 +99,7 @@ func init() {
 	Register(&Action{
 		ID:                ActionTunnelStop,
 		Parent:            ActionTunnel,
-		Use:               "stop <tag>",
+		Use:               "stop",
 		Short:             "Stop a tunnel",
 		Long:              "Stop a tunnel",
 		MenuLabel:         "Stop",
@@ -117,7 +117,7 @@ func init() {
 	Register(&Action{
 		ID:                ActionTunnelRestart,
 		Parent:            ActionTunnel,
-		Use:               "restart <tag>",
+		Use:               "restart",
 		Short:             "Restart a tunnel",
 		Long:              "Restart a tunnel",
 		MenuLabel:         "Restart",
@@ -135,7 +135,7 @@ func init() {
 	Register(&Action{
 		ID:                ActionTunnelEnable,
 		Parent:            ActionTunnel,
-		Use:               "enable <tag>",
+		Use:               "enable",
 		Short:             "Enable a tunnel",
 		Long:              "Enable a tunnel (auto-starts in multi mode)",
 		MenuLabel:         "Enable",
@@ -153,7 +153,7 @@ func init() {
 	Register(&Action{
 		ID:                ActionTunnelDisable,
 		Parent:            ActionTunnel,
-		Use:               "disable <tag>",
+		Use:               "disable",
 		Short:             "Disable a tunnel",
 		Long:              "Disable a tunnel (stops it in multi mode)",
 		MenuLabel:         "Disable",
@@ -171,7 +171,7 @@ func init() {
 	Register(&Action{
 		ID:                ActionTunnelRemove,
 		Parent:            ActionTunnel,
-		Use:               "remove <tag>",
+		Use:               "remove",
 		Short:             "Remove a tunnel",
 		Long:              "Remove a tunnel and its configuration",
 		MenuLabel:         "Remove",
@@ -194,26 +194,29 @@ func init() {
 	Register(&Action{
 		ID:                ActionTunnelAdd,
 		Parent:            ActionTunnel,
-		Use:               "add [tag]",
+		Use:               "add",
 		Short:             "Add a new tunnel",
 		Long:              "Add a new DNS tunnel interactively or via flags",
 		MenuLabel:         "Add",
 		RequiresRoot:      true,
 		RequiresInstalled: true,
-		Args: &ArgsSpec{
-			Name:        "tag",
-			Description: "Tunnel tag (optional, auto-generated if not provided)",
-			Required:    false,
-		},
 		Inputs: []InputField{
+			{
+				Name:        "tag",
+				Label:       "Tag",
+				ShortFlag:   't',
+				Type:        InputTypeText,
+				Description: "Tunnel tag (auto-generated if omitted)",
+				ShowIf:      func(ctx *Context) bool { return !ctx.IsInteractive },
+			},
 			{
 				Name:        "transport",
 				Label:       "Transport",
-				ShortFlag:   't',
 				Type:        InputTypeSelect,
 				Required:    true,
 				Options:     TransportOptions(),
 				Description: "The transport protocol to use",
+				ShowIf:      func(ctx *Context) bool { return !ctx.IsInteractive },
 			},
 			{
 				Name:        "backend",
@@ -242,6 +245,7 @@ func init() {
 					}
 					return "The backend to forward traffic to"
 				},
+				ShowIf: func(ctx *Context) bool { return !ctx.IsInteractive },
 			},
 			{
 				Name:      "domain",
@@ -249,6 +253,7 @@ func init() {
 				ShortFlag: 'd',
 				Type:      InputTypeText,
 				Required:  true,
+				ShowIf:    func(ctx *Context) bool { return !ctx.IsInteractive },
 			},
 			{
 				Name:        "port",
@@ -267,36 +272,18 @@ func init() {
 					}
 					return fmt.Sprintf("%d", port)
 				},
+				ShowIf: func(ctx *Context) bool { return !ctx.IsInteractive },
 			},
 			{
 				Name:    "mtu",
 				Label:   "MTU",
 				Type:    InputTypeNumber,
 				Default: "1232",
-				ShowIf: func(ctx *Context) bool {
-					return ctx.GetString("transport") == string(config.TransportDNSTT)
-				},
+				ShowIf:  func(ctx *Context) bool { return !ctx.IsInteractive },
 			},
 		},
 	})
 
-	// Register tunnel.reconfigure action
-	Register(&Action{
-		ID:                ActionTunnelReconfigure,
-		Parent:            ActionTunnel,
-		Use:               "reconfigure <tag>",
-		Short:             "Reconfigure a tunnel",
-		Long:              "Reconfigure an existing tunnel interactively (including rename)",
-		MenuLabel:         "Reconfigure",
-		RequiresRoot:      true,
-		RequiresInstalled: true,
-		Args: &ArgsSpec{
-			Name:        "tag",
-			Description: "Tunnel tag",
-			Required:    true,
-			PickerFunc:  TunnelPicker,
-		},
-	})
 }
 
 // TunnelPicker provides interactive tunnel selection.

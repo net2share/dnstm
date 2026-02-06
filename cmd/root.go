@@ -13,7 +13,6 @@ import (
 	"github.com/net2share/dnstm/internal/transport"
 	"github.com/net2share/dnstm/internal/version"
 	"github.com/net2share/go-corelib/osdetect"
-	"github.com/net2share/go-corelib/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -34,9 +33,7 @@ var rootCmd = &cobra.Command{
 		if err := osdetect.RequireRoot(); err != nil {
 			return err
 		}
-		menu.Version = version.Version
-		menu.BuildTime = version.BuildTime
-		tui.SetAppInfo("dnstm", version.Version, version.BuildTime)
+		menu.InitTUI()
 		return menu.RunInteractive()
 	},
 }

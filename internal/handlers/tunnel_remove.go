@@ -18,9 +18,9 @@ func HandleTunnelRemove(ctx *actions.Context) error {
 		return err
 	}
 
-	tag := ctx.GetArg(0)
+	tag := ctx.GetString("tag")
 	if tag == "" {
-		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel remove <tag>")
+		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel remove -t <tag>")
 	}
 
 	cfg, err := LoadConfig(ctx)

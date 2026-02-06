@@ -32,12 +32,12 @@ func HandleBackendAdd(ctx *actions.Context) error {
 
 	tag := ctx.GetString("tag")
 	if tag == "" {
-		return fmt.Errorf("backend tag is required")
+		tag = router.GenerateUniqueBackendTag(cfg.Backends)
 	}
 
 	// Normalize and validate tag
-	tag = router.NormalizeName(tag)
-	if err := router.ValidateName(tag); err != nil {
+	tag = router.NormalizeTag(tag)
+	if err := router.ValidateTag(tag); err != nil {
 		return fmt.Errorf("invalid tag: %w", err)
 	}
 
@@ -69,7 +69,6 @@ func HandleBackendAdd(ctx *actions.Context) error {
 		password := ctx.GetString("password")
 		if password == "" {
 			password = GeneratePassword()
-			ctx.Output.Printf("Generated password: %s\n", password)
 		}
 
 		method := ctx.GetString("method")
@@ -94,6 +93,37 @@ func HandleBackendAdd(ctx *actions.Context) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
+	// Display result
+	if ctx.IsInteractive {
+		infoCfg := actions.InfoConfig{
+			Title: fmt.Sprintf("Backend '%s' added", tag),
+		}
+
+		section := actions.InfoSection{
+			Rows: []actions.InfoRow{
+				{Key: "Type", Value: string(backendType)},
+			},
+		}
+
+		switch backendType {
+		case config.BackendShadowsocks:
+			section.Rows = append(section.Rows,
+				actions.InfoRow{Key: "Method", Value: backend.Shadowsocks.Method},
+				actions.InfoRow{Key: "Password", Value: backend.Shadowsocks.Password},
+			)
+		case config.BackendCustom:
+			section.Rows = append(section.Rows,
+				actions.InfoRow{Key: "Address", Value: backend.Address},
+			)
+		}
+
+		infoCfg.Sections = append(infoCfg.Sections, section)
+		return ctx.Output.ShowInfo(infoCfg)
+	}
+
+	if backendType == config.BackendShadowsocks && ctx.GetString("password") == "" {
+		ctx.Output.Printf("Generated password: %s\n", backend.Shadowsocks.Password)
+	}
 	ctx.Output.Success(fmt.Sprintf("Backend '%s' added", tag))
 
 	return nil

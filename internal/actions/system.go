@@ -51,13 +51,14 @@ func init() {
 		},
 	})
 
-	// Register ssh-users action
+	// Register ssh-users action (TUI-only, hidden from CLI help)
 	Register(&Action{
 		ID:                ActionSSHUsers,
 		Use:               "ssh-users",
 		Short:             "Manage SSH tunnel users",
 		Long:              "Launch sshtun-user for managing SSH tunnel users and hardening",
 		MenuLabel:         "SSH Users",
+		Hidden:            true,
 		RequiresRoot:      true,
 		RequiresInstalled: true,
 	})

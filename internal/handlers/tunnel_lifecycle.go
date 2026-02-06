@@ -21,9 +21,9 @@ func HandleTunnelStart(ctx *actions.Context) error {
 		return err
 	}
 
-	tag := ctx.GetArg(0)
+	tag := ctx.GetString("tag")
 	if tag == "" {
-		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel start <tag>")
+		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel start -t <tag>")
 	}
 
 	tunnelCfg, err := GetTunnelByTag(ctx, tag)
@@ -84,9 +84,9 @@ func HandleTunnelStop(ctx *actions.Context) error {
 		return err
 	}
 
-	tag := ctx.GetArg(0)
+	tag := ctx.GetString("tag")
 	if tag == "" {
-		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel stop <tag>")
+		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel stop -t <tag>")
 	}
 
 	tunnelCfg, err := GetTunnelByTag(ctx, tag)
@@ -127,9 +127,9 @@ func HandleTunnelRestart(ctx *actions.Context) error {
 		return err
 	}
 
-	tag := ctx.GetArg(0)
+	tag := ctx.GetString("tag")
 	if tag == "" {
-		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel restart <tag>")
+		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel restart -t <tag>")
 	}
 
 	tunnelCfg, err := GetTunnelByTag(ctx, tag)
@@ -170,9 +170,9 @@ func HandleTunnelEnable(ctx *actions.Context) error {
 		return err
 	}
 
-	tag := ctx.GetArg(0)
+	tag := ctx.GetString("tag")
 	if tag == "" {
-		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel enable <tag>")
+		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel enable -t <tag>")
 	}
 
 	cfg, err := LoadConfig(ctx)
@@ -233,9 +233,9 @@ func HandleTunnelDisable(ctx *actions.Context) error {
 		return err
 	}
 
-	tag := ctx.GetArg(0)
+	tag := ctx.GetString("tag")
 	if tag == "" {
-		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel disable <tag>")
+		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel disable -t <tag>")
 	}
 
 	cfg, err := LoadConfig(ctx)
