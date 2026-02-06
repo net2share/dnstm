@@ -12,31 +12,20 @@ import (
 )
 
 var dnsrouterCmd = &cobra.Command{
-	Use:   "dnsrouter",
-	Short: "DNS router commands",
+	Use:    "dnsrouter",
+	Short:  "DNS router commands",
+	Hidden: true,
 }
 
 var dnsrouterServeCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the DNS router server",
-	Long: `Start the minimal DNS router that forwards raw packets.
-
-This router extracts only the query name for routing decisions,
-then forwards the entire DNS packet unchanged to the backend.
-This preserves all DNS data including QUIC-over-DNS tunneling.`,
-	RunE: runDNSRouterServe,
-}
-
-var dnsrouterTestCmd = &cobra.Command{
-	Use:   "test",
-	Short: "Test DNS packet parsing",
-	RunE:  runDNSRouterTest,
+	RunE:  runDNSRouterServe,
 }
 
 func init() {
 	rootCmd.AddCommand(dnsrouterCmd)
 	dnsrouterCmd.AddCommand(dnsrouterServeCmd)
-	dnsrouterCmd.AddCommand(dnsrouterTestCmd)
 }
 
 func runDNSRouterServe(cmd *cobra.Command, args []string) error {
@@ -73,35 +62,4 @@ func runDNSRouterServe(cmd *cobra.Command, args []string) error {
 
 	log.Printf("Shutting down...")
 	return forwarder.Stop()
-}
-
-func runDNSRouterTest(cmd *cobra.Command, args []string) error {
-	// Test the parser with some example packets
-	fmt.Println("DNS Router Parser Test")
-	fmt.Println("======================")
-
-	// Example: test domain matching
-	testCases := []struct {
-		query  string
-		suffix string
-		expect bool
-	}{
-		{"test.example.com", "example.com", true},
-		{"example.com", "example.com", true},
-		{"foo.bar.example.com", "example.com", true},
-		{"test.other.com", "example.com", false},
-		{"exampleXcom", "example.com", false},
-	}
-
-	for _, tc := range testCases {
-		result := dnsrouter.MatchDomainSuffix(tc.query, tc.suffix)
-		status := "✓"
-		if result != tc.expect {
-			status = "✗"
-		}
-		fmt.Printf("%s MatchDomainSuffix(%q, %q) = %v (expected %v)\n",
-			status, tc.query, tc.suffix, result, tc.expect)
-	}
-
-	return nil
 }
