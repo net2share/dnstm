@@ -14,13 +14,9 @@ func init() {
 
 // HandleRouterStatus shows the router status.
 func HandleRouterStatus(ctx *actions.Context) error {
-	if err := CheckRequirements(ctx, true, true); err != nil {
-		return err
-	}
-
-	cfg, err := LoadConfig(ctx)
+	cfg, err := RequireConfig(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
 	r, err := router.New(cfg)

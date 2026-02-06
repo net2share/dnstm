@@ -11,8 +11,6 @@ import (
 	"golang.org/x/crypto/curve25519"
 )
 
-const ConfigDir = "/etc/dnstt"
-
 // Generate creates a new Curve25519 key pair for dnstt.
 // Keys are stored as 64-character hex strings (32 bytes).
 func Generate(privateKeyPath, publicKeyPath string) (publicKey string, err error) {

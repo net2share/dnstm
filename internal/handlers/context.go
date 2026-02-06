@@ -4,6 +4,7 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 
 	"github.com/net2share/dnstm/internal/actions"
 	"github.com/net2share/dnstm/internal/config"
@@ -128,6 +129,50 @@ func GeneratePassword() string {
 // GetDefaultSSHAddress returns the default SSH server address.
 func GetDefaultSSHAddress() string {
 	return "127.0.0.1:" + osdetect.DetectSSHPort()
+}
+
+// RequireConfig checks installation/initialization requirements and loads config.
+func RequireConfig(ctx *actions.Context) (*config.Config, error) {
+	if err := CheckRequirements(ctx, true, true); err != nil {
+		return nil, err
+	}
+	return LoadConfig(ctx)
+}
+
+// RequireTag gets a tag value from context, returning a standardized error if empty.
+func RequireTag(ctx *actions.Context, entity string) (string, error) {
+	tag := ctx.GetString("tag")
+	if tag == "" {
+		return "", actions.NewActionError(
+			fmt.Sprintf("%s tag required", entity),
+			fmt.Sprintf("Usage: dnstm %s <command> -t <tag>", entity),
+		)
+	}
+	return tag, nil
+}
+
+// beginProgress starts a progress view in interactive mode.
+func beginProgress(ctx *actions.Context, title string) {
+	if ctx.IsInteractive {
+		ctx.Output.BeginProgress(title)
+	}
+}
+
+// endProgress ends a progress view in interactive mode.
+func endProgress(ctx *actions.Context) {
+	if ctx.IsInteractive {
+		ctx.Output.EndProgress()
+	}
+}
+
+// failProgress shows an error in the progress view and returns the error.
+// Unlike the previous pattern, this always returns the error instead of swallowing it.
+func failProgress(ctx *actions.Context, err error) error {
+	if ctx.IsInteractive {
+		ctx.Output.Error(fmt.Sprintf("Failed: %v", err))
+		ctx.Output.EndProgress()
+	}
+	return err
 }
 
 // GetModeDisplayName returns a human-readable mode name.

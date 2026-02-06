@@ -14,13 +14,9 @@ func init() {
 
 // HandleRouterStart starts or restarts the router.
 func HandleRouterStart(ctx *actions.Context) error {
-	if err := CheckRequirements(ctx, true, true); err != nil {
-		return err
-	}
-
-	cfg, err := LoadConfig(ctx)
+	cfg, err := RequireConfig(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
 	r, err := router.New(cfg)
@@ -31,14 +27,12 @@ func HandleRouterStart(ctx *actions.Context) error {
 	modeName := GetModeDisplayName(cfg.Route.Mode)
 	isRunning := r.IsRunning()
 
-	// Start progress view in interactive mode
-	if ctx.IsInteractive {
-		if isRunning {
-			ctx.Output.BeginProgress("Restart Router")
-		} else {
-			ctx.Output.BeginProgress("Start Router")
-		}
+	if isRunning {
+		beginProgress(ctx, "Restart Router")
 	} else {
+		beginProgress(ctx, "Start Router")
+	}
+	if !ctx.IsInteractive {
 		ctx.Output.Println()
 	}
 
@@ -49,12 +43,7 @@ func HandleRouterStart(ctx *actions.Context) error {
 	}
 
 	if err := r.Restart(); err != nil {
-		if ctx.IsInteractive {
-			ctx.Output.Error(fmt.Sprintf("Failed: %v", err))
-			ctx.Output.EndProgress()
-			return nil // Error already shown in progress view
-		}
-		return fmt.Errorf("failed to start: %w", err)
+		return failProgress(ctx, fmt.Errorf("failed to start: %w", err))
 	}
 
 	if isRunning {
@@ -63,9 +52,8 @@ func HandleRouterStart(ctx *actions.Context) error {
 		ctx.Output.Success("Started!")
 	}
 
-	if ctx.IsInteractive {
-		ctx.Output.EndProgress()
-	} else {
+	endProgress(ctx)
+	if !ctx.IsInteractive {
 		ctx.Output.Println()
 	}
 
@@ -74,13 +62,9 @@ func HandleRouterStart(ctx *actions.Context) error {
 
 // HandleRouterStop stops the router.
 func HandleRouterStop(ctx *actions.Context) error {
-	if err := CheckRequirements(ctx, true, true); err != nil {
-		return err
-	}
-
-	cfg, err := LoadConfig(ctx)
+	cfg, err := RequireConfig(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
 	r, err := router.New(cfg)
@@ -88,29 +72,21 @@ func HandleRouterStop(ctx *actions.Context) error {
 		return fmt.Errorf("failed to create router: %w", err)
 	}
 
-	// Start progress view in interactive mode
-	if ctx.IsInteractive {
-		ctx.Output.BeginProgress("Stop Router")
-	} else {
+	beginProgress(ctx, "Stop Router")
+	if !ctx.IsInteractive {
 		ctx.Output.Println()
 	}
 
 	ctx.Output.Info("Stopping...")
 
 	if err := r.Stop(); err != nil {
-		if ctx.IsInteractive {
-			ctx.Output.Error(fmt.Sprintf("Failed: %v", err))
-			ctx.Output.EndProgress()
-			return nil // Error already shown in progress view
-		}
-		return fmt.Errorf("failed to stop: %w", err)
+		return failProgress(ctx, fmt.Errorf("failed to stop: %w", err))
 	}
 
 	ctx.Output.Success("Stopped!")
 
-	if ctx.IsInteractive {
-		ctx.Output.EndProgress()
-	} else {
+	endProgress(ctx)
+	if !ctx.IsInteractive {
 		ctx.Output.Println()
 	}
 

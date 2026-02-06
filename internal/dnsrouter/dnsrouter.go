@@ -17,8 +17,6 @@ const (
 	// DefaultTimeout is the default upstream query timeout
 	DefaultTimeout = 5 * time.Second
 
-	// ConnectionIdleTimeout is how long to keep idle backend connections
-	ConnectionIdleTimeout = 60 * time.Second
 )
 
 // Buffer pools to reduce allocations

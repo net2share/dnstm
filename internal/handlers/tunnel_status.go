@@ -16,13 +16,13 @@ func init() {
 
 // HandleTunnelStatus shows status for a specific tunnel.
 func HandleTunnelStatus(ctx *actions.Context) error {
-	if err := CheckRequirements(ctx, true, true); err != nil {
+	if _, err := RequireConfig(ctx); err != nil {
 		return err
 	}
 
-	tag := ctx.GetString("tag")
-	if tag == "" {
-		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel status -t <tag>")
+	tag, err := RequireTag(ctx, "tunnel")
+	if err != nil {
+		return err
 	}
 
 	tunnelCfg, err := GetTunnelByTag(ctx, tag)

@@ -15,13 +15,9 @@ func init() {
 // HandleBackendAdd adds a new backend.
 // Inputs are collected by the action system in order: type → tag → type-specific fields
 func HandleBackendAdd(ctx *actions.Context) error {
-	if err := CheckRequirements(ctx, true, true); err != nil {
-		return err
-	}
-
-	cfg, err := LoadConfig(ctx)
+	cfg, err := RequireConfig(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
 	// Get values from context (collected by action system)

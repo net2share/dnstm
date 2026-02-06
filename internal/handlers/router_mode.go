@@ -14,13 +14,9 @@ func init() {
 
 // HandleRouterMode shows or sets the operating mode.
 func HandleRouterMode(ctx *actions.Context) error {
-	if err := CheckRequirements(ctx, true, true); err != nil {
-		return err
-	}
-
-	cfg, err := LoadConfig(ctx)
+	cfg, err := RequireConfig(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
 	// Get mode from input (interactive) or args (CLI)
@@ -93,22 +89,15 @@ func switchMode(ctx *actions.Context, cfg *config.Config, newMode string) error 
 
 	oldModeName := GetModeDisplayName(cfg.Route.Mode)
 
-	// Start progress view in interactive mode
-	if ctx.IsInteractive {
-		ctx.Output.BeginProgress(fmt.Sprintf("Switch to %s", newModeName))
-	} else {
+	beginProgress(ctx, fmt.Sprintf("Switch to %s", newModeName))
+	if !ctx.IsInteractive {
 		ctx.Output.Println()
 	}
 
 	ctx.Output.Info(fmt.Sprintf("Switching from %s to %s...", oldModeName, newModeName))
 
 	if err := r.SwitchMode(newMode); err != nil {
-		if ctx.IsInteractive {
-			ctx.Output.Error(fmt.Sprintf("Failed: %v", err))
-			ctx.Output.EndProgress()
-			return nil // Error already shown in progress view
-		}
-		return fmt.Errorf("failed to switch mode: %w", err)
+		return failProgress(ctx, fmt.Errorf("failed to switch mode: %w", err))
 	}
 
 	ctx.Output.Success(fmt.Sprintf("Switched to %s!", newModeName))

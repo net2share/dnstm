@@ -136,4 +136,4 @@ Supports:
 
 Configures:
 - Port 53 UDP/TCP for DNS
-- Transport ports (5300+ for multi-mode backends)
+- Transport ports (5310+ for multi-mode backends)

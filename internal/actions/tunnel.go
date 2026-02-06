@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/net2share/dnstm/internal/config"
-	"github.com/net2share/dnstm/internal/router"
 	"github.com/net2share/go-corelib/tui"
 )
 
@@ -266,8 +265,8 @@ func init() {
 					if err != nil {
 						return fmt.Sprintf("%d", config.DefaultPortStart)
 					}
-					port, err := router.AllocatePort(cfg)
-					if err != nil {
+					port := cfg.AllocateNextPort()
+					if port == 0 {
 						return fmt.Sprintf("%d", config.DefaultPortStart)
 					}
 					return fmt.Sprintf("%d", port)

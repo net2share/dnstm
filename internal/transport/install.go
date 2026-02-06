@@ -6,29 +6,10 @@ import (
 	"github.com/net2share/dnstm/internal/binary"
 	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/log"
-	"github.com/net2share/dnstm/internal/types"
 )
 
 // StatusFunc is a callback for reporting installation status messages.
 type StatusFunc func(message string)
-
-// EnsureBinariesInstalled checks and installs required binaries for a transport type.
-// This is the legacy function that accepts types.TransportType.
-func EnsureBinariesInstalled(t types.TransportType) error {
-	switch t {
-	case types.TypeSlipstreamShadowsocks:
-		if err := EnsureSlipstreamInstalled(); err != nil {
-			return err
-		}
-		return EnsureShadowsocksInstalled()
-	case types.TypeSlipstreamSocks, types.TypeSlipstreamSSH:
-		return EnsureSlipstreamInstalled()
-	case types.TypeDNSTTSocks, types.TypeDNSTTSSH:
-		return EnsureDnsttInstalled()
-	default:
-		return nil
-	}
-}
 
 // EnsureTransportBinariesInstalled checks and installs required binaries for a transport type.
 // This function accepts the new config.TransportType.

@@ -31,7 +31,7 @@ func NewTunnel(cfg *config.TunnelConfig) *Tunnel {
 		Backend:     cfg.Backend,
 		Domain:      cfg.Domain,
 		Port:        cfg.Port,
-		ServiceName: GetTunnelServiceName(cfg.Tag),
+		ServiceName: GetServiceName(cfg.Tag),
 		Config:      cfg,
 	}
 }
@@ -154,7 +154,3 @@ Status:    %s
 	)
 }
 
-// GetTunnelServiceName returns the systemd service name for a tunnel.
-func GetTunnelServiceName(tag string) string {
-	return fmt.Sprintf("dnstm-%s", tag)
-}

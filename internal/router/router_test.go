@@ -74,7 +74,7 @@ func TestIsPortAvailable(t *testing.T) {
 	}
 }
 
-func TestAllocatePort(t *testing.T) {
+func TestIsPortAvailableUsedPort(t *testing.T) {
 	cfg := &config.Config{
 		Tunnels: []config.TunnelConfig{
 			{Tag: "tunnel-a", Port: 5310},
@@ -82,28 +82,12 @@ func TestAllocatePort(t *testing.T) {
 		},
 	}
 
-	port, err := AllocatePort(cfg)
-	if err != nil {
-		t.Fatalf("AllocatePort failed: %v", err)
+	// Port used by config should not be available
+	if IsPortAvailable(5310, cfg) {
+		t.Error("IsPortAvailable(5310) should be false (used by tunnel)")
 	}
-
-	// Should not be one of the used ports
-	if port == 5310 || port == 5311 {
-		t.Errorf("AllocatePort returned used port: %d", port)
-	}
-
-	// Should be in valid range
-	if port < BasePort || port > MaxPort {
-		t.Errorf("AllocatePort returned port outside range: %d", port)
-	}
-}
-
-func TestPortConstants(t *testing.T) {
-	if BasePort != 5310 {
-		t.Errorf("BasePort = %d, want 5310", BasePort)
-	}
-	if MaxPort != 5399 {
-		t.Errorf("MaxPort = %d, want 5399", MaxPort)
+	if IsPortAvailable(5311, cfg) {
+		t.Error("IsPortAvailable(5311) should be false (used by tunnel)")
 	}
 }
 

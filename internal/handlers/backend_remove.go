@@ -13,18 +13,14 @@ func init() {
 
 // HandleBackendRemove removes a backend.
 func HandleBackendRemove(ctx *actions.Context) error {
-	if err := CheckRequirements(ctx, true, true); err != nil {
+	cfg, err := RequireConfig(ctx)
+	if err != nil {
 		return err
 	}
 
-	cfg, err := LoadConfig(ctx)
+	tag, err := RequireTag(ctx, "backend")
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	tag := ctx.GetString("tag")
-	if tag == "" {
-		return fmt.Errorf("backend tag is required")
+		return err
 	}
 
 	// Check if backend exists
@@ -57,28 +53,20 @@ func HandleBackendRemove(ctx *actions.Context) error {
 	}
 	cfg.Backends = newBackends
 
-	// Start progress view in interactive mode
-	if ctx.IsInteractive {
-		ctx.Output.BeginProgress(fmt.Sprintf("Remove Backend: %s", tag))
-	} else {
+	beginProgress(ctx, fmt.Sprintf("Remove Backend: %s", tag))
+	if !ctx.IsInteractive {
 		ctx.Output.Println()
 	}
 
 	// Save config
 	if err := cfg.Save(); err != nil {
-		if ctx.IsInteractive {
-			ctx.Output.Error(fmt.Sprintf("Failed: %v", err))
-			ctx.Output.EndProgress()
-			return nil
-		}
-		return fmt.Errorf("failed to save config: %w", err)
+		return failProgress(ctx, fmt.Errorf("failed to save config: %w", err))
 	}
 
 	ctx.Output.Success(fmt.Sprintf("Backend '%s' removed", tag))
 
-	if ctx.IsInteractive {
-		ctx.Output.EndProgress()
-	} else {
+	endProgress(ctx)
+	if !ctx.IsInteractive {
 		ctx.Output.Println()
 	}
 

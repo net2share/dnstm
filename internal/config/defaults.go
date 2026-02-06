@@ -1,6 +1,9 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"net"
+)
 
 const (
 	// DefaultPortStart is the start of the port range for tunnel allocation.
@@ -96,19 +99,38 @@ func (c *Config) getUsedPorts() map[int]bool {
 }
 
 // allocatePort finds the next available port in the tunnel port range.
+// It checks both the config (usedPorts) and system (TCP/UDP binding).
 func allocatePort(usedPorts map[int]bool) int {
 	for port := DefaultPortStart; port <= DefaultPortEnd; port++ {
-		if !usedPorts[port] {
+		if !usedPorts[port] && IsPortFree(port) {
 			return port
 		}
 	}
 	// Fallback to ports above the range
 	for port := DefaultPortEnd + 1; port < 65535; port++ {
-		if !usedPorts[port] {
+		if !usedPorts[port] && IsPortFree(port) {
 			return port
 		}
 	}
 	return 0 // Should not happen
+}
+
+// IsPortFree checks if a port is free on the system (both TCP and UDP on 127.0.0.1).
+func IsPortFree(port int) bool {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return false
+	}
+	ln.Close()
+
+	udpLn, err := net.ListenPacket("udp", addr)
+	if err != nil {
+		return false
+	}
+	udpLn.Close()
+
+	return true
 }
 
 // AllocateNextPort allocates the next available port for a new tunnel.

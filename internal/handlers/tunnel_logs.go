@@ -13,13 +13,13 @@ func init() {
 
 // HandleTunnelLogs shows logs for a specific tunnel.
 func HandleTunnelLogs(ctx *actions.Context) error {
-	if err := CheckRequirements(ctx, true, true); err != nil {
+	if _, err := RequireConfig(ctx); err != nil {
 		return err
 	}
 
-	tag := ctx.GetString("tag")
-	if tag == "" {
-		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel logs -t <tag>")
+	tag, err := RequireTag(ctx, "tunnel")
+	if err != nil {
+		return err
 	}
 
 	tunnelCfg, err := GetTunnelByTag(ctx, tag)

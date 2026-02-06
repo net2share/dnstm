@@ -101,6 +101,15 @@ func GetServicePath(serviceName string) string {
 	return fmt.Sprintf("/etc/systemd/system/%s.service", serviceName)
 }
 
+// runSystemctl executes a systemctl command and returns a formatted error on failure.
+func runSystemctl(action, serviceName string) error {
+	cmd := exec.Command("systemctl", action, serviceName)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to %s service: %s: %w", action, strings.TrimSpace(string(output)), err)
+	}
+	return nil
+}
+
 // CreateGenericService creates a systemd service with the given configuration.
 func CreateGenericService(cfg *ServiceConfig) error {
 	servicePath := GetServicePath(cfg.Name)
@@ -156,45 +165,32 @@ WantedBy=multi-user.target
 		return fmt.Errorf("failed to write service file: %w", err)
 	}
 
-	exec.Command("systemctl", "daemon-reload").Run()
-
-	return nil
+	return DaemonReload()
 }
 
 // EnableService enables a systemd service.
 func EnableService(serviceName string) error {
-	cmd := exec.Command("systemctl", "enable", serviceName)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to enable service: %s: %w", string(output), err)
-	}
-	return nil
+	return runSystemctl("enable", serviceName)
+}
+
+// DisableService disables a systemd service.
+func DisableService(serviceName string) error {
+	return runSystemctl("disable", serviceName)
 }
 
 // StartService starts a systemd service.
 func StartService(serviceName string) error {
-	cmd := exec.Command("systemctl", "start", serviceName)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to start service: %s: %w", string(output), err)
-	}
-	return nil
+	return runSystemctl("start", serviceName)
 }
 
 // StopService stops a systemd service.
 func StopService(serviceName string) error {
-	cmd := exec.Command("systemctl", "stop", serviceName)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to stop service: %s: %w", string(output), err)
-	}
-	return nil
+	return runSystemctl("stop", serviceName)
 }
 
 // RestartService restarts a systemd service.
 func RestartService(serviceName string) error {
-	cmd := exec.Command("systemctl", "restart", serviceName)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to restart service: %s: %w", string(output), err)
-	}
-	return nil
+	return runSystemctl("restart", serviceName)
 }
 
 // IsServiceActive checks if a service is active.
@@ -234,34 +230,39 @@ func GetServiceLogs(serviceName string, lines int) (string, error) {
 	return string(output), nil
 }
 
-// DisableService disables a systemd service.
-func DisableService(serviceName string) error {
-	cmd := exec.Command("systemctl", "disable", serviceName)
-	cmd.Run()
-	return nil
-}
-
-// RemoveService removes a systemd service unit file.
+// RemoveService removes a systemd service unit file and reloads daemon.
 func RemoveService(serviceName string) error {
-	os.Remove(GetServicePath(serviceName))
-	exec.Command("systemctl", "daemon-reload").Run()
-	return nil
+	servicePath := GetServicePath(serviceName)
+	if err := os.Remove(servicePath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove service file: %w", err)
+	}
+	return DaemonReload()
 }
 
 // SetServicePermissions sets permissions for service files.
 func SetServicePermissions(user, group string, privateKeyFile, publicKeyFile, configDir string) error {
-	// Set ownership of key files
+	ownership := user + ":" + group
+
 	if privateKeyFile != "" {
-		exec.Command("chown", user+":"+group, privateKeyFile).Run()
-		exec.Command("chmod", "600", privateKeyFile).Run()
+		if err := exec.Command("chown", ownership, privateKeyFile).Run(); err != nil {
+			return fmt.Errorf("failed to chown private key: %w", err)
+		}
+		if err := exec.Command("chmod", "600", privateKeyFile).Run(); err != nil {
+			return fmt.Errorf("failed to chmod private key: %w", err)
+		}
 	}
 	if publicKeyFile != "" {
-		exec.Command("chown", user+":"+group, publicKeyFile).Run()
-		exec.Command("chmod", "644", publicKeyFile).Run()
+		if err := exec.Command("chown", ownership, publicKeyFile).Run(); err != nil {
+			return fmt.Errorf("failed to chown public key: %w", err)
+		}
+		if err := exec.Command("chmod", "644", publicKeyFile).Run(); err != nil {
+			return fmt.Errorf("failed to chmod public key: %w", err)
+		}
 	}
 
-	// Set ownership of config directory
-	exec.Command("chown", "-R", user+":"+group, configDir).Run()
+	if err := exec.Command("chown", "-R", ownership, configDir).Run(); err != nil {
+		return fmt.Errorf("failed to chown config directory: %w", err)
+	}
 
 	return nil
 }

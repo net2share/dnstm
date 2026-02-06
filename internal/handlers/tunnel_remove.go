@@ -14,18 +14,14 @@ func init() {
 
 // HandleTunnelRemove removes a tunnel.
 func HandleTunnelRemove(ctx *actions.Context) error {
-	if err := CheckRequirements(ctx, true, true); err != nil {
+	cfg, err := RequireConfig(ctx)
+	if err != nil {
 		return err
 	}
 
-	tag := ctx.GetString("tag")
-	if tag == "" {
-		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel remove -t <tag>")
-	}
-
-	cfg, err := LoadConfig(ctx)
+	tag, err := RequireTag(ctx, "tunnel")
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
 	tunnelCfg := cfg.GetTunnelByTag(tag)
@@ -48,10 +44,8 @@ func HandleTunnelRemove(ctx *actions.Context) error {
 	// Confirmation is handled by the adapter (CLI or menu)
 	// The handler assumes confirmation has already been obtained
 
-	// Start progress view in interactive mode
-	if ctx.IsInteractive {
-		ctx.Output.BeginProgress(fmt.Sprintf("Remove Tunnel: %s", tag))
-	} else {
+	beginProgress(ctx, fmt.Sprintf("Remove Tunnel: %s", tag))
+	if !ctx.IsInteractive {
 		ctx.Output.Println()
 	}
 
@@ -109,20 +103,14 @@ func HandleTunnelRemove(ctx *actions.Context) error {
 	}
 
 	if err := cfg.Save(); err != nil {
-		if ctx.IsInteractive {
-			ctx.Output.Error(fmt.Sprintf("Failed: %v", err))
-			ctx.Output.EndProgress()
-			return nil // Error already shown in progress view
-		}
-		return fmt.Errorf("failed to save config: %w", err)
+		return failProgress(ctx, fmt.Errorf("failed to save config: %w", err))
 	}
 	ctx.Output.Status("Configuration updated")
 
 	ctx.Output.Success(fmt.Sprintf("Tunnel '%s' removed!", tag))
 
-	if ctx.IsInteractive {
-		ctx.Output.EndProgress()
-	} else {
+	endProgress(ctx)
+	if !ctx.IsInteractive {
 		ctx.Output.Println()
 	}
 

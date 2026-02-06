@@ -14,13 +14,9 @@ func init() {
 
 // HandleConfigExport exports the current configuration.
 func HandleConfigExport(ctx *actions.Context) error {
-	if err := CheckRequirements(ctx, true, true); err != nil {
-		return err
-	}
-
-	cfg, err := LoadConfig(ctx)
+	cfg, err := RequireConfig(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
 	// Marshal to pretty JSON
@@ -45,9 +41,4 @@ func HandleConfigExport(ctx *actions.Context) error {
 	fmt.Println(string(data))
 
 	return nil
-}
-
-// HandleConfigShow shows the current configuration (alias for export).
-func HandleConfigShow(ctx *actions.Context) error {
-	return HandleConfigExport(ctx)
 }

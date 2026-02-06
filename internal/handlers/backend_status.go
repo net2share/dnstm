@@ -13,18 +13,14 @@ func init() {
 
 // HandleBackendStatus shows backend status and configuration.
 func HandleBackendStatus(ctx *actions.Context) error {
-	if err := CheckRequirements(ctx, true, true); err != nil {
+	cfg, err := RequireConfig(ctx)
+	if err != nil {
 		return err
 	}
 
-	cfg, err := LoadConfig(ctx)
+	tag, err := RequireTag(ctx, "backend")
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	tag := ctx.GetString("tag")
-	if tag == "" {
-		return fmt.Errorf("backend tag is required")
+		return err
 	}
 
 	// Get backend

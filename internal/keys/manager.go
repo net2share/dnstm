@@ -73,7 +73,7 @@ func (m *Manager) Get(domain string) *KeyInfo {
 func (m *Manager) Generate(domain string) (*KeyInfo, error) {
 	privPath, pubPath := m.GetPaths(domain)
 
-	pubKey, err := GenerateKeys(privPath, pubPath)
+	pubKey, err := Generate(privPath, pubPath)
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +136,3 @@ func (m *Manager) GetPaths(domain string) (privPath, pubPath string) {
 	return
 }
 
-// GenerateKeys creates a new Curve25519 key pair.
-// This is a wrapper around the existing Generate function in generate.go.
-func GenerateKeys(privateKeyPath, publicKeyPath string) (publicKey string, err error) {
-	return Generate(privateKeyPath, publicKeyPath)
-}

@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"fmt"
-
 	"github.com/net2share/dnstm/internal/actions"
 	"github.com/net2share/dnstm/internal/config"
 )
@@ -13,13 +11,9 @@ func init() {
 
 // HandleBackendList lists all configured backends.
 func HandleBackendList(ctx *actions.Context) error {
-	if err := CheckRequirements(ctx, true, true); err != nil {
-		return err
-	}
-
-	cfg, err := LoadConfig(ctx)
+	cfg, err := RequireConfig(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
 	if len(cfg.Backends) == 0 {

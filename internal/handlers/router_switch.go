@@ -14,13 +14,9 @@ func init() {
 
 // HandleRouterSwitch switches the active tunnel in single mode.
 func HandleRouterSwitch(ctx *actions.Context) error {
-	if err := CheckRequirements(ctx, true, true); err != nil {
-		return err
-	}
-
-	cfg, err := LoadConfig(ctx)
+	cfg, err := RequireConfig(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
 	// Check mode
@@ -68,22 +64,15 @@ func HandleRouterSwitch(ctx *actions.Context) error {
 		return fmt.Errorf("failed to create router: %w", err)
 	}
 
-	// Start progress view in interactive mode
-	if ctx.IsInteractive {
-		ctx.Output.BeginProgress("Switch Active Tunnel")
-	} else {
+	beginProgress(ctx, "Switch Active Tunnel")
+	if !ctx.IsInteractive {
 		ctx.Output.Println()
 	}
 
 	ctx.Output.Info(fmt.Sprintf("Switching to '%s'...", tunnelTag))
 
 	if err := r.SwitchActiveTunnel(tunnelTag); err != nil {
-		if ctx.IsInteractive {
-			ctx.Output.Error(fmt.Sprintf("Failed: %v", err))
-			ctx.Output.EndProgress()
-			return nil // Error already shown in progress view
-		}
-		return fmt.Errorf("failed to switch tunnel: %w", err)
+		return failProgress(ctx, fmt.Errorf("failed to switch tunnel: %w", err))
 	}
 
 	// Show success
@@ -96,9 +85,8 @@ func HandleRouterSwitch(ctx *actions.Context) error {
 	ctx.Output.Status(fmt.Sprintf("Domain: %s", tunnel.Domain))
 	ctx.Output.Status(fmt.Sprintf("Port: %d", tunnel.Port))
 
-	if ctx.IsInteractive {
-		ctx.Output.EndProgress()
-	} else {
+	endProgress(ctx)
+	if !ctx.IsInteractive {
 		ctx.Output.Println()
 	}
 

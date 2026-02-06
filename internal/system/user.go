@@ -13,10 +13,6 @@ const (
 	// DnstmUser is the shared system user for all dnstm services.
 	DnstmUser = "dnstm"
 
-	// Legacy user constants for backward compatibility
-	DnsttUser       = DnstmUser
-	SlipstreamUser  = DnstmUser
-	ShadowsocksUser = DnstmUser
 )
 
 // CreateSystemUser creates a system user with no home directory and nologin shell.
@@ -125,50 +121,6 @@ func ChownDirToDnstm(path string) error {
 	return nil
 }
 
-// CreateDnsttUser creates the dnstt system user (backward compatible wrapper).
-func CreateDnsttUser() error {
-	return CreateSystemUser(DnsttUser)
-}
-
-// DnsttUserExists checks if the dnstt user exists (backward compatible wrapper).
-func DnsttUserExists() bool {
-	return UserExists(DnsttUser)
-}
-
-// RemoveDnsttUser removes the dnstt user (backward compatible wrapper).
-func RemoveDnsttUser() {
-	RemoveSystemUser(DnsttUser)
-}
-
-// CreateSlipstreamUser creates the slipstream system user.
-func CreateSlipstreamUser() error {
-	return CreateSystemUser(SlipstreamUser)
-}
-
-// SlipstreamUserExists checks if the slipstream user exists.
-func SlipstreamUserExists() bool {
-	return UserExists(SlipstreamUser)
-}
-
-// RemoveSlipstreamUser removes the slipstream user.
-func RemoveSlipstreamUser() {
-	RemoveSystemUser(SlipstreamUser)
-}
-
-// CreateShadowsocksUser creates the shadowsocks system user.
-func CreateShadowsocksUser() error {
-	return CreateSystemUser(ShadowsocksUser)
-}
-
-// ShadowsocksUserExists checks if the shadowsocks user exists.
-func ShadowsocksUserExists() bool {
-	return UserExists(ShadowsocksUser)
-}
-
-// RemoveShadowsocksUser removes the shadowsocks user.
-func RemoveShadowsocksUser() {
-	RemoveSystemUser(ShadowsocksUser)
-}
 
 // CanDnstmUserReadFile checks if the dnstm user can read the specified file.
 // Returns true if the file exists and is readable by the dnstm user.

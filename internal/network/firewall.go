@@ -9,10 +9,11 @@ import (
 	"time"
 )
 
+// Legacy port constants used for cleaning up old firewall rules.
 const (
-	DnsttPort       = "5300"
-	SlipstreamPort  = "5301"
-	ShadowsocksPort = "5302"
+	legacyDnsttPort       = "5300"
+	legacySlipstreamPort  = "5301"
+	legacyShadowsocksPort = "5302"
 )
 
 type FirewallType int
@@ -47,11 +48,6 @@ func DetectFirewall() FirewallType {
 	return FirewallNone
 }
 
-// ConfigureFirewall configures the firewall for dnstt (backward compatible wrapper).
-func ConfigureFirewall() error {
-	return ConfigureFirewallForPort(DnsttPort)
-}
-
 // ConfigureFirewallForPort configures the firewall to redirect port 53 to the given port.
 func ConfigureFirewallForPort(port string) error {
 	fwType := DetectFirewall()
@@ -66,10 +62,6 @@ func ConfigureFirewallForPort(port string) error {
 	}
 
 	return nil
-}
-
-func configureFirewalld() error {
-	return configureFirewalldForPort(DnsttPort)
 }
 
 func configureFirewalldForPort(port string) error {
@@ -91,10 +83,6 @@ func configureFirewalldForPort(port string) error {
 	}
 
 	return nil
-}
-
-func configureUFW() error {
-	return configureUFWForPort(DnsttPort)
 }
 
 func configureUFWForPort(port string) error {
@@ -131,53 +119,47 @@ func configureUFWForPort(port string) error {
 	return nil
 }
 
-const ufwBeforeRulesPath = "/etc/ufw/before.rules"
-const dnstmNatMarker = "# NAT table rules for dnstm"
-const dnsttNatMarker = "# NAT table rules for dnstt" // Legacy marker for backward compat
+const (
+	ufwBeforeRulesPath  = "/etc/ufw/before.rules"
+	ufwBefore6RulesPath = "/etc/ufw/before6.rules"
+	dnstmNatMarker      = "# NAT table rules for dnstm"
+	dnsttNatMarker      = "# NAT table rules for dnstt" // Legacy marker for backward compat
+)
 
-func addUFWNatRules() error {
-	return addUFWNatRulesForPort(DnsttPort)
-}
-
-func addUFWNatRulesForPort(port string) error {
-	// Enable route_localnet for DNAT to 127.0.0.1
-	enableRouteLocalnet()
-
-	content, err := os.ReadFile(ufwBeforeRulesPath)
+// addUFWNatRulesToFile is the shared implementation for adding NAT rules to UFW rules files.
+func addUFWNatRulesToFile(filePath, targetAddr, port, comment string) error {
+	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
 
 	// Check if NAT rules already exist (check both old and new markers)
 	if strings.Contains(string(content), dnstmNatMarker) || strings.Contains(string(content), dnsttNatMarker) {
-		// Remove existing rules first, then add new ones
-		removeUFWNatRules(ufwBeforeRulesPath)
-		content, _ = os.ReadFile(ufwBeforeRulesPath)
+		removeUFWNatRules(filePath)
+		content, _ = os.ReadFile(filePath)
 	}
 
-	// NAT rules to prepend before the *filter section
-	// Use DNAT instead of REDIRECT to work with services bound to 127.0.0.1
-	natRules := fmt.Sprintf(`%s - DNAT port 53 to 127.0.0.1:%s
+	natRules := fmt.Sprintf(`%s - DNAT port 53 to %s:%s%s
 *nat
 :PREROUTING ACCEPT [0:0]
--A PREROUTING -p udp --dport 53 -j DNAT --to-destination 127.0.0.1:%s
--A PREROUTING -p tcp --dport 53 -j DNAT --to-destination 127.0.0.1:%s
+-A PREROUTING -p udp --dport 53 -j DNAT --to-destination %s:%s
+-A PREROUTING -p tcp --dport 53 -j DNAT --to-destination %s:%s
 COMMIT
 
-`, dnstmNatMarker, port, port, port)
+`, dnstmNatMarker, targetAddr, port, comment, targetAddr, port, targetAddr, port)
 
-	// Prepend NAT rules to the file
 	newContent := natRules + string(content)
 
-	if err := os.WriteFile(ufwBeforeRulesPath, []byte(newContent), 0640); err != nil {
-		return err
-	}
-
-	return nil
+	return os.WriteFile(filePath, []byte(newContent), 0640)
 }
 
-func configureIptables() error {
-	return configureIptablesForPort(DnsttPort)
+func addUFWNatRulesForPort(port string) error {
+	enableRouteLocalnet()
+	return addUFWNatRulesToFile(ufwBeforeRulesPath, "127.0.0.1", port, "")
+}
+
+func addUFWNatRulesIPv6ForPort(port string) error {
+	return addUFWNatRulesToFile(ufwBefore6RulesPath, "[::1]", port, " (IPv6)")
 }
 
 func configureIptablesForPort(port string) error {
@@ -225,10 +207,6 @@ func clearAllNatOutput() {
 	exec.Command("ip6tables", "-t", "nat", "-F", "OUTPUT").Run()
 }
 
-func clearIptablesRules() {
-	clearIptablesRulesForPort(DnsttPort)
-}
-
 func clearIptablesRulesForPort(port string) {
 	// Try to delete both DNAT and REDIRECT rules (for backward compatibility)
 	rules := [][]string{
@@ -270,11 +248,6 @@ func saveIptablesRules() error {
 	return nil
 }
 
-// ConfigureIPv6 configures IPv6 firewall rules for dnstt (backward compatible wrapper).
-func ConfigureIPv6() error {
-	return ConfigureIPv6ForPort(DnsttPort)
-}
-
 // ConfigureIPv6ForPort configures IPv6 firewall rules for the given port.
 func ConfigureIPv6ForPort(port string) error {
 	fwType := DetectFirewall()
@@ -285,7 +258,6 @@ func ConfigureIPv6ForPort(port string) error {
 		return addUFWNatRulesIPv6ForPort(port)
 	}
 
-	// Enable route_localnet equivalent for IPv6 (not needed, but keep for consistency)
 	// Direct ip6tables for non-UFW systems
 	// Clear any existing rules first
 	exec.Command("ip6tables", "-t", "nat", "-F", "PREROUTING").Run()
@@ -300,53 +272,6 @@ func ConfigureIPv6ForPort(port string) error {
 	}
 
 	return nil
-}
-
-const ufwBefore6RulesPath = "/etc/ufw/before6.rules"
-
-func addUFWNatRulesIPv6() error {
-	return addUFWNatRulesIPv6ForPort(DnsttPort)
-}
-
-func addUFWNatRulesIPv6ForPort(port string) error {
-	content, err := os.ReadFile(ufwBefore6RulesPath)
-	if err != nil {
-		return err
-	}
-
-	// Check if NAT rules already exist (check both old and new markers)
-	if strings.Contains(string(content), dnstmNatMarker) || strings.Contains(string(content), dnsttNatMarker) {
-		// Remove existing rules first, then add new ones
-		removeUFWNatRules(ufwBefore6RulesPath)
-		content, _ = os.ReadFile(ufwBefore6RulesPath)
-	}
-
-	// NAT rules to prepend before the *filter section
-	// Use DNAT for IPv6 as well
-	natRules := fmt.Sprintf(`%s - DNAT port 53 to [::1]:%s (IPv6)
-*nat
-:PREROUTING ACCEPT [0:0]
--A PREROUTING -p udp --dport 53 -j DNAT --to-destination [::1]:%s
--A PREROUTING -p tcp --dport 53 -j DNAT --to-destination [::1]:%s
-COMMIT
-
-`, dnstmNatMarker, port, port, port)
-
-	// Prepend NAT rules to the file
-	newContent := natRules + string(content)
-
-	if err := os.WriteFile(ufwBefore6RulesPath, []byte(newContent), 0640); err != nil {
-		return err
-	}
-
-	// Don't reload here - the caller should reload once after all configs are done
-	// to avoid duplicating IPv4 rules
-	return nil
-}
-
-// RemoveFirewallRules removes all firewall rules for dnstt (backward compatible wrapper).
-func RemoveFirewallRules() {
-	RemoveFirewallRulesForPort(DnsttPort)
 }
 
 // RemoveFirewallRulesForPort removes firewall rules for a specific port.
@@ -365,32 +290,27 @@ func RemoveFirewallRulesForPort(port string) {
 	}
 }
 
-// RemoveAllFirewallRules removes firewall rules for all providers.
+// RemoveAllFirewallRules removes firewall rules for all legacy ports.
 func RemoveAllFirewallRules() {
+	legacyPorts := []string{legacyDnsttPort, legacySlipstreamPort, legacyShadowsocksPort}
 	fwType := DetectFirewall()
 
 	switch fwType {
 	case FirewallFirewalld:
-		removeFirewalldRulesForPort(DnsttPort)
-		removeFirewalldRulesForPort(SlipstreamPort)
-		removeFirewalldRulesForPort(ShadowsocksPort)
+		for _, port := range legacyPorts {
+			removeFirewalldRulesForPort(port)
+		}
 	case FirewallUFW:
-		removeUFWRulesForPort(DnsttPort)
-		removeUFWRulesForPort(SlipstreamPort)
-		removeUFWRulesForPort(ShadowsocksPort)
+		for _, port := range legacyPorts {
+			removeUFWRulesForPort(port)
+		}
 	case FirewallIptables, FirewallNone:
-		clearIptablesRulesForPort(DnsttPort)
-		clearIptablesRulesForPort(SlipstreamPort)
-		clearIptablesRulesForPort(ShadowsocksPort)
-		clearIp6tablesRulesForPort(DnsttPort)
-		clearIp6tablesRulesForPort(SlipstreamPort)
-		clearIp6tablesRulesForPort(ShadowsocksPort)
+		for _, port := range legacyPorts {
+			clearIptablesRulesForPort(port)
+			clearIp6tablesRulesForPort(port)
+		}
 		saveIptablesRules()
 	}
-}
-
-func removeFirewalldRules() {
-	removeFirewalldRulesForPort(DnsttPort)
 }
 
 func removeFirewalldRulesForPort(port string) {
@@ -406,10 +326,6 @@ func removeFirewalldRulesForPort(port string) {
 	for _, args := range cmds {
 		exec.Command(args[0], args[1:]...).Run()
 	}
-}
-
-func removeUFWRules() {
-	removeUFWRulesForPort(DnsttPort)
 }
 
 func removeUFWRulesForPort(port string) {
@@ -476,10 +392,6 @@ func removeUFWNatRules(filePath string) {
 	}
 
 	os.WriteFile(filePath, []byte(strings.Join(newLines, "\n")), 0640)
-}
-
-func clearIp6tablesRules() {
-	clearIp6tablesRulesForPort(DnsttPort)
 }
 
 func clearIp6tablesRulesForPort(port string) {
@@ -569,16 +481,11 @@ func ClearNATOnly() {
 		clearAllNatOutput()
 		exec.Command("ip6tables", "-t", "nat", "-F", "PREROUTING").Run()
 	case FirewallFirewalld:
-		// For firewalld, just remove the direct rules
-		cmds := [][]string{
-			{"firewall-cmd", "--permanent", "--direct", "--remove-rule", "ipv4", "nat", "PREROUTING", "0", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", DnsttPort},
-			{"firewall-cmd", "--permanent", "--direct", "--remove-rule", "ipv4", "nat", "PREROUTING", "0", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", SlipstreamPort},
-			{"firewall-cmd", "--permanent", "--direct", "--remove-rule", "ipv4", "nat", "PREROUTING", "0", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", ShadowsocksPort},
-			{"firewall-cmd", "--reload"},
+		// For firewalld, remove the direct rules for all legacy ports
+		for _, port := range []string{legacyDnsttPort, legacySlipstreamPort, legacyShadowsocksPort} {
+			exec.Command("firewall-cmd", "--permanent", "--direct", "--remove-rule", "ipv4", "nat", "PREROUTING", "0", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", port).Run()
 		}
-		for _, args := range cmds {
-			exec.Command(args[0], args[1:]...).Run()
-		}
+		exec.Command("firewall-cmd", "--reload").Run()
 	}
 }
 
