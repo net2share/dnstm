@@ -17,9 +17,9 @@ func HandleTunnelLogs(ctx *actions.Context) error {
 		return err
 	}
 
-	tag := ctx.GetArg(0)
+	tag := ctx.GetString("tag")
 	if tag == "" {
-		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel logs <tag>")
+		return actions.NewActionError("tunnel tag required", "Usage: dnstm tunnel logs -t <tag>")
 	}
 
 	tunnelCfg, err := GetTunnelByTag(ctx, tag)

@@ -49,41 +49,41 @@ func GenerateUniqueTag(cfg *config.Config) string {
 	return GenerateName() + fmt.Sprintf("-%d", rand.IntN(1000))
 }
 
-// ValidateName validates an instance name.
-func ValidateName(name string) error {
-	if name == "" {
-		return fmt.Errorf("name cannot be empty")
+// ValidateTag validates a tag.
+func ValidateTag(tag string) error {
+	if tag == "" {
+		return fmt.Errorf("tag cannot be empty")
 	}
 
-	if len(name) < 3 {
-		return fmt.Errorf("name must be at least 3 characters")
+	if len(tag) < 3 {
+		return fmt.Errorf("tag must be at least 3 characters")
 	}
 
-	if len(name) > 63 {
-		return fmt.Errorf("name must be at most 63 characters")
+	if len(tag) > 63 {
+		return fmt.Errorf("tag must be at most 63 characters")
 	}
 
-	if !nameRegex.MatchString(name) {
-		return fmt.Errorf("name must start with a lowercase letter and contain only lowercase letters, numbers, and hyphens")
+	if !nameRegex.MatchString(tag) {
+		return fmt.Errorf("tag must start with a lowercase letter and contain only lowercase letters, numbers, and hyphens")
 	}
 
-	// Check for reserved names
+	// Check for reserved tags
 	reserved := []string{"coredns", "router", "default", "all", "none"}
 	for _, r := range reserved {
-		if name == r {
-			return fmt.Errorf("name '%s' is reserved", name)
+		if tag == r {
+			return fmt.Errorf("tag '%s' is reserved", tag)
 		}
 	}
 
 	return nil
 }
 
-// NormalizeName normalizes a name to lowercase and replaces underscores with hyphens.
-func NormalizeName(name string) string {
-	name = strings.ToLower(name)
-	name = strings.ReplaceAll(name, "_", "-")
-	name = strings.ReplaceAll(name, " ", "-")
-	return name
+// NormalizeTag normalizes a tag to lowercase and replaces underscores with hyphens.
+func NormalizeTag(tag string) string {
+	tag = strings.ToLower(tag)
+	tag = strings.ReplaceAll(tag, "_", "-")
+	tag = strings.ReplaceAll(tag, " ", "-")
+	return tag
 }
 
 // SuggestSimilarTags suggests similar tags if a tag is taken.
@@ -130,6 +130,24 @@ func GenerateUniqueTunnelTag(tunnels []config.TunnelConfig) string {
 	existingTags := make(map[string]bool)
 	for _, t := range tunnels {
 		existingTags[t.Tag] = true
+	}
+
+	for i := 0; i < maxAttempts; i++ {
+		tag := GenerateName()
+		if !existingTags[tag] {
+			return tag
+		}
+	}
+	// Fallback: add a random suffix
+	return GenerateName() + fmt.Sprintf("-%d", rand.IntN(1000))
+}
+
+// GenerateUniqueBackendTag generates a unique tag that doesn't conflict with existing backends.
+func GenerateUniqueBackendTag(backends []config.BackendConfig) string {
+	maxAttempts := 100
+	existingTags := make(map[string]bool)
+	for _, b := range backends {
+		existingTags[b.Tag] = true
 	}
 
 	for i := 0; i < maxAttempts; i++ {

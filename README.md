@@ -110,25 +110,25 @@ sudo dnstm install --mode multi       # For multi-tunnel mode with DNS router
 
 ```bash
 sudo dnstm
-# Navigate: Tunnel Management → Add Tunnel
+# Navigate: Tunnels → Add
 ```
 
 #### 2. CLI Commands
 
 ```bash
 # Add slipstream + socks tunnel
-sudo dnstm tunnel add slip-socks --transport slipstream --backend socks --domain t1.example.com
+sudo dnstm tunnel add -t slip-socks --transport slipstream --backend socks --domain t1.example.com
 
 # Add dnstt + ssh tunnel
-sudo dnstm tunnel add dnstt-ssh --transport dnstt --backend ssh --domain t2.example.com
+sudo dnstm tunnel add -t dnstt-ssh --transport dnstt --backend ssh --domain t2.example.com
 
 # Add slipstream + shadowsocks tunnel (creates shadowsocks backend automatically)
-sudo dnstm backend add --tag my-ss --type shadowsocks --password mypass123 --method aes-256-gcm
-sudo dnstm tunnel add slip-ss --transport slipstream --backend my-ss --domain t3.example.com
+sudo dnstm backend add -t my-ss --type shadowsocks --password mypass123 --method aes-256-gcm
+sudo dnstm tunnel add -t slip-ss --transport slipstream --backend my-ss --domain t3.example.com
 
 # Add slipstream + custom backend (e.g., MTProto proxy)
-sudo dnstm backend add --tag mtproto --type custom --address 127.0.0.1:8443
-sudo dnstm tunnel add slip-mtproto --transport slipstream --backend mtproto --domain t4.example.com
+sudo dnstm backend add -t mtproto --type custom --address 127.0.0.1:8443
+sudo dnstm tunnel add -t slip-mtproto --transport slipstream --backend mtproto --domain t4.example.com
 
 # Start router
 sudo dnstm router start
@@ -194,7 +194,7 @@ Example `config.json` (certs/keys auto-generated):
 ```bash
 sudo dnstm router status          # View router and tunnel status
 sudo dnstm tunnel list            # List all tunnels
-sudo dnstm tunnel logs <tag>      # View tunnel logs
+sudo dnstm tunnel logs -t <tag>   # View tunnel logs
 sudo dnstm router logs            # View router logs (multi-mode)
 sudo dnstm update                 # Check for and install updates
 sudo dnstm uninstall              # Remove all components
@@ -210,7 +210,7 @@ One tunnel active at a time. The active transport binds directly to port 53.
 
 ```bash
 sudo dnstm router mode single
-sudo dnstm router switch <tag>
+sudo dnstm router switch -t <tag>
 ```
 
 ### Multi-Tunnel Mode

@@ -45,6 +45,42 @@ func PrintBanner() {
 	})
 }
 
+// InitTUI sets up the TUI environment. Must be called before any interactive menu.
+func InitTUI() {
+	Version = version.Version
+	BuildTime = version.BuildTime
+	tui.SetAppInfo("dnstm", version.Version, version.BuildTime)
+}
+
+// HasInteractiveMenu returns true if the action has a registered interactive submenu.
+func HasInteractiveMenu(actionID string) bool {
+	switch actionID {
+	case actions.ActionTunnel, actions.ActionBackend, actions.ActionRouter:
+		return true
+	}
+	return false
+}
+
+// RunSubmenuByID launches the interactive submenu for a parent action.
+// Returns nil when user exits.
+func RunSubmenuByID(actionID string) error {
+	var err error
+	switch actionID {
+	case actions.ActionTunnel:
+		err = runTunnelMenu()
+	case actions.ActionBackend:
+		err = runBackendMenu()
+	case actions.ActionRouter:
+		err = RunSubmenu(actions.ActionRouter)
+	default:
+		return fmt.Errorf("no interactive menu for '%s'", actionID)
+	}
+	if err == errCancelled {
+		return nil
+	}
+	return err
+}
+
 // RunInteractive shows the main interactive menu.
 func RunInteractive() error {
 	return runMainMenu()
@@ -193,7 +229,7 @@ func runMainMenu() error {
 
 		choice, err := tui.RunMenu(tui.MenuConfig{
 			Header:      header,
-			Title:       fmt.Sprintf("DNSTM %s", Version),
+			Title:       "DNSTM",
 			Description: description,
 			Options:     options,
 		})
@@ -361,7 +397,6 @@ func runTunnelManageMenu(tag string) error {
 			{Label: "Stop", Value: "stop"},
 			{Label: "Enable", Value: "enable"},
 			{Label: "Disable", Value: "disable"},
-			{Label: "Reconfigure", Value: "reconfigure"},
 			{Label: "Remove", Value: "remove"},
 			{Label: "Back", Value: "back"},
 		}
@@ -388,18 +423,6 @@ func runTunnelManageMenu(tag string) error {
 			if choice == "remove" {
 				return errCancelled
 			}
-			// Check if tunnel was renamed
-			if choice == "reconfigure" {
-				cfg, err = config.Load()
-				if err != nil || cfg == nil {
-					// Config unavailable, go back to list
-					return errCancelled
-				}
-				if cfg.GetTunnelByTag(tag) == nil {
-					// Tunnel was renamed, go back to list
-					return errCancelled
-				}
-			}
 			// Skip WaitForEnter for actions that use TUI info/progress view
 			if !isInfoViewAction(actionID) {
 				tui.WaitForEnter()
@@ -414,7 +437,7 @@ func runTunnelAction(actionID, tunnelTag string) error {
 	switch actionID {
 	case actions.ActionTunnelStatus, actions.ActionTunnelLogs, actions.ActionTunnelStart,
 		actions.ActionTunnelStop, actions.ActionTunnelRestart, actions.ActionTunnelEnable,
-		actions.ActionTunnelDisable, actions.ActionTunnelRemove, actions.ActionTunnelReconfigure:
+		actions.ActionTunnelDisable, actions.ActionTunnelRemove:
 		return runActionWithArgs(actionID, []string{tunnelTag})
 	default:
 		return RunAction(actionID)
@@ -444,8 +467,11 @@ func runActionWithArgs(actionID string, args []string) error {
 		}
 	}
 
-	// Build context with args
-	ctx := newActionContext(args)
+	// Build context and set tag from args
+	ctx := newActionContext(nil)
+	if action.Args != nil && action.Args.Name == "tag" && len(args) > 0 {
+		ctx.Values["tag"] = args[0]
+	}
 
 	if action.Handler == nil {
 		return fmt.Errorf("no handler for action %s", actionID)

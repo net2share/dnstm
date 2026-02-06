@@ -128,7 +128,7 @@ func TestGenerateName(t *testing.T) {
 	}
 }
 
-func TestValidateName(t *testing.T) {
+func TestValidateTag(t *testing.T) {
 	tests := []struct {
 		name    string
 		wantErr bool
@@ -153,23 +153,23 @@ func TestValidateName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateName(tt.name)
+			err := ValidateTag(tt.name)
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("ValidateName(%q) expected error", tt.name)
+					t.Errorf("ValidateTag(%q) expected error", tt.name)
 				} else if !strings.Contains(err.Error(), tt.errText) {
-					t.Errorf("ValidateName(%q) error = %q, want containing %q", tt.name, err.Error(), tt.errText)
+					t.Errorf("ValidateTag(%q) error = %q, want containing %q", tt.name, err.Error(), tt.errText)
 				}
 			} else {
 				if err != nil {
-					t.Errorf("ValidateName(%q) unexpected error: %v", tt.name, err)
+					t.Errorf("ValidateTag(%q) unexpected error: %v", tt.name, err)
 				}
 			}
 		})
 	}
 }
 
-func TestNormalizeName(t *testing.T) {
+func TestNormalizeTag(t *testing.T) {
 	tests := []struct {
 		input    string
 		expected string
@@ -183,9 +183,9 @@ func TestNormalizeName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			result := NormalizeName(tt.input)
+			result := NormalizeTag(tt.input)
 			if result != tt.expected {
-				t.Errorf("NormalizeName(%q) = %q, want %q", tt.input, result, tt.expected)
+				t.Errorf("NormalizeTag(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}
@@ -202,8 +202,8 @@ func TestGenerateUniqueTag(t *testing.T) {
 	}
 
 	// Should validate
-	if err := ValidateName(tag); err != nil {
-		t.Errorf("GenerateUniqueTag returned invalid name: %v", err)
+	if err := ValidateTag(tag); err != nil {
+		t.Errorf("GenerateUniqueTag returned invalid tag: %v", err)
 	}
 }
 

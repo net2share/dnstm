@@ -106,9 +106,9 @@ func init() {
 	Register(&Action{
 		ID:                ActionRouterSwitch,
 		Parent:            ActionRouter,
-		Use:               "switch [tag]",
+		Use:               "switch",
 		Short:             "Switch active tunnel",
-		Long:              "Switch the active tunnel in single-tunnel mode.\n\nWithout arguments, shows an interactive picker.\nWith a tunnel tag, switches to that tunnel directly.\n\nThis command is only available in single-tunnel mode.\nUse 'dnstm router mode single' to switch to single-tunnel mode first.",
+		Long:              "Switch the active tunnel in single-tunnel mode.\n\nUse --tag/-t to specify the tunnel, or run without flags for an interactive picker.\n\nThis command is only available in single-tunnel mode.\nUse 'dnstm router mode single' to switch to single-tunnel mode first.",
 		MenuLabel:         "Switch Active",
 		RequiresRoot:      true,
 		RequiresInstalled: true,

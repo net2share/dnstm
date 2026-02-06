@@ -6,7 +6,7 @@ For setting up the testing environment and running tests, see the [Testing Guide
 
 ## Binary Version Pinning
 
-Transport binaries (slipstream-server, ssserver, microsocks, sshtun-user) have their versions pinned in the codebase. Each dnstm release specifies exact binary versions it expects.
+Transport binaries (slipstream-server, dnstt-server, ssserver, microsocks, sshtun-user) have their versions pinned in the codebase. Each dnstm release specifies exact binary versions it expects.
 
 ### How It Works
 
