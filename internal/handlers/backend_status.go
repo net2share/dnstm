@@ -22,8 +22,7 @@ func HandleBackendStatus(ctx *actions.Context) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Get tag from args
-	tag := ctx.GetArg(0)
+	tag := ctx.GetString("tag")
 	if tag == "" {
 		return fmt.Errorf("backend tag is required")
 	}

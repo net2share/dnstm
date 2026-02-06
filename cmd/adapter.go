@@ -7,6 +7,7 @@ import (
 
 	"github.com/net2share/dnstm/internal/actions"
 	"github.com/net2share/dnstm/internal/handlers"
+	"github.com/net2share/dnstm/internal/menu"
 	"github.com/net2share/dnstm/internal/router"
 	"github.com/net2share/go-corelib/osdetect"
 	"github.com/net2share/go-corelib/tui"
@@ -55,13 +56,46 @@ func BuildCobraCommand(action *actions.Action) *cobra.Command {
 		}
 	}
 
+	// Register --tag/-t flag from Args when no Input already defines it
+	if action.Args != nil && action.Args.Name == "tag" {
+		hasTagInput := false
+		for _, input := range action.Inputs {
+			if input.Name == "tag" {
+				hasTagInput = true
+				break
+			}
+		}
+		if !hasTagInput {
+			cmd.Flags().StringP("tag", "t", "", action.Args.Description)
+		}
+	}
+
 	// Handle confirmation flag
 	if action.Confirm != nil && action.Confirm.ForceFlag != "" {
 		cmd.Flags().BoolP(action.Confirm.ForceFlag, "f", false, "Skip confirmation")
 	}
 
-	// If this is a submenu (parent action), just set up the command without a RunE
+	// If this is a submenu (parent action), launch interactive menu if available
 	if action.IsSubmenu {
+		if menu.HasInteractiveMenu(action.ID) {
+			actionID := action.ID
+			requiresRoot := action.RequiresRoot
+			requiresInstalled := action.RequiresInstalled
+			cmd.RunE = func(cmd *cobra.Command, args []string) error {
+				if requiresRoot {
+					if err := osdetect.RequireRoot(); err != nil {
+						return err
+					}
+				}
+				if requiresInstalled {
+					if err := requireInstalled(); err != nil {
+						return err
+					}
+				}
+				menu.InitTUI()
+				return menu.RunSubmenuByID(actionID)
+			}
+		}
 		return cmd
 	}
 
@@ -96,6 +130,15 @@ func BuildCobraCommand(action *actions.Action) *cobra.Command {
 			ctx.Config = cfg
 		}
 
+		// Collect tag from --tag/-t flag (not from positional args)
+		if action.Args != nil && action.Args.Name == "tag" {
+			tagVal, _ := cmd.Flags().GetString("tag")
+			ctx.Values["tag"] = tagVal
+			if action.Args.Required && tagVal == "" {
+				return fmt.Errorf("--tag/-t is required\n\nUsage: %s", cmd.UseLine())
+			}
+		}
+
 		// Collect values from flags
 		for _, input := range action.Inputs {
 			switch input.Type {
@@ -117,22 +160,19 @@ func BuildCobraCommand(action *actions.Action) *cobra.Command {
 			ctx.Values[action.Confirm.ForceFlag] = force
 		}
 
-		// Handle required argument with picker fallback
-		if action.Args != nil && action.Args.Required && len(args) == 0 {
-			if action.Args.PickerFunc != nil {
-				// Show picker for interactive mode
-				selected, err := runPicker(ctx, action)
-				if err != nil {
-					return err
-				}
-				if selected == "" {
-					tui.PrintInfo("Cancelled")
-					return nil
-				}
-				ctx.Args = []string{selected}
-			} else {
-				return fmt.Errorf("%s required", action.Args.Name)
-			}
+		// Determine if running interactively (no flags/args provided).
+		// Only top-level commands (install, update, uninstall) auto-switch to interactive.
+		// Child commands (tunnel add, backend available, etc.) always stay in CLI mode
+		// when invoked from the command line — interactive mode is only via the TUI menu.
+		isInteractive := action.Parent == "" && cmd.Flags().NFlag() == 0 && len(args) == 0
+		if isInteractive {
+			menu.InitTUI()
+		}
+		ctx.IsInteractive = isInteractive
+
+		// Require non-tag arguments in CLI mode
+		if action.Args != nil && action.Args.Name != "tag" && action.Args.Required && len(args) == 0 {
+			return fmt.Errorf("%s is required\n\nUsage: %s", action.Args.Name, cmd.UseLine())
 		}
 
 		// Handle confirmation
@@ -163,41 +203,6 @@ func BuildCobraCommand(action *actions.Action) *cobra.Command {
 	}
 
 	return cmd
-}
-
-// runPicker shows an interactive picker for selecting an instance.
-func runPicker(ctx *actions.Context, action *actions.Action) (string, error) {
-	// Call the picker function to populate options
-	_, err := action.Args.PickerFunc(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	// Get options from context using shared helper
-	options := actions.GetPickerOptions(ctx)
-	if len(options) == 0 {
-		return "", fmt.Errorf("no options available")
-	}
-
-	// Convert to tui options
-	var tuiOptions []tui.MenuOption
-	for _, opt := range options {
-		tuiOptions = append(tuiOptions, tui.MenuOption{
-			Label: opt.Label,
-			Value: opt.Value,
-		})
-	}
-
-	// Show picker
-	selected, err := tui.RunMenu(tui.MenuConfig{
-		Title:   fmt.Sprintf("Select %s", action.Args.Name),
-		Options: tuiOptions,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	return selected, nil
 }
 
 // BuildAllCommands builds all Cobra commands from registered actions.

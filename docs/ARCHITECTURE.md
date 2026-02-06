@@ -40,7 +40,7 @@ Transports forward traffic to backends:
 - One transport handles DNS queries at a time
 - Active transport binds directly to port 53 on the external IP
 - Lower overhead (no router process, no NAT)
-- Switch tunnels with `dnstm router switch <tag>`
+- Switch tunnels with `dnstm router switch -t <tag>`
 
 ### Multi-Tunnel Mode
 
@@ -51,17 +51,17 @@ Transports forward traffic to backends:
 │                    Server                        │
 │                                                  │
 │  Port 53 ──► DNS Router ──┬──► Transport 1      │
-│                           │      :5300           │
+│                           │      :5310           │
 │                           ├──► Transport 2      │
-│                           │      :5301           │
+│                           │      :5311           │
 │                           └──► Transport N      │
-│                                  :530N           │
+│                                  :531N           │
 └─────────────────────────────────────────────────┘
 ```
 
 - All transports run simultaneously
 - DNS router on port 53 routes queries by domain
-- Each transport runs on its own port (5300+)
+- Each transport runs on its own port (5310+)
 - Domain-based routing
 
 ## Components
@@ -79,7 +79,7 @@ Runs in multi-mode only. Listens on port 53 and routes DNS queries to appropriat
 
 ### Tunnel Services (`dnstm-<tag>`)
 
-Individual systemd services for each configured tunnel. Each runs on an auto-allocated port (5300+).
+Individual systemd services for each configured tunnel. Each runs on an auto-allocated port (5310+).
 
 ### Certificate Manager (`/etc/dnstm/certs/`)
 

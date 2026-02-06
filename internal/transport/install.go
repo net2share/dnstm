@@ -7,7 +7,6 @@ import (
 	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/log"
 	"github.com/net2share/dnstm/internal/types"
-	"github.com/net2share/go-corelib/tui"
 )
 
 // StatusFunc is a callback for reporting installation status messages.
@@ -113,11 +112,8 @@ func ensureBinaryInstalled(binType binary.BinaryType, displayName string, status
 
 	log.Debug("%s installed at %s", displayName, path)
 
-	// Route status through callback if provided, otherwise use direct tui output
 	if statusFn != nil {
 		statusFn(fmt.Sprintf("%s installed", displayName))
-	} else {
-		tui.PrintStatus(fmt.Sprintf("%s installed", displayName))
 	}
 	return nil
 }

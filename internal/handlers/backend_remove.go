@@ -22,8 +22,7 @@ func HandleBackendRemove(ctx *actions.Context) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Get tag from args
-	tag := ctx.GetArg(0)
+	tag := ctx.GetString("tag")
 	if tag == "" {
 		return fmt.Errorf("backend tag is required")
 	}
@@ -58,12 +57,30 @@ func HandleBackendRemove(ctx *actions.Context) error {
 	}
 	cfg.Backends = newBackends
 
+	// Start progress view in interactive mode
+	if ctx.IsInteractive {
+		ctx.Output.BeginProgress(fmt.Sprintf("Remove Backend: %s", tag))
+	} else {
+		ctx.Output.Println()
+	}
+
 	// Save config
 	if err := cfg.Save(); err != nil {
+		if ctx.IsInteractive {
+			ctx.Output.Error(fmt.Sprintf("Failed: %v", err))
+			ctx.Output.EndProgress()
+			return nil
+		}
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
 	ctx.Output.Success(fmt.Sprintf("Backend '%s' removed", tag))
+
+	if ctx.IsInteractive {
+		ctx.Output.EndProgress()
+	} else {
+		ctx.Output.Println()
+	}
 
 	return nil
 }

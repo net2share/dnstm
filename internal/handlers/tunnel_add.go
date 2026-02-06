@@ -29,25 +29,13 @@ func HandleTunnelAdd(ctx *actions.Context) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Check if we have flags for non-interactive mode
-	transportType := ctx.GetString("transport")
-	backendTag := ctx.GetString("backend")
-	domain := ctx.GetString("domain")
-
-	if transportType != "" && backendTag != "" && domain != "" {
-		// Non-interactive mode
-		return addTunnelNonInteractive(ctx, cfg)
+	if ctx.IsInteractive {
+		return addTunnelInteractive(ctx, cfg)
 	}
-
-	// Interactive mode
-	return addTunnelInteractive(ctx, cfg)
+	return addTunnelNonInteractive(ctx, cfg)
 }
 
 func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
-	ctx.Output.Println()
-	ctx.Output.Info("Adding new tunnel...")
-	ctx.Output.Println()
-
 	// Select transport type
 	transportType, err := tui.RunMenu(tui.MenuConfig{
 		Title: "Transport Type",
@@ -61,11 +49,6 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 	}
 	if transportType == "" {
 		return nil
-	}
-
-	// Install required binaries if needed
-	if err := transport.EnsureTransportBinariesInstalled(config.TransportType(transportType)); err != nil {
-		return fmt.Errorf("failed to install required binaries: %w", err)
 	}
 
 	// Select backend
@@ -95,18 +78,14 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 	}
 
 	// Get or generate tag
-	var tag string
-	if ctx.HasArg(0) {
-		tag = ctx.GetArg(0)
-	}
+	tag := ctx.GetString("tag")
 
 	suggestedTag := router.GenerateUniqueTunnelTag(cfg.Tunnels)
 	if tag == "" {
 		var confirmed bool
 		tag, confirmed, err = tui.RunInput(tui.InputConfig{
-			Title:       "Tunnel Tag",
-			Description: fmt.Sprintf("Leave empty for auto-generated tag (%s)", suggestedTag),
-			Placeholder: suggestedTag,
+			Title: "Tunnel Tag",
+			Value: suggestedTag,
 		})
 		if err != nil {
 			return err
@@ -119,8 +98,8 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 		}
 	}
 
-	tag = router.NormalizeName(tag)
-	if err := router.ValidateName(tag); err != nil {
+	tag = router.NormalizeTag(tag)
+	if err := router.ValidateTag(tag); err != nil {
 		return fmt.Errorf("invalid tag: %w", err)
 	}
 
@@ -171,11 +150,17 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 }
 
 func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
-	transportType := config.TransportType(ctx.GetString("transport"))
+	transportStr := ctx.GetString("transport")
 	backendTag := ctx.GetString("backend")
 	domain := ctx.GetString("domain")
 	port := ctx.GetInt("port")
 	mtu := ctx.GetInt("mtu")
+
+	if transportStr == "" || backendTag == "" || domain == "" {
+		return fmt.Errorf("--transport, --backend, and --domain flags are required\n\nUsage: dnstm tunnel add --transport TYPE -b BACKEND -d DOMAIN [-t TAG]")
+	}
+
+	transportType := config.TransportType(transportStr)
 
 	// Validate transport type
 	if transportType != config.TransportSlipstream && transportType != config.TransportDNSTT {
@@ -196,26 +181,19 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 		)
 	}
 
-	// Get tag
-	var tag string
-	if ctx.HasArg(0) {
-		tag = ctx.GetArg(0)
-	} else {
+	// Get tag from --tag/-t flag, or auto-generate
+	tag := ctx.GetString("tag")
+	if tag == "" {
 		tag = router.GenerateUniqueTunnelTag(cfg.Tunnels)
 	}
 
-	tag = router.NormalizeName(tag)
-	if err := router.ValidateName(tag); err != nil {
+	tag = router.NormalizeTag(tag)
+	if err := router.ValidateTag(tag); err != nil {
 		return fmt.Errorf("invalid tag: %w", err)
 	}
 
 	if cfg.GetTunnelByTag(tag) != nil {
 		return actions.TunnelExistsError(tag)
-	}
-
-	// Install required binaries if needed
-	if err := transport.EnsureTransportBinariesInstalled(transportType); err != nil {
-		return fmt.Errorf("failed to install required binaries: %w", err)
 	}
 
 	// Build config
@@ -248,29 +226,21 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 func promptModeSwitch(ctx *actions.Context, cfg *config.Config) (bool, error) {
 	existingTunnel := cfg.Tunnels[0].Tag
 
-	// Show info about the situation
-	ctx.Output.Println()
-	ctx.Output.Info("You already have a tunnel configured: " + existingTunnel)
-	ctx.Output.Info("Single mode only allows one active tunnel at a time.")
-	ctx.Output.Println()
-
-	// Ask user if they want to switch to multi mode
 	confirm, err := tui.RunConfirm(tui.ConfirmConfig{
-		Title:       "Switch to multi mode?",
-		Description: "Multi mode allows running multiple tunnels simultaneously with DNS-based routing.",
+		Title: "Switch to multi mode?",
+		Description: fmt.Sprintf(
+			"You already have tunnel '%s'. Single mode only allows one active tunnel.\nMulti mode allows running multiple tunnels simultaneously with DNS-based routing.",
+			existingTunnel,
+		),
 	})
 	if err != nil {
 		return false, err
 	}
 
 	if !confirm {
-		ctx.Output.Info("Staying in single mode. New tunnel will be added but only one can be active.")
-		ctx.Output.Println()
+		_ = tui.ShowMessage(tui.AppMessage{Type: "info", Message: "Staying in single mode. New tunnel will be added but only one can be active."})
 		return false, nil
 	}
-
-	// Switch to multi mode
-	ctx.Output.Info("Switching to multi mode...")
 
 	r, err := router.New(cfg)
 	if err != nil {
@@ -281,8 +251,7 @@ func promptModeSwitch(ctx *actions.Context, cfg *config.Config) (bool, error) {
 		return false, fmt.Errorf("failed to switch mode: %w", err)
 	}
 
-	ctx.Output.Success("Switched to multi mode!")
-	ctx.Output.Println()
+	_ = tui.ShowMessage(tui.AppMessage{Type: "info", Message: "Switched to multi mode!"})
 
 	return true, nil
 }
@@ -320,10 +289,18 @@ func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *con
 		ctx.Output.Println()
 	}
 
-	totalSteps := 5
+	totalSteps := 6
 	currentStep := 0
 
-	// Step 1: Generate certificates/keys
+	// Step 1: Install required binaries
+	currentStep++
+	ctx.Output.Step(currentStep, totalSteps, "Installing transport binaries...")
+	if err := transport.EnsureTransportBinariesInstalled(tunnelCfg.Transport); err != nil {
+		return fmt.Errorf("failed to install required binaries: %w", err)
+	}
+	ctx.Output.Status("Transport binaries ready")
+
+	// Step 2: Generate certificates/keys
 	currentStep++
 	ctx.Output.Step(currentStep, totalSteps, "Generating cryptographic material...")
 	var fingerprint string
@@ -353,7 +330,7 @@ func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *con
 		ctx.Output.Status("Curve25519 keys ready")
 	}
 
-	// Step 2: Create tunnel config directory
+	// Step 3: Create tunnel config directory
 	currentStep++
 	ctx.Output.Step(currentStep, totalSteps, "Creating tunnel configuration...")
 	tunnelDir := filepath.Join(config.TunnelsDir, tunnelCfg.Tag)
@@ -362,7 +339,7 @@ func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *con
 	}
 	ctx.Output.Status("Tunnel directory created")
 
-	// Step 3: Create systemd service
+	// Step 4: Create systemd service
 	currentStep++
 	ctx.Output.Step(currentStep, totalSteps, "Creating systemd service...")
 	tunnel := router.NewTunnel(tunnelCfg)
@@ -388,7 +365,7 @@ func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *con
 	}
 	ctx.Output.Status("Service created")
 
-	// Step 4: Set permissions
+	// Step 5: Set permissions
 	currentStep++
 	ctx.Output.Step(currentStep, totalSteps, "Setting permissions...")
 	if err := tunnel.SetPermissions(); err != nil {
@@ -397,7 +374,7 @@ func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *con
 		ctx.Output.Status("Permissions set")
 	}
 
-	// Step 5: Save config
+	// Step 6: Save config
 	currentStep++
 	ctx.Output.Step(currentStep, totalSteps, "Saving configuration...")
 	cfg.Tunnels = append(cfg.Tunnels, *tunnelCfg)

@@ -193,7 +193,7 @@ func (r *Router) Restart() error {
 
 // AddTunnel adds a new tunnel.
 func (r *Router) AddTunnel(cfg *config.TunnelConfig) error {
-	if err := ValidateName(cfg.Tag); err != nil {
+	if err := ValidateTag(cfg.Tag); err != nil {
 		return err
 	}
 

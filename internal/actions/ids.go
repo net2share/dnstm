@@ -21,8 +21,7 @@ const (
 	ActionTunnelStop        = "tunnel.stop"
 	ActionTunnelRestart     = "tunnel.restart"
 	ActionTunnelStatus      = "tunnel.status"
-	ActionTunnelLogs        = "tunnel.logs"
-	ActionTunnelReconfigure = "tunnel.reconfigure"
+	ActionTunnelLogs = "tunnel.logs"
 
 	// Router actions
 	ActionRouter        = "router"

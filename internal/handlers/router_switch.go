@@ -33,7 +33,7 @@ func HandleRouterSwitch(ctx *actions.Context) error {
 		return actions.NoTunnelsError()
 	}
 
-	tunnelTag := ctx.GetArg(0)
+	tunnelTag := ctx.GetString("tag")
 
 	// If only one tunnel, just make sure it's active
 	if len(cfg.Tunnels) == 1 {
@@ -47,7 +47,7 @@ func HandleRouterSwitch(ctx *actions.Context) error {
 
 	// If no tunnel tag provided, the adapter should have shown a picker
 	if tunnelTag == "" {
-		return actions.NewActionError("tunnel tag required", "Usage: dnstm router switch <tag>")
+		return actions.NewActionError("tunnel tag required", "Usage: dnstm router switch -t <tag>")
 	}
 
 	// Verify tunnel exists
