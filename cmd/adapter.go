@@ -142,6 +142,7 @@ func BuildCobraCommand(action *actions.Action) *cobra.Command {
 				confirm, err := tui.RunConfirm(tui.ConfirmConfig{
 					Title:       action.Confirm.Message,
 					Description: action.Confirm.Description,
+					Default:     !action.Confirm.DefaultNo,
 				})
 				if err != nil {
 					return err

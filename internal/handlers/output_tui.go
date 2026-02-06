@@ -232,6 +232,14 @@ func (t *TUIOutput) EndProgress() {
 	}
 }
 
+// DismissProgress closes the progress view immediately without waiting for user input.
+func (t *TUIOutput) DismissProgress() {
+	if t.progressView != nil {
+		t.progressView.Dismiss()
+		t.progressView = nil
+	}
+}
+
 // IsProgressActive returns true if a progress view is currently active.
 func (t *TUIOutput) IsProgressActive() bool {
 	return t.progressView != nil

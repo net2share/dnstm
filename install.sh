@@ -4,6 +4,30 @@ set -e
 REPO="net2share/dnstm"
 INSTALL_DIR="/usr/local/bin"
 BINARY_NAME="dnstm"
+FORCE=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --force|-f)
+            FORCE=true
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [--force]"
+            echo ""
+            echo "Install or update dnstm."
+            echo ""
+            echo "Options:"
+            echo "  --force, -f    Skip confirmation prompts"
+            echo "  --help, -h     Show this help message"
+            exit 0
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
 
 # Colors
 RED='\033[0;31m'
@@ -28,6 +52,24 @@ warn() {
 if [ "$EUID" -ne 0 ]; then
     error "Please run as root (sudo)"
 fi
+
+# Check if already installed
+if [ -f "${INSTALL_DIR}/${BINARY_NAME}" ]; then
+    echo "dnstm is already installed."
+    if [ "$FORCE" = true ]; then
+        echo "Running update with --force..."
+        exec "${INSTALL_DIR}/${BINARY_NAME}" update --force
+    else
+        read -p "Would you like to check for updates? [y/N] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            exec "${INSTALL_DIR}/${BINARY_NAME}" update
+        fi
+    fi
+    exit 0
+fi
+
+# Not installed - proceed with fresh install
 
 # Detect OS
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -56,6 +98,16 @@ case "$ARCH" in
 esac
 
 echo "Detected: ${OS}/${ARCH}"
+
+# Confirmation (unless --force)
+if [ "$FORCE" = false ]; then
+    read -p "Install dnstm? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Installation cancelled."
+        exit 0
+    fi
+fi
 
 # Get latest release
 echo "Fetching latest release..."
@@ -92,7 +144,7 @@ success "Successfully installed ${BINARY_NAME} ${LATEST_RELEASE} to ${INSTALL_DI
 echo ""
 echo "Getting started:"
 echo "  ${BINARY_NAME}              # Interactive menu"
-echo "  ${BINARY_NAME} router init  # Initialize router"
-echo "  ${BINARY_NAME} instance add # Add transport instance"
+echo "  ${BINARY_NAME} install      # Install transport binaries"
+echo "  ${BINARY_NAME} tunnel add   # Add a tunnel"
 echo ""
 echo "Documentation: https://github.com/${REPO}#readme"

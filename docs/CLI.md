@@ -17,14 +17,16 @@ The menu structure mirrors the CLI commands exactly. When optional arguments are
 Install all components and configure the system.
 
 ```bash
-dnstm install                              # Install (defaults to single-tunnel mode)
+dnstm install                              # Interactive install with confirmation
+dnstm install --force                      # Install without confirmation prompts
 dnstm install --mode single                # Explicitly set single-tunnel mode
 dnstm install --mode multi                 # Install with multi-tunnel mode
-dnstm install --dnstt                      # Install dnstt-server only
-dnstm install --slipstream                 # Install slipstream-server only
-dnstm install --shadowsocks                # Install ssserver only
-dnstm install --microsocks                 # Install microsocks only
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--force`, `-f` | Skip confirmation prompts |
+| `--mode`, `-m` | Operating mode: `single` (default) or `multi` |
 
 This command:
 - Creates the dnstm system user
@@ -216,6 +218,32 @@ Manage SSH tunnel users. Launches the standalone sshtun-user tool.
 ```bash
 dnstm ssh-users            # Launch sshtun-user management tool
 ```
+
+## Update Command
+
+Check for and install updates to dnstm and transport binaries.
+
+```bash
+dnstm update                           # Check and install updates (interactive)
+dnstm update --check                   # Check only, don't install
+dnstm update --force                   # Skip confirmation prompts
+dnstm update --self                    # Only update dnstm itself
+dnstm update --binaries                # Only update transport binaries
+```
+
+| Flag | Description |
+|------|-------------|
+| `--check` | Dry-run: show available updates without installing |
+| `--force` | Skip confirmation prompts |
+| `--self` | Only update dnstm itself |
+| `--binaries` | Only update transport binaries |
+
+The update process:
+- Checks for newer dnstm version on GitHub
+- Compares installed binary versions against pinned versions
+- Stops affected services before updating
+- Downloads and installs new versions
+- Restarts previously running services
 
 ## Uninstall
 

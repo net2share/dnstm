@@ -44,4 +44,5 @@ const (
 	ActionInstall   = "install"
 	ActionUninstall = "uninstall"
 	ActionSSHUsers  = "ssh-users"
+	ActionUpdate    = "update"
 )

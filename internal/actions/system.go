@@ -25,6 +25,17 @@ func init() {
 		Long:         "Install all transport binaries and configure the system for DNS tunneling.\n\nThis will:\n  - Create dnstm system user\n  - Initialize router configuration and directories\n  - Set operating mode (defaults to single)\n  - Create DNS router service\n  - Download and install transport binaries\n  - Configure firewall rules (port 53 UDP/TCP)\n\nOptionally use --mode to set the operating mode:\n  single  Single-tunnel mode (default) - one tunnel at a time\n  multi   Multi-tunnel mode - multiple tunnels with DNS router",
 		MenuLabel:    "Install",
 		RequiresRoot: true,
+		Confirm: &ConfirmConfig{
+			Message:   "Install dnstm?",
+			Description: "This will:\n" +
+				"  • Create dnstm system user\n" +
+				"  • Initialize router and config directories\n" +
+				"  • Create DNS router service\n" +
+				"  • Download transport binaries (dnstt, slipstream, shadowsocks)\n" +
+				"  • Install and start microsocks SOCKS5 proxy\n" +
+				"  • Configure firewall (port 53 UDP/TCP)",
+			ForceFlag: "force",
+		},
 		Inputs: []InputField{
 			{
 				Name:      "mode",
@@ -36,32 +47,6 @@ func init() {
 				// Skip mode selection in interactive mode - defaults to single,
 				// user will be prompted to switch to multi when adding second tunnel
 				ShowIf: func(ctx *Context) bool { return !ctx.IsInteractive },
-			},
-			// CLI-only boolean flags for selective installation (not shown in interactive mode)
-			{
-				Name:  "all",
-				Label: "Install all binaries (default)",
-				Type:  InputTypeBool,
-			},
-			{
-				Name:  "dnstt",
-				Label: "Install dnstt-server only",
-				Type:  InputTypeBool,
-			},
-			{
-				Name:  "slipstream",
-				Label: "Install slipstream-server only",
-				Type:  InputTypeBool,
-			},
-			{
-				Name:  "shadowsocks",
-				Label: "Install ssserver only",
-				Type:  InputTypeBool,
-			},
-			{
-				Name:  "microsocks",
-				Label: "Install microsocks only",
-				Type:  InputTypeBool,
 			},
 		},
 	})
@@ -75,6 +60,39 @@ func init() {
 		MenuLabel:         "SSH Users",
 		RequiresRoot:      true,
 		RequiresInstalled: true,
+	})
+
+	// Register update action
+	Register(&Action{
+		ID:                ActionUpdate,
+		Use:               "update",
+		Short:             "Check for and install updates",
+		Long:              "Check for available updates to dnstm and transport binaries.\n\nThis will:\n  - Check for a newer version of dnstm\n  - Check for updates to slipstream-server, ssserver, microsocks, sshtun-user\n  - Stop affected services before updating\n  - Download and install new versions\n  - Restart previously running services\n\nFlags:\n  --force      Skip confirmation prompts\n  --self       Only update dnstm\n  --binaries   Only update transport binaries\n  --check      Dry-run: show available updates without installing",
+		MenuLabel:         "Update",
+		RequiresRoot:      true,
+		RequiresInstalled: true,
+		Inputs: []InputField{
+			{
+				Name:  "force",
+				Label: "Skip confirmation prompts",
+				Type:  InputTypeBool,
+			},
+			{
+				Name:  "self",
+				Label: "Only update dnstm",
+				Type:  InputTypeBool,
+			},
+			{
+				Name:  "binaries",
+				Label: "Only update transport binaries",
+				Type:  InputTypeBool,
+			},
+			{
+				Name:  "check",
+				Label: "Check for updates without installing",
+				Type:  InputTypeBool,
+			},
+		},
 	})
 }
 

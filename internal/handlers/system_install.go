@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/net2share/dnstm/internal/actions"
+	"github.com/net2share/dnstm/internal/binary"
 	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/dnsrouter"
 	"github.com/net2share/dnstm/internal/network"
@@ -13,6 +14,7 @@ import (
 	"github.com/net2share/dnstm/internal/router"
 	"github.com/net2share/dnstm/internal/system"
 	"github.com/net2share/dnstm/internal/transport"
+	"github.com/net2share/dnstm/internal/updater"
 )
 
 const installPath = "/usr/local/bin/dnstm"
@@ -23,18 +25,7 @@ func init() {
 
 // HandleInstall performs system installation.
 func HandleInstall(ctx *actions.Context) error {
-	// Get flags
-	all := ctx.GetBool("all")
-	dnstt := ctx.GetBool("dnstt")
-	slipstream := ctx.GetBool("slipstream")
-	shadowsocks := ctx.GetBool("shadowsocks")
-	microsocks := ctx.GetBool("microsocks")
 	modeStr := ctx.GetString("mode")
-
-	// If no specific flags, install all
-	if !dnstt && !slipstream && !shadowsocks && !microsocks {
-		all = true
-	}
 
 	// Default to single mode if not specified
 	if modeStr == "" {
@@ -99,61 +90,52 @@ func HandleInstall(ctx *actions.Context) error {
 	// Status callback routes output through the context
 	statusFn := func(msg string) { ctx.Output.Status(msg) }
 
-	if all || dnstt {
-		if err := transport.EnsureDnsttInstalledWithStatus(statusFn); err != nil {
-			return fmt.Errorf("failed to install dnstt-server: %w", err)
-		}
+	if err := transport.EnsureDnsttInstalledWithStatus(statusFn); err != nil {
+		return fmt.Errorf("failed to install dnstt-server: %w", err)
 	}
 
-	if all || slipstream {
-		if err := transport.EnsureSlipstreamInstalledWithStatus(statusFn); err != nil {
-			return fmt.Errorf("failed to install slipstream-server: %w", err)
-		}
+	if err := transport.EnsureSlipstreamInstalledWithStatus(statusFn); err != nil {
+		return fmt.Errorf("failed to install slipstream-server: %w", err)
 	}
 
-	if all || shadowsocks {
-		if err := transport.EnsureShadowsocksInstalledWithStatus(statusFn); err != nil {
-			return fmt.Errorf("failed to install ssserver: %w", err)
-		}
+	if err := transport.EnsureShadowsocksInstalledWithStatus(statusFn); err != nil {
+		return fmt.Errorf("failed to install ssserver: %w", err)
 	}
 
-	// Always install sshtun-user
 	if err := transport.EnsureSSHTunUserInstalledWithStatus(statusFn); err != nil {
 		ctx.Output.Warning("sshtun-user: " + err.Error())
 	}
 
-	if all || microsocks {
-		if !proxy.IsMicrosocksInstalled() {
-			ctx.Output.Info("Installing microsocks...")
-			if err := proxy.InstallMicrosocks(nil); err != nil {
-				return fmt.Errorf("failed to install microsocks: %w", err)
-			}
+	if !proxy.IsMicrosocksInstalled() {
+		ctx.Output.Info("Installing microsocks...")
+		if err := proxy.InstallMicrosocks(nil); err != nil {
+			return fmt.Errorf("failed to install microsocks: %w", err)
 		}
-		// Ensure microsocks service is configured and running
-		if !proxy.IsMicrosocksRunning() {
-			ctx.Output.Info("Configuring microsocks service...")
-			port, err := proxy.FindAvailablePort()
-			if err != nil {
-				ctx.Output.Warning("Could not find available port: " + err.Error())
-			} else {
-				cfg.Proxy.Port = port
-				cfg.UpdateSocksBackendPort(port)
-				if err := cfg.Save(); err != nil {
-					ctx.Output.Warning("Failed to save proxy port: " + err.Error())
-				}
-				if err := proxy.ConfigureMicrosocks(port); err != nil {
-					ctx.Output.Warning("microsocks service config: " + err.Error())
-				} else {
-					if err := proxy.StartMicrosocks(); err != nil {
-						ctx.Output.Warning("microsocks service start: " + err.Error())
-					} else {
-						ctx.Output.Status(fmt.Sprintf("microsocks installed and running on port %d", port))
-					}
-				}
-			}
+	}
+	// Ensure microsocks service is configured and running
+	if !proxy.IsMicrosocksRunning() {
+		ctx.Output.Info("Configuring microsocks service...")
+		port, err := proxy.FindAvailablePort()
+		if err != nil {
+			ctx.Output.Warning("Could not find available port: " + err.Error())
 		} else {
-			ctx.Output.Status("microsocks already running")
+			cfg.Proxy.Port = port
+			cfg.UpdateSocksBackendPort(port)
+			if err := cfg.Save(); err != nil {
+				ctx.Output.Warning("Failed to save proxy port: " + err.Error())
+			}
+			if err := proxy.ConfigureMicrosocks(port); err != nil {
+				ctx.Output.Warning("microsocks service config: " + err.Error())
+			} else {
+				if err := proxy.StartMicrosocks(); err != nil {
+					ctx.Output.Warning("microsocks service start: " + err.Error())
+				} else {
+					ctx.Output.Status(fmt.Sprintf("microsocks installed and running on port %d", port))
+				}
+			}
 		}
+	} else {
+		ctx.Output.Status("microsocks already running")
 	}
 
 	// Step 6: Configure firewall
@@ -164,6 +146,11 @@ func HandleInstall(ctx *actions.Context) error {
 		ctx.Output.Warning("Firewall configuration: " + err.Error())
 	} else {
 		ctx.Output.Status("Firewall configured (port 53 UDP/TCP)")
+	}
+
+	// Step 7: Create version manifest
+	if err := createVersionManifest(ctx); err != nil {
+		ctx.Output.Warning("Failed to create version manifest: " + err.Error())
 	}
 
 	ctx.Output.Success("Installation complete!")
@@ -241,4 +228,27 @@ func ensureDnstmInstalled(ctx *actions.Context) error {
 
 	ctx.Output.Status("dnstm binary installed to " + installPath)
 	return nil
+}
+
+// createVersionManifest creates the initial version manifest after installation.
+// Uses pinned versions from binary definitions as the source of truth.
+func createVersionManifest(ctx *actions.Context) error {
+	manifest := &updater.VersionManifest{}
+
+	binaries := []binary.BinaryType{
+		binary.BinarySlipstreamServer,
+		binary.BinarySSServer,
+		binary.BinaryMicrosocks,
+		binary.BinarySSHTunUser,
+	}
+
+	for _, binType := range binaries {
+		def, ok := binary.GetDef(binType)
+		if !ok || def.PinnedVersion == "" {
+			continue
+		}
+		manifest.SetVersion(string(binType), def.PinnedVersion)
+	}
+
+	return manifest.Save()
 }
