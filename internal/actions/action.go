@@ -63,6 +63,8 @@ type InputField struct {
 	Validate func(value string) error
 	// DefaultFunc dynamically generates the default value.
 	DefaultFunc func(ctx *Context) string
+	// InteractiveOnly skips CLI flag creation for this input (TUI/interactive only).
+	InteractiveOnly bool
 	// DescriptionFunc dynamically generates the description based on context.
 	DescriptionFunc func(ctx *Context) string
 }

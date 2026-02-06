@@ -93,11 +93,12 @@ func init() {
 		RequiresInstalled: true,
 		Inputs: []InputField{
 			{
-				Name:     "mode",
-				Label:    "Operating Mode",
-				Type:     InputTypeSelect,
-				Required: true,
-				Options:  OperatingModeOptions(),
+				Name:            "mode",
+				Label:           "Operating Mode",
+				Type:            InputTypeSelect,
+				Required:        true,
+				Options:         OperatingModeOptions(),
+				InteractiveOnly: true,
 			},
 		},
 	})

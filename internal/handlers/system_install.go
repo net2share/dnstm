@@ -25,6 +25,13 @@ func init() {
 
 // HandleInstall performs system installation.
 func HandleInstall(ctx *actions.Context) error {
+	force := ctx.GetBool("force")
+
+	// Check if already installed
+	if router.IsInitialized() && !force {
+		return fmt.Errorf("dnstm is already installed. Use --force to reinstall")
+	}
+
 	modeStr := ctx.GetString("mode")
 
 	// Default to single mode if not specified
@@ -35,7 +42,6 @@ func HandleInstall(ctx *actions.Context) error {
 		return fmt.Errorf("invalid mode: %s (must be 'single' or 'multi')", modeStr)
 	}
 
-	// Start progress view in interactive mode
 	if ctx.IsInteractive {
 		ctx.Output.BeginProgress("Install dnstm")
 	} else {

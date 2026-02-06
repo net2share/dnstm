@@ -19,11 +19,9 @@ func HandleRouterMode(ctx *actions.Context) error {
 		return err
 	}
 
-	// Get mode from input (interactive) or args (CLI)
-	var modeStr string
-	if ctx.IsInteractive {
-		modeStr = ctx.GetString("mode")
-	} else if ctx.HasArg(0) {
+	// Get mode from input (interactive) or positional arg (CLI)
+	modeStr := ctx.GetString("mode")
+	if modeStr == "" && ctx.HasArg(0) {
 		modeStr = ctx.GetArg(0)
 	}
 

@@ -8,7 +8,6 @@ import (
 	"github.com/net2share/dnstm/internal/actions"
 	"github.com/net2share/dnstm/internal/updater"
 	"github.com/net2share/dnstm/internal/version"
-	"github.com/net2share/go-corelib/tui"
 )
 
 func init() {
@@ -71,26 +70,13 @@ func HandleUpdate(ctx *actions.Context) error {
 		return nil
 	}
 
-	// Dismiss progress view immediately to proceed to confirm dialog
-	if ctx.IsInteractive {
-		ctx.Output.DismissProgress()
-	}
-
-	// Confirm unless --force
+	// Require --force to install updates
 	if !force {
-		desc := formatUpdateSummary(report)
-		confirm, err := tui.RunConfirm(tui.ConfirmConfig{
-			Title:       "Install updates?",
-			Description: desc,
-			Default:     true,
-		})
-		if err != nil {
-			return err
+		if ctx.IsInteractive {
+			ctx.Output.EndProgress()
 		}
-		if !confirm {
-			ctx.Output.Info("Update cancelled")
-			return nil
-		}
+		ctx.Output.Info("Run with --force to install updates")
+		return nil
 	}
 
 	// Phase 2: Perform updates (in progress view for TUI)
@@ -168,23 +154,3 @@ func displayUpdateReport(ctx *actions.Context, report *updater.UpdateReport) {
 	}
 }
 
-// formatUpdateSummary returns a short summary for the confirm dialog.
-func formatUpdateSummary(report *updater.UpdateReport) string {
-	var parts []string
-
-	if report.DnstmUpdate != nil {
-		parts = append(parts, fmt.Sprintf("dnstm %s -> %s",
-			report.DnstmUpdate.Current, report.DnstmUpdate.Latest))
-	}
-
-	for _, bu := range report.BinaryUpdates {
-		current := bu.CurrentVersion
-		if current == "" {
-			current = "?"
-		}
-		parts = append(parts, fmt.Sprintf("%s %s -> %s",
-			bu.Binary, current, bu.LatestVersion))
-	}
-
-	return strings.Join(parts, "\n")
-}

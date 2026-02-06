@@ -7,10 +7,8 @@ import (
 
 	"github.com/net2share/dnstm/internal/actions"
 	"github.com/net2share/dnstm/internal/handlers"
-	"github.com/net2share/dnstm/internal/menu"
 	"github.com/net2share/dnstm/internal/router"
 	"github.com/net2share/go-corelib/osdetect"
-	"github.com/net2share/go-corelib/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -25,6 +23,9 @@ func BuildCobraCommand(action *actions.Action) *cobra.Command {
 
 	// Add flags for inputs
 	for _, input := range action.Inputs {
+		if input.InteractiveOnly {
+			continue
+		}
 		switch input.Type {
 		case actions.InputTypeText, actions.InputTypePassword:
 			if input.ShortFlag != 0 {
@@ -75,27 +76,8 @@ func BuildCobraCommand(action *actions.Action) *cobra.Command {
 		cmd.Flags().BoolP(action.Confirm.ForceFlag, "f", false, "Skip confirmation")
 	}
 
-	// If this is a submenu (parent action), launch interactive menu if available
+	// Submenus have no RunE — Cobra shows help/usage automatically
 	if action.IsSubmenu {
-		if menu.HasInteractiveMenu(action.ID) {
-			actionID := action.ID
-			requiresRoot := action.RequiresRoot
-			requiresInstalled := action.RequiresInstalled
-			cmd.RunE = func(cmd *cobra.Command, args []string) error {
-				if requiresRoot {
-					if err := osdetect.RequireRoot(); err != nil {
-						return err
-					}
-				}
-				if requiresInstalled {
-					if err := requireInstalled(); err != nil {
-						return err
-					}
-				}
-				menu.InitTUI()
-				return menu.RunSubmenuByID(actionID)
-			}
-		}
 		return cmd
 	}
 
@@ -141,6 +123,9 @@ func BuildCobraCommand(action *actions.Action) *cobra.Command {
 
 		// Collect values from flags
 		for _, input := range action.Inputs {
+			if input.InteractiveOnly {
+				continue
+			}
 			switch input.Type {
 			case actions.InputTypeText, actions.InputTypePassword, actions.InputTypeSelect:
 				val, _ := cmd.Flags().GetString(input.Name)
@@ -160,37 +145,16 @@ func BuildCobraCommand(action *actions.Action) *cobra.Command {
 			ctx.Values[action.Confirm.ForceFlag] = force
 		}
 
-		// Determine if running interactively (no flags/args provided).
-		// Only top-level commands (install, update, uninstall) auto-switch to interactive.
-		// Child commands (tunnel add, backend available, etc.) always stay in CLI mode
-		// when invoked from the command line — interactive mode is only via the TUI menu.
-		isInteractive := action.Parent == "" && cmd.Flags().NFlag() == 0 && len(args) == 0
-		if isInteractive {
-			menu.InitTUI()
-		}
-		ctx.IsInteractive = isInteractive
-
 		// Require non-tag arguments in CLI mode
 		if action.Args != nil && action.Args.Name != "tag" && action.Args.Required && len(args) == 0 {
 			return fmt.Errorf("%s is required\n\nUsage: %s", action.Args.Name, cmd.UseLine())
 		}
 
-		// Handle confirmation
+		// Handle confirmation — require --force in CLI mode
 		if action.Confirm != nil {
 			force := ctx.GetBool(action.Confirm.ForceFlag)
 			if !force {
-				confirm, err := tui.RunConfirm(tui.ConfirmConfig{
-					Title:       action.Confirm.Message,
-					Description: action.Confirm.Description,
-					Default:     !action.Confirm.DefaultNo,
-				})
-				if err != nil {
-					return err
-				}
-				if !confirm {
-					tui.PrintInfo("Cancelled")
-					return nil
-				}
+				return fmt.Errorf("%s\n\nUse --force to confirm", action.Confirm.Message)
 			}
 		}
 

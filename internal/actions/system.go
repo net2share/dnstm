@@ -25,18 +25,12 @@ func init() {
 		Long:         "Install all transport binaries and configure the system for DNS tunneling.\n\nThis will:\n  - Create dnstm system user\n  - Initialize router configuration and directories\n  - Set operating mode (defaults to single)\n  - Create DNS router service\n  - Download and install transport binaries\n  - Configure firewall rules (port 53 UDP/TCP)\n\nOptionally use --mode to set the operating mode:\n  single  Single-tunnel mode (default) - one tunnel at a time\n  multi   Multi-tunnel mode - multiple tunnels with DNS router",
 		MenuLabel:    "Install",
 		RequiresRoot: true,
-		Confirm: &ConfirmConfig{
-			Message:   "Install dnstm?",
-			Description: "This will:\n" +
-				"  • Create dnstm system user\n" +
-				"  • Initialize router and config directories\n" +
-				"  • Create DNS router service\n" +
-				"  • Download transport binaries (dnstt, slipstream, shadowsocks)\n" +
-				"  • Install and start microsocks SOCKS5 proxy\n" +
-				"  • Configure firewall (port 53 UDP/TCP)",
-			ForceFlag: "force",
-		},
 		Inputs: []InputField{
+			{
+				Name:  "force",
+				Label: "Force reinstall if already installed",
+				Type:  InputTypeBool,
+			},
 			{
 				Name:      "mode",
 				Label:     "Operating Mode",
