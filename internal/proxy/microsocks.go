@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"os/exec"
+	"strings"
 
 	"github.com/net2share/dnstm/internal/binary"
 	"github.com/net2share/dnstm/internal/service"
@@ -33,7 +35,7 @@ func ConfigureMicrosocks(port int) error {
 		Name:             MicrosocksServiceName,
 		Description:      "Microsocks SOCKS5 Proxy",
 		User:             "nobody",
-		Group:            "nogroup",
+		Group:            getNobodyGroup(),
 		ExecStart:        fmt.Sprintf("%s -i %s -p %d -q", binaryPath, MicrosocksBindAddr, port),
 		ReadOnlyPaths:    []string{binaryPath},
 		BindToPrivileged: false,
@@ -91,6 +93,18 @@ func IsMicrosocksInstalled() bool {
 // IsMicrosocksRunning checks if the microsocks service is active.
 func IsMicrosocksRunning() bool {
 	return service.IsServiceActive(MicrosocksServiceName)
+}
+
+// getNobodyGroup returns the appropriate "nobody" group for the current system.
+// Debian/Ubuntu use "nogroup", RHEL/Fedora use "nobody".
+func getNobodyGroup() string {
+	// Check if nogroup exists (Debian/Ubuntu)
+	out, err := exec.Command("getent", "group", "nogroup").Output()
+	if err == nil && strings.HasPrefix(string(out), "nogroup:") {
+		return "nogroup"
+	}
+	// Fall back to nobody (RHEL/Fedora)
+	return "nobody"
 }
 
 // UninstallMicrosocks removes the microsocks binary and service.

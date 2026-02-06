@@ -67,7 +67,7 @@ var DefaultBinaries = map[BinaryType]BinaryDef{
 	BinarySlipstreamServer: {
 		Type:       BinarySlipstreamServer,
 		EnvVar:     "DNSTM_SLIPSTREAM_SERVER_PATH",
-		URLPattern: "https://github.com/net2share/slipstream-rust-build/releases/download/latest/slipstream-server-{os}-{arch}",
+		URLPattern: "https://github.com/net2share/slipstream-rust-build/releases/download/v2026.02.05/slipstream-server-{os}-{arch}",
 		Platforms: map[string][]string{
 			"linux": {"amd64", "arm64"},
 		},
@@ -75,7 +75,7 @@ var DefaultBinaries = map[BinaryType]BinaryDef{
 	BinarySlipstreamClient: {
 		Type:       BinarySlipstreamClient,
 		EnvVar:     "DNSTM_TEST_SLIPSTREAM_CLIENT_PATH",
-		URLPattern: "https://github.com/net2share/slipstream-rust-build/releases/download/latest/slipstream-client-{os}-{arch}",
+		URLPattern: "https://github.com/net2share/slipstream-rust-build/releases/download/v2026.02.05/slipstream-client-{os}-{arch}",
 		Platforms: map[string][]string{
 			"linux": {"amd64", "arm64"},
 		},

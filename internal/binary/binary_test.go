@@ -55,7 +55,7 @@ func TestBuildURL(t *testing.T) {
 		},
 		{
 			BinarySlipstreamServer,
-			"https://github.com/net2share/slipstream-rust-build/releases/download/latest/slipstream-server-linux-amd64",
+			"https://github.com/net2share/slipstream-rust-build/releases/download/v2026.02.05/slipstream-server-linux-amd64",
 		},
 	}
 
