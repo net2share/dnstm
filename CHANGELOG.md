@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.4](https://github.com/net2share/dnstm/compare/v0.6.3...v0.6.4) (2026-02-07)
+
+
+### Features
+
+* fix TUI flickering between menu transitions ([5e9af93](https://github.com/net2share/dnstm/commit/5e9af937cd379bead89e5b41a3d95d75cb6b5f46))
+
 ## [0.6.3](https://github.com/net2share/dnstm/compare/v0.6.2...v0.6.3) (2026-02-06)
 
 
