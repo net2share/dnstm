@@ -50,6 +50,7 @@ func InitTUI() {
 	Version = version.Version
 	BuildTime = version.BuildTime
 	tui.SetAppInfo("dnstm", version.Version, version.BuildTime)
+	tui.BeginSession()
 }
 
 // HasInteractiveMenu returns true if the action has a registered interactive submenu.
@@ -83,6 +84,7 @@ func RunSubmenuByID(actionID string) error {
 
 // RunInteractive shows the main interactive menu.
 func RunInteractive() error {
+	defer tui.EndSession()
 	return runMainMenu()
 }
 
@@ -291,6 +293,7 @@ func handleMainMenuChoice(choice string) error {
 			}
 			return err
 		}
+		tui.EndSession()
 		os.Exit(0)
 	}
 	return nil

@@ -8,6 +8,7 @@ import (
 	"github.com/net2share/dnstm/internal/actions"
 	"github.com/net2share/dnstm/internal/updater"
 	"github.com/net2share/dnstm/internal/version"
+	"github.com/net2share/go-corelib/tui"
 )
 
 func init() {
@@ -118,6 +119,7 @@ func HandleUpdate(ctx *actions.Context) error {
 		if ctx.IsInteractive {
 			ctx.Output.EndProgress()
 		}
+		tui.EndSession()
 		os.Exit(0)
 	}
 

@@ -127,7 +127,7 @@ func BackendExistsError(tag string) *ActionError {
 func BackendInUseError(tag string, tunnels []string) *ActionError {
 	return &ActionError{
 		Message: fmt.Sprintf("backend '%s' is in use by tunnels: %v", tag, tunnels),
-		Hint:    "Remove or reconfigure the tunnels first",
+		Hint:    "Remove the tunnels first",
 		Err:     ErrBackendInUse,
 	}
 }
