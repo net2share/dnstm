@@ -38,6 +38,8 @@ github.com/muesli/termenv v0.16.0 h1:S5AlUN9dENB57rsbnkPyfdGuWIlkmzJjbFf0Tf5FWUc
 github.com/muesli/termenv v0.16.0/go.mod h1:ZRfOIKPFDYQoDFF4Olj7/QJbW60Ol/kL1pU3VfY/Cnk=
 github.com/net2share/go-corelib v0.1.7 h1:dzFqSD6UCdTaDehhn0+BMpDNK3AhxNQ4AFxc1jCBYag=
 github.com/net2share/go-corelib v0.1.7/go.mod h1:aAR+jZYpIx28EKB/LAQRIaPazHMm+/E+N1JTr8div2M=
+github.com/net2share/go-corelib v0.1.8 h1:YND+F0RbGCRC/Upcg9SqND1EGDDhLGzlC5q4IQRI8fw=
+github.com/net2share/go-corelib v0.1.8/go.mod h1:aAR+jZYpIx28EKB/LAQRIaPazHMm+/E+N1JTr8div2M=
 github.com/rivo/uniseg v0.1.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.2.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.4.7 h1:WUdvkW8uEhrYfLC4ZzdpI2ztxP1I582+49Oc5Mq64VQ=

@@ -223,9 +223,12 @@ func runMainMenu() error {
 			options = append(options, tui.MenuOption{Label: "Tunnels →", Value: actions.ActionTunnel})
 			options = append(options, tui.MenuOption{Label: "Backends →", Value: actions.ActionBackend})
 			options = append(options, tui.MenuOption{Label: "Router →", Value: actions.ActionRouter})
-			options = append(options, tui.MenuOption{Label: "SSH Users →", Value: actions.ActionSSHUsers})
 			options = append(options, tui.MenuOption{Label: "Update", Value: actions.ActionUpdate})
 			options = append(options, tui.MenuOption{Label: "Uninstall", Value: actions.ActionUninstall})
+			options = append(options, tui.MenuOption{Label: "", Separator: true})
+			options = append(options, tui.MenuOption{Label: "External Tools", Separator: true})
+			options = append(options, tui.MenuOption{Label: "SSH Users ↗", Value: actions.ActionSSHUsers})
+			options = append(options, tui.MenuOption{Label: "", Separator: true})
 			options = append(options, tui.MenuOption{Label: "Exit", Value: "exit"})
 		}
 
