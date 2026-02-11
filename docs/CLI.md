@@ -46,12 +46,13 @@ dnstm install --mode single                # Explicitly set single-tunnel mode
 dnstm install --mode multi                 # Install with multi-tunnel mode
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--force`, `-f` | Skip confirmation prompts |
-| `--mode`, `-m` | Operating mode: `single` (default) or `multi` |
+| Flag            | Description                                   |
+| --------------- | --------------------------------------------- |
+| `--force`, `-f` | Skip confirmation prompts                     |
+| `--mode`, `-m`  | Operating mode: `single` (default) or `multi` |
 
 This command:
+
 - Creates the dnstm system user
 - Initializes router configuration and directories
 - Sets operating mode (single or multi)
@@ -102,14 +103,14 @@ dnstm tunnel add -t my-tunnel \
   --domain t.example.com
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--tag`, `-t` | Tunnel tag (auto-generated if omitted) |
-| `--transport` | Transport type: `slipstream` or `dnstt` |
-| `--backend`, `-b` | Backend tag to forward traffic to |
-| `--domain`, `-d` | Domain name |
-| `--port`, `-p` | Port number (auto-allocated if not specified) |
-| `--mtu` | MTU for DNSTT (default: 1232) |
+| Flag              | Description                                   |
+| ----------------- | --------------------------------------------- |
+| `--tag`, `-t`     | Tunnel tag (auto-generated if omitted)        |
+| `--transport`     | Transport type: `slipstream` or `dnstt`       |
+| `--backend`, `-b` | Backend tag to forward traffic to             |
+| `--domain`, `-d`  | Domain name                                   |
+| `--port`, `-p`    | Port number (auto-allocated if not specified) |
+| `--mtu`           | MTU for DNSTT (default: 1232)                 |
 
 ## Backend Commands
 
@@ -140,24 +141,25 @@ dnstm backend add \
   --address 127.0.0.1:8080
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--type` | Backend type: `shadowsocks` or `custom` |
-| `--tag`, `-t` | Unique identifier for the backend (auto-generated if omitted) |
-| `--address`, `-a` | Target address (for custom backends) |
-| `--password`, `-p` | Shadowsocks password (auto-generated if empty) |
-| `--method`, `-m` | Shadowsocks encryption method |
+| Flag               | Description                                                   |
+| ------------------ | ------------------------------------------------------------- |
+| `--type`           | Backend type: `shadowsocks` or `custom`                       |
+| `--tag`, `-t`      | Unique identifier for the backend (auto-generated if omitted) |
+| `--address`, `-a`  | Target address (for custom backends)                          |
+| `--password`, `-p` | Shadowsocks password (auto-generated if empty)                |
+| `--method`, `-m`   | Shadowsocks encryption method                                 |
 
 ### Backend Types
 
-| Type | Description | Addable |
-|------|-------------|---------|
-| `socks` | Built-in SOCKS5 proxy (microsocks at 127.0.0.1:1080) | No (built-in) |
-| `ssh` | Built-in SSH server (127.0.0.1:22) | No (built-in) |
-| `shadowsocks` | Shadowsocks server (slipstream only, uses SIP003 plugin) | Yes |
-| `custom` | Custom target address | Yes |
+| Type          | Description                                              | Addable       |
+| ------------- | -------------------------------------------------------- | ------------- |
+| `socks`       | Built-in SOCKS5 proxy (microsocks at 127.0.0.1:1080)     | No (built-in) |
+| `ssh`         | Built-in SSH server (127.0.0.1:22)                       | No (built-in) |
+| `shadowsocks` | Shadowsocks server (slipstream only, uses SIP003 plugin) | Yes           |
+| `custom`      | Custom target address                                    | Yes           |
 
 **Notes:**
+
 - SOCKS and SSH backends are created automatically during installation and cannot be added manually.
 - DNSTT transport does not support the `shadowsocks` backend type.
 
@@ -206,11 +208,13 @@ dnstm router mode multi        # Switch to multi-tunnel mode
 ```
 
 **Single-tunnel mode:**
+
 - One tunnel active at a time
 - Transport binds directly to external IP:53
 - Lower overhead (no DNS router process)
 
 **Multi-tunnel mode:**
+
 - All enabled tunnels run simultaneously
 - DNS router handles domain-based routing
 - Each domain routes to its designated tunnel
@@ -246,14 +250,15 @@ dnstm update --self                    # Only update dnstm itself
 dnstm update --binaries                # Only update transport binaries
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--check` | Dry-run: show available updates without installing |
-| `--force` | Skip confirmation prompts |
-| `--self` | Only update dnstm itself |
-| `--binaries` | Only update transport binaries |
+| Flag         | Description                                        |
+| ------------ | -------------------------------------------------- |
+| `--check`    | Dry-run: show available updates without installing |
+| `--force`    | Skip confirmation prompts                          |
+| `--self`     | Only update dnstm itself                           |
+| `--binaries` | Only update transport binaries                     |
 
 The update process:
+
 - Checks for newer dnstm version on GitHub
 - Compares installed binary versions against pinned versions
 - Stops affected services before updating
@@ -269,6 +274,7 @@ dnstm uninstall [--force]
 ```
 
 This removes:
+
 - All tunnel services
 - DNS router and microsocks services
 - Configuration files (`/etc/dnstm/`)
@@ -345,6 +351,4 @@ dnstm config validate backup.json
 
 # Load on another server
 sudo dnstm config load backup.json
-sudo dnstm router start
 ```
-

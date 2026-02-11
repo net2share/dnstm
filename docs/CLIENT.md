@@ -3,7 +3,7 @@
 ## Prerequisites
 
 Download client binaries:
-- [slipstream-client](https://github.com/Mygod/slipstream-rust/releases)
+- [slipstream-client](https://github.com/net2share/slipstream-rust-build/releases)
 - [dnstt-client](https://www.bamsoftware.com/software/dnstt/)
 - [sslocal](https://github.com/shadowsocks/shadowsocks-rust/releases) (for Shadowsocks)
 
