@@ -270,13 +270,9 @@ func (r *Router) RemoveTunnel(tag string) error {
 
 	// Handle mode-specific cleanup
 	if r.config.IsSingleMode() {
-		// Update active tunnel if needed
+		// Clear active if removing the active tunnel
 		if r.config.Route.Active == tag {
 			r.config.Route.Active = ""
-			// Set to first available tunnel
-			if len(r.config.Tunnels) > 0 {
-				r.config.Route.Active = r.config.Tunnels[0].Tag
-			}
 		}
 	} else {
 		// Update default route if needed

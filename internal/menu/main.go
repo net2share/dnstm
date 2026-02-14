@@ -396,16 +396,33 @@ func runTunnelManageMenu(tag string) error {
 			status = "Running"
 		}
 
+		isRunning := tunnel.IsActive()
+
+		// Build context-aware options
 		options := []tui.MenuOption{
 			{Label: "Status", Value: "status"},
 			{Label: "Logs", Value: "logs"},
-			{Label: "Start/Restart", Value: "start"},
-			{Label: "Stop", Value: "stop"},
-			{Label: "Enable", Value: "enable"},
-			{Label: "Disable", Value: "disable"},
-			{Label: "Remove", Value: "remove"},
-			{Label: "Back", Value: "back"},
 		}
+
+		// Only show start/stop/restart for active tunnel (single mode) or any tunnel (multi mode)
+		canManage := cfg.IsMultiMode() || (cfg.IsSingleMode() && cfg.Route.Active == tag)
+		if canManage {
+			if isRunning {
+				options = append(options,
+					tui.MenuOption{Label: "Restart", Value: "restart"},
+					tui.MenuOption{Label: "Stop", Value: "stop"},
+				)
+			} else {
+				options = append(options,
+					tui.MenuOption{Label: "Start", Value: "start"},
+				)
+			}
+		}
+
+		options = append(options,
+			tui.MenuOption{Label: "Remove", Value: "remove"},
+			tui.MenuOption{Label: "Back", Value: "back"},
+		)
 
 		transportName := config.GetTransportTypeDisplayName(tunnelCfg.Transport)
 		choice, err := tui.RunMenu(tui.MenuConfig{
@@ -442,8 +459,7 @@ func runTunnelAction(actionID, tunnelTag string) error {
 	// Special handling for actions that need the tunnel tag
 	switch actionID {
 	case actions.ActionTunnelStatus, actions.ActionTunnelLogs, actions.ActionTunnelStart,
-		actions.ActionTunnelStop, actions.ActionTunnelRestart, actions.ActionTunnelEnable,
-		actions.ActionTunnelDisable, actions.ActionTunnelRemove:
+		actions.ActionTunnelStop, actions.ActionTunnelRestart, actions.ActionTunnelRemove:
 		return runActionWithArgs(actionID, []string{tunnelTag})
 	default:
 		return RunAction(actionID)

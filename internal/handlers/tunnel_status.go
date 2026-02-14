@@ -39,10 +39,6 @@ func HandleTunnelStatus(ctx *actions.Context) error {
 	}
 
 	// Main info section
-	enabledStr := "No"
-	if tunnelCfg.IsEnabled() {
-		enabledStr = "Yes"
-	}
 	mainSection := actions.InfoSection{
 		Rows: []actions.InfoRow{
 			{Key: "Transport", Value: config.GetTransportTypeDisplayName(tunnelCfg.Transport)},
@@ -51,7 +47,6 @@ func HandleTunnelStatus(ctx *actions.Context) error {
 			{Key: "Port", Value: fmt.Sprintf("%d", tunnelCfg.Port)},
 			{Key: "Service", Value: tunnel.ServiceName},
 			{Key: "Status", Value: tunnel.StatusString()},
-			{Key: "Enabled", Value: enabledStr},
 		},
 	}
 	infoCfg.Sections = append(infoCfg.Sections, mainSection)
@@ -110,13 +105,6 @@ func HandleTunnelStatus(ctx *actions.Context) error {
 	// CLI mode - print to console
 	ctx.Output.Println()
 	ctx.Output.Println(tunnel.GetFormattedInfo())
-
-	if tunnelCfg.IsEnabled() {
-		ctx.Output.Printf("Enabled:   Yes\n")
-	} else {
-		ctx.Output.Printf("Enabled:   No\n")
-	}
-	ctx.Output.Println()
 
 	if tunnelCfg.Transport == config.TransportSlipstream {
 		certMgr := certs.NewManager()

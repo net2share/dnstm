@@ -15,8 +15,6 @@ const (
 	ActionTunnelList        = "tunnel.list"
 	ActionTunnelAdd         = "tunnel.add"
 	ActionTunnelRemove      = "tunnel.remove"
-	ActionTunnelEnable      = "tunnel.enable"
-	ActionTunnelDisable     = "tunnel.disable"
 	ActionTunnelStart       = "tunnel.start"
 	ActionTunnelStop        = "tunnel.stop"
 	ActionTunnelRestart     = "tunnel.restart"

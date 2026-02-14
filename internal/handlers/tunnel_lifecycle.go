@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/net2share/dnstm/internal/actions"
+	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/router"
 )
 
@@ -11,13 +12,12 @@ func init() {
 	actions.SetTunnelHandler(actions.ActionTunnelStart, HandleTunnelStart)
 	actions.SetTunnelHandler(actions.ActionTunnelStop, HandleTunnelStop)
 	actions.SetTunnelHandler(actions.ActionTunnelRestart, HandleTunnelRestart)
-	actions.SetTunnelHandler(actions.ActionTunnelEnable, HandleTunnelEnable)
-	actions.SetTunnelHandler(actions.ActionTunnelDisable, HandleTunnelDisable)
 }
 
-// HandleTunnelStart starts or restarts a tunnel.
+// HandleTunnelStart enables and starts a tunnel.
 func HandleTunnelStart(ctx *actions.Context) error {
-	if _, err := RequireConfig(ctx); err != nil {
+	cfg, err := RequireConfig(ctx)
+	if err != nil {
 		return err
 	}
 
@@ -26,9 +26,14 @@ func HandleTunnelStart(ctx *actions.Context) error {
 		return err
 	}
 
-	tunnelCfg, err := GetTunnelByTag(ctx, tag)
-	if err != nil {
-		return err
+	tunnelCfg := cfg.GetTunnelByTag(tag)
+	if tunnelCfg == nil {
+		return actions.TunnelNotFoundError(tag)
+	}
+
+	// Single mode guard: must be the active tunnel
+	if cfg.IsSingleMode() && cfg.Route.Active != tag {
+		return fmt.Errorf("tunnel '%s' is not the active tunnel. Switch with: dnstm router switch -t %s", tag, tag)
 	}
 
 	tunnel := router.NewTunnel(tunnelCfg)
@@ -40,19 +45,39 @@ func HandleTunnelStart(ctx *actions.Context) error {
 		beginProgress(ctx, fmt.Sprintf("Start Tunnel: %s", tag))
 	}
 
+	// Enable in config
+	enabled := true
+	tunnelCfg.Enabled = &enabled
+	if err := cfg.Save(); err != nil {
+		return failProgress(ctx, fmt.Errorf("failed to save config: %w", err))
+	}
+
+	// Enable systemd service
 	if err := tunnel.Enable(); err != nil {
 		ctx.Output.Warning("Failed to enable service: " + err.Error())
 	}
 
+	// Multi mode: regenerate DNS router config and restart DNS router
+	if cfg.IsMultiMode() {
+		if err := regenerateDNSRouter(cfg); err != nil {
+			ctx.Output.Warning("Failed to update DNS router: " + err.Error())
+		}
+	}
+
+	// Start or restart
 	if isRunning {
 		ctx.Output.Info("Restarting tunnel...")
 		if err := tunnel.Restart(); err != nil {
+			// Roll back enabled state
+			rollbackEnabled(tunnelCfg, cfg, false)
 			return failProgress(ctx, fmt.Errorf("failed to restart tunnel: %w", err))
 		}
 		ctx.Output.Success(fmt.Sprintf("Tunnel '%s' restarted", tag))
 	} else {
 		ctx.Output.Info("Starting tunnel...")
 		if err := tunnel.Start(); err != nil {
+			// Roll back enabled state
+			rollbackEnabled(tunnelCfg, cfg, false)
 			return failProgress(ctx, fmt.Errorf("failed to start tunnel: %w", err))
 		}
 		ctx.Output.Success(fmt.Sprintf("Tunnel '%s' started", tag))
@@ -62,9 +87,10 @@ func HandleTunnelStart(ctx *actions.Context) error {
 	return nil
 }
 
-// HandleTunnelStop stops a tunnel.
+// HandleTunnelStop stops and disables a tunnel.
 func HandleTunnelStop(ctx *actions.Context) error {
-	if _, err := RequireConfig(ctx); err != nil {
+	cfg, err := RequireConfig(ctx)
+	if err != nil {
 		return err
 	}
 
@@ -73,26 +99,58 @@ func HandleTunnelStop(ctx *actions.Context) error {
 		return err
 	}
 
-	tunnelCfg, err := GetTunnelByTag(ctx, tag)
-	if err != nil {
-		return err
+	tunnelCfg := cfg.GetTunnelByTag(tag)
+	if tunnelCfg == nil {
+		return actions.TunnelNotFoundError(tag)
 	}
 
 	tunnel := router.NewTunnel(tunnelCfg)
 
+	// Guard: if not running, just inform
+	if !tunnel.IsActive() {
+		ctx.Output.Info(fmt.Sprintf("Tunnel '%s' is not running", tag))
+		return nil
+	}
+
 	beginProgress(ctx, fmt.Sprintf("Stop Tunnel: %s", tag))
 	ctx.Output.Info("Stopping tunnel...")
 
+	// Stop the tunnel
 	if err := tunnel.Stop(); err != nil {
 		return failProgress(ctx, fmt.Errorf("failed to stop tunnel: %w", err))
 	}
 
+	// Disable systemd service
+	if err := tunnel.Disable(); err != nil {
+		ctx.Output.Warning("Failed to disable service: " + err.Error())
+	}
+
+	// Disable in config
+	enabled := false
+	tunnelCfg.Enabled = &enabled
+	if err := cfg.Save(); err != nil {
+		ctx.Output.Warning("Failed to save config: " + err.Error())
+	}
+
+	// Multi mode: regenerate DNS router config and restart DNS router
+	if cfg.IsMultiMode() {
+		if err := regenerateDNSRouter(cfg); err != nil {
+			ctx.Output.Warning("Failed to update DNS router: " + err.Error())
+		}
+	}
+
 	ctx.Output.Success(fmt.Sprintf("Tunnel '%s' stopped", tag))
+
+	// Warn if stopping the active tunnel in single mode
+	if cfg.IsSingleMode() && cfg.Route.Active == tag {
+		ctx.Output.Warning("This is the active tunnel in single mode. No tunnel will be serving traffic.")
+	}
+
 	endProgress(ctx)
 	return nil
 }
 
-// HandleTunnelRestart restarts a tunnel.
+// HandleTunnelRestart restarts a running tunnel.
 func HandleTunnelRestart(ctx *actions.Context) error {
 	if _, err := RequireConfig(ctx); err != nil {
 		return err
@@ -110,6 +168,11 @@ func HandleTunnelRestart(ctx *actions.Context) error {
 
 	tunnel := router.NewTunnel(tunnelCfg)
 
+	// Guard: must be running
+	if !tunnel.IsActive() {
+		return fmt.Errorf("tunnel '%s' is not running. Use start instead", tag)
+	}
+
 	beginProgress(ctx, fmt.Sprintf("Restart Tunnel: %s", tag))
 	ctx.Output.Info("Restarting tunnel...")
 
@@ -122,91 +185,26 @@ func HandleTunnelRestart(ctx *actions.Context) error {
 	return nil
 }
 
-// HandleTunnelEnable enables a tunnel.
-func HandleTunnelEnable(ctx *actions.Context) error {
-	cfg, err := RequireConfig(ctx)
+// regenerateDNSRouter regenerates DNS router config and restarts it.
+func regenerateDNSRouter(cfg *config.Config) error {
+	r, err := router.New(cfg)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create router: %w", err)
 	}
-
-	tag, err := RequireTag(ctx, "tunnel")
-	if err != nil {
-		return err
+	if err := r.RegenerateDNSRouterConfig(); err != nil {
+		return fmt.Errorf("failed to regenerate DNS router config: %w", err)
 	}
-
-	tunnelCfg := cfg.GetTunnelByTag(tag)
-	if tunnelCfg == nil {
-		return actions.TunnelNotFoundError(tag)
-	}
-
-	beginProgress(ctx, fmt.Sprintf("Enable Tunnel: %s", tag))
-	ctx.Output.Info("Enabling tunnel...")
-
-	enabled := true
-	tunnelCfg.Enabled = &enabled
-
-	if err := cfg.Save(); err != nil {
-		return failProgress(ctx, fmt.Errorf("failed to save config: %w", err))
-	}
-
-	ctx.Output.Success(fmt.Sprintf("Tunnel '%s' enabled", tag))
-
-	// In multi mode, also start the tunnel
-	if cfg.IsMultiMode() {
-		tunnel := router.NewTunnel(tunnelCfg)
-		if err := tunnel.Enable(); err != nil {
-			ctx.Output.Warning("Failed to enable service: " + err.Error())
-		}
-		if err := tunnel.Start(); err != nil {
-			ctx.Output.Warning("Failed to start tunnel: " + err.Error())
-		} else {
-			ctx.Output.Status("Tunnel started")
+	dnsRouter := r.GetDNSRouterService()
+	if dnsRouter.IsActive() {
+		if err := dnsRouter.Restart(); err != nil {
+			return fmt.Errorf("failed to restart DNS router: %w", err)
 		}
 	}
-
-	endProgress(ctx)
 	return nil
 }
 
-// HandleTunnelDisable disables a tunnel.
-func HandleTunnelDisable(ctx *actions.Context) error {
-	cfg, err := RequireConfig(ctx)
-	if err != nil {
-		return err
-	}
-
-	tag, err := RequireTag(ctx, "tunnel")
-	if err != nil {
-		return err
-	}
-
-	tunnelCfg := cfg.GetTunnelByTag(tag)
-	if tunnelCfg == nil {
-		return actions.TunnelNotFoundError(tag)
-	}
-
-	beginProgress(ctx, fmt.Sprintf("Disable Tunnel: %s", tag))
-	ctx.Output.Info("Disabling tunnel...")
-
-	enabled := false
-	tunnelCfg.Enabled = &enabled
-
-	if err := cfg.Save(); err != nil {
-		return failProgress(ctx, fmt.Errorf("failed to save config: %w", err))
-	}
-
-	ctx.Output.Success(fmt.Sprintf("Tunnel '%s' disabled", tag))
-
-	// Also stop the tunnel
-	tunnel := router.NewTunnel(tunnelCfg)
-	if tunnel.IsActive() {
-		if err := tunnel.Stop(); err != nil {
-			ctx.Output.Warning("Failed to stop tunnel: " + err.Error())
-		} else {
-			ctx.Output.Status("Tunnel stopped")
-		}
-	}
-
-	endProgress(ctx)
-	return nil
+// rollbackEnabled rolls back the Enabled config field and saves.
+func rollbackEnabled(tunnelCfg *config.TunnelConfig, cfg *config.Config, value bool) {
+	tunnelCfg.Enabled = &value
+	_ = cfg.Save()
 }

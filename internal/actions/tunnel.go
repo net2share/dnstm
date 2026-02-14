@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/net2share/dnstm/internal/config"
+	"github.com/net2share/dnstm/internal/router"
 	"github.com/net2share/go-corelib/tui"
 )
 
@@ -81,9 +82,9 @@ func init() {
 		ID:                ActionTunnelStart,
 		Parent:            ActionTunnel,
 		Use:               "start",
-		Short:             "Start a tunnel",
-		Long:              "Start or restart a tunnel. If already running, restarts to pick up changes.",
-		MenuLabel:         "Start/Restart",
+		Short:             "Start a tunnel (enables and starts)",
+		Long:              "Enable and start a tunnel. If already running, restarts to pick up changes.",
+		MenuLabel:         "Start",
 		RequiresRoot:      true,
 		RequiresInstalled: true,
 		Args: &ArgsSpec{
@@ -99,8 +100,8 @@ func init() {
 		ID:                ActionTunnelStop,
 		Parent:            ActionTunnel,
 		Use:               "stop",
-		Short:             "Stop a tunnel",
-		Long:              "Stop a tunnel",
+		Short:             "Stop a tunnel (stops and disables)",
+		Long:              "Stop and disable a tunnel",
 		MenuLabel:         "Stop",
 		RequiresRoot:      true,
 		RequiresInstalled: true,
@@ -120,42 +121,6 @@ func init() {
 		Short:             "Restart a tunnel",
 		Long:              "Restart a tunnel",
 		MenuLabel:         "Restart",
-		RequiresRoot:      true,
-		RequiresInstalled: true,
-		Args: &ArgsSpec{
-			Name:        "tag",
-			Description: "Tunnel tag",
-			Required:    true,
-			PickerFunc:  TunnelPicker,
-		},
-	})
-
-	// Register tunnel.enable action
-	Register(&Action{
-		ID:                ActionTunnelEnable,
-		Parent:            ActionTunnel,
-		Use:               "enable",
-		Short:             "Enable a tunnel",
-		Long:              "Enable a tunnel (auto-starts in multi mode)",
-		MenuLabel:         "Enable",
-		RequiresRoot:      true,
-		RequiresInstalled: true,
-		Args: &ArgsSpec{
-			Name:        "tag",
-			Description: "Tunnel tag",
-			Required:    true,
-			PickerFunc:  TunnelPicker,
-		},
-	})
-
-	// Register tunnel.disable action
-	Register(&Action{
-		ID:                ActionTunnelDisable,
-		Parent:            ActionTunnel,
-		Use:               "disable",
-		Short:             "Disable a tunnel",
-		Long:              "Disable a tunnel (stops it in multi mode)",
-		MenuLabel:         "Disable",
 		RequiresRoot:      true,
 		RequiresInstalled: true,
 		Args: &ArgsSpec{
@@ -299,7 +264,7 @@ func TunnelPicker(ctx *Context) (string, error) {
 	var options []SelectOption
 	for _, t := range cfg.Tunnels {
 		status := SymbolStopped
-		if t.IsEnabled() {
+		if router.NewTunnel(&t).IsActive() {
 			status = SymbolRunning
 		}
 		transportName := config.GetTransportTypeDisplayName(t.Transport)

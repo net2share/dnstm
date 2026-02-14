@@ -173,7 +173,7 @@ func TestTunnelList(t *testing.T) {
 	}
 }
 
-func TestTunnelEnableDisable(t *testing.T) {
+func TestTunnelEnabledState(t *testing.T) {
 	env := NewTestEnv(t)
 
 	cfg := env.DefaultConfig()

@@ -377,6 +377,8 @@ func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *con
 	// Step 6: Save config
 	currentStep++
 	ctx.Output.Step(currentStep, totalSteps, "Saving configuration...")
+	enabled := true
+	tunnelCfg.Enabled = &enabled
 	cfg.Tunnels = append(cfg.Tunnels, *tunnelCfg)
 
 	// Handle mode-specific config
