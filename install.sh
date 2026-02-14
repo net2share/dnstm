@@ -63,7 +63,7 @@ if [ -f "${INSTALL_DIR}/${BINARY_NAME}" ]; then
         read -p "Would you like to check for updates? [y/N] " -n 1 -r < /dev/tty
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            exec "${INSTALL_DIR}/${BINARY_NAME}" update
+            exec "${INSTALL_DIR}/${BINARY_NAME}" update --force
         fi
     fi
     exit 0
