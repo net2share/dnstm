@@ -60,7 +60,7 @@ if [ -f "${INSTALL_DIR}/${BINARY_NAME}" ]; then
         echo "Running update with --force..."
         exec "${INSTALL_DIR}/${BINARY_NAME}" update --force
     else
-        read -p "Would you like to check for updates? [y/N] " -n 1 -r
+        read -p "Would you like to check for updates? [y/N] " -n 1 -r < /dev/tty
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             exec "${INSTALL_DIR}/${BINARY_NAME}" update
@@ -101,7 +101,7 @@ echo "Detected: ${OS}/${ARCH}"
 
 # Confirmation (unless --force)
 if [ "$FORCE" = false ]; then
-    read -p "Install dnstm? [y/N] " -n 1 -r
+    read -p "Install dnstm? [y/N] " -n 1 -r < /dev/tty
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         echo "Installation cancelled."
@@ -142,9 +142,14 @@ chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
 
 success "Successfully installed ${BINARY_NAME} ${LATEST_RELEASE} to ${INSTALL_DIR}/${BINARY_NAME}"
 echo ""
+
+# Install transport binaries
+echo "Installing transport binaries..."
+"${INSTALL_DIR}/${BINARY_NAME}" install
+
+echo ""
 echo "Getting started:"
 echo "  ${BINARY_NAME}              # Interactive menu"
-echo "  ${BINARY_NAME} install      # Install transport binaries"
 echo "  ${BINARY_NAME} tunnel add   # Add a tunnel"
 echo ""
 echo "Documentation: https://github.com/${REPO}#readme"

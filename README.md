@@ -96,12 +96,7 @@ t.example.com.   IN  NS  ns.example.com.
 ### Install
 
 ```bash
-# Download and install binary
 curl -sSL https://raw.githubusercontent.com/net2share/dnstm/main/install.sh | sudo bash
-
-# Initialize system (creates user, services, downloads transports)
-sudo dnstm install                    # Defaults to single-tunnel mode
-sudo dnstm install --mode multi       # For multi-tunnel mode with DNS router
 ```
 
 ### Configuration Methods
