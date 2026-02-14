@@ -29,17 +29,9 @@ func HandleTunnelRemove(ctx *actions.Context) error {
 		return actions.TunnelNotFoundError(tag)
 	}
 
-	// Warn if removing the active tunnel in single mode
-	if cfg.IsSingleMode() && cfg.Route.Active == tag {
-		ctx.Output.Println()
-		ctx.Output.Warning("This is the currently active tunnel.")
-		if len(cfg.Tunnels) > 1 {
-			ctx.Output.Info("After removal, run 'dnstm router switch <tag>' to activate another tunnel.")
-		} else {
-			ctx.Output.Info("After removal, no transport will be active. Add a new tunnel to continue.")
-		}
-		ctx.Output.Println()
-	}
+	// Track if removing the active tunnel in single mode (for warning after removal)
+	wasActiveSingleMode := cfg.IsSingleMode() && cfg.Route.Active == tag
+	remainingTunnels := len(cfg.Tunnels) - 1
 
 	// Confirmation is handled by the adapter (CLI or menu)
 	// The handler assumes confirmation has already been obtained
@@ -94,12 +86,9 @@ func HandleTunnelRemove(ctx *actions.Context) error {
 		}
 	}
 
-	// Update Route.Active if needed (single mode)
+	// Clear Route.Active if removing the active tunnel (single mode)
 	if cfg.Route.Active == tag {
 		cfg.Route.Active = ""
-		if len(cfg.Tunnels) > 0 {
-			cfg.Route.Active = cfg.Tunnels[0].Tag
-		}
 	}
 
 	if err := cfg.Save(); err != nil {
@@ -108,6 +97,14 @@ func HandleTunnelRemove(ctx *actions.Context) error {
 	ctx.Output.Status("Configuration updated")
 
 	ctx.Output.Success(fmt.Sprintf("Tunnel '%s' removed!", tag))
+
+	// Warn after removal if it was the active tunnel in single mode
+	if wasActiveSingleMode {
+		ctx.Output.Warning("This was the active tunnel in single mode. No tunnel will be serving traffic.")
+		if remainingTunnels > 0 {
+			ctx.Output.Info("Use 'dnstm router switch -t <tag>' to activate another tunnel.")
+		}
+	}
 
 	endProgress(ctx)
 	if !ctx.IsInteractive {

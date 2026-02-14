@@ -46,15 +46,9 @@ func HandleTunnelList(ctx *actions.Context) error {
 			marker = " (default)"
 		}
 
-		// Show enabled/disabled status
-		enabledMarker := ""
-		if !t.IsEnabled() {
-			enabledMarker = " [disabled]"
-		}
-
 		transportName := config.GetTransportTypeDisplayName(t.Transport)
-		ctx.Output.Printf("%-16s %-12s %-16s %-8d %-20s %s%s%s\n",
-			t.Tag, transportName, t.Backend, t.Port, t.Domain, status, marker, enabledMarker)
+		ctx.Output.Printf("%-16s %-12s %-16s %-8d %-20s %s%s\n",
+			t.Tag, transportName, t.Backend, t.Port, t.Domain, status, marker)
 	}
 
 	if cfg.IsSingleMode() {

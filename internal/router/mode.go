@@ -120,7 +120,25 @@ func (r *Router) switchToSingleMode() error {
 		r.config.Route.Active = active
 	}
 
-	// 4. Wait for port 53 to become available
+	// 4. Set enabled/disabled state for tunnels
+	enabledTrue := true
+	enabledFalse := false
+	for i := range r.config.Tunnels {
+		t := &r.config.Tunnels[i]
+		if t.Tag == active {
+			t.Enabled = &enabledTrue
+			if tunnel, ok := r.tunnels[t.Tag]; ok {
+				tunnel.Enable()
+			}
+		} else {
+			t.Enabled = &enabledFalse
+			if tunnel, ok := r.tunnels[t.Tag]; ok {
+				tunnel.Disable()
+			}
+		}
+	}
+
+	// 5. Wait for port 53 to become available
 	if !network.WaitForPortAvailable(53, 10*time.Second) {
 		if err := network.KillProcessOnPort(53); err != nil {
 			if !network.WaitForPortAvailable(53, 5*time.Second) {
@@ -129,14 +147,14 @@ func (r *Router) switchToSingleMode() error {
 		}
 	}
 
-	// 5. Remove NAT rules (no longer needed - transport binds directly)
+	// 6. Remove NAT rules (no longer needed - transport binds directly)
 	network.ClearNATOnly()
 	network.AllowPort53()
 
-	// 6. Update config mode
+	// 7. Update config mode
 	r.config.Route.Mode = "single"
 
-	// 7. Regenerate active tunnel's service with single-mode binding (EXTERNAL_IP:53)
+	// 8. Regenerate active tunnel's service with single-mode binding (EXTERNAL_IP:53)
 	if active != "" {
 		tunnelCfg := r.config.GetTunnelByTag(active)
 		if tunnelCfg != nil {
@@ -155,12 +173,12 @@ func (r *Router) switchToSingleMode() error {
 		}
 	}
 
-	// 8. Save config
+	// 9. Save config
 	if err := r.config.Save(); err != nil {
 		return r.rollback(snapshot, fmt.Sprintf("failed to save config: %v", err))
 	}
 
-	// 9. Start active tunnel if any
+	// 10. Start active tunnel if any
 	if active != "" {
 		if tunnel, ok := r.tunnels[active]; ok {
 			if err := tunnel.Start(); err != nil {
@@ -305,10 +323,19 @@ func (r *Router) SwitchActiveTunnel(tag string) error {
 	builder := transport.NewBuilder()
 	sg := NewServiceGenerator()
 
-	// 1. Regenerate old active tunnel's service with multi-mode binding
+	// 1. Disable old active tunnel
 	if currentActive != "" {
 		oldTunnelCfg := r.config.GetTunnelByTag(currentActive)
 		if oldTunnelCfg != nil {
+			// Disable in config
+			enabledFalse := false
+			oldTunnelCfg.Enabled = &enabledFalse
+
+			// Disable systemd service
+			if oldTunnel, ok := r.tunnels[currentActive]; ok {
+				oldTunnel.Disable()
+			}
+
 			oldBackend := r.config.GetBackendByTag(oldTunnelCfg.Backend)
 			if oldBackend != nil {
 				// Get multi-mode bind options (127.0.0.1:port)
@@ -346,13 +373,20 @@ func (r *Router) SwitchActiveTunnel(tag string) error {
 		return fmt.Errorf("failed to regenerate new tunnel service: %w", err)
 	}
 
-	// 4. Update config
+	// 4. Enable new tunnel in config
+	enabledTrue := true
+	newTunnelCfg.Enabled = &enabledTrue
+
+	// 5. Update config
 	r.config.Route.Active = tag
 	if err := r.config.Save(); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	// 5. Start new active tunnel
+	// 6. Enable and start new active tunnel
+	if err := newTunnel.Enable(); err != nil {
+		return fmt.Errorf("failed to enable tunnel %s: %w", tag, err)
+	}
 	if err := newTunnel.Start(); err != nil {
 		return fmt.Errorf("failed to start tunnel %s: %w", tag, err)
 	}

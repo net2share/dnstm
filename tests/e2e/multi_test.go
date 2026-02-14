@@ -135,7 +135,7 @@ func TestMultiTunnel_Configuration(t *testing.T) {
 	t.Log("Multi-tunnel configuration validated successfully")
 }
 
-func TestMultiTunnel_EnableDisable(t *testing.T) {
+func TestMultiTunnel_EnabledState(t *testing.T) {
 	enabled := true
 	disabled := false
 

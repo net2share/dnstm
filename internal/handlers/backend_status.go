@@ -5,6 +5,7 @@ import (
 
 	"github.com/net2share/dnstm/internal/actions"
 	"github.com/net2share/dnstm/internal/config"
+	"github.com/net2share/dnstm/internal/router"
 )
 
 func init() {
@@ -68,9 +69,9 @@ func HandleBackendStatus(ctx *actions.Context) error {
 		tunnelSection.Rows = []actions.InfoRow{{Value: "None"}}
 	} else {
 		for _, t := range tunnelsUsing {
-			status := "disabled"
-			if t.IsEnabled() {
-				status = "enabled"
+			status := "stopped"
+			if router.NewTunnel(t).IsActive() {
+				status = "running"
 			}
 			tunnelSection.Rows = append(tunnelSection.Rows, actions.InfoRow{
 				Value: fmt.Sprintf("• %s (%s, %s)", t.Tag, t.Domain, status),
@@ -106,9 +107,9 @@ func HandleBackendStatus(ctx *actions.Context) error {
 	} else {
 		ctx.Output.Printf("Tunnels using this backend (%d):\n", len(tunnelsUsing))
 		for _, t := range tunnelsUsing {
-			status := "disabled"
-			if t.IsEnabled() {
-				status = "enabled"
+			status := "stopped"
+			if router.NewTunnel(t).IsActive() {
+				status = "running"
 			}
 			ctx.Output.Printf("  - %s (%s, %s)\n", t.Tag, t.Domain, status)
 		}

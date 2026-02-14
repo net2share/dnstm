@@ -23,7 +23,6 @@ func isInfoViewAction(actionID string) bool {
 		actions.ActionRouterMode,
 		actions.ActionTunnelAdd, actions.ActionTunnelRemove,
 		actions.ActionTunnelStart, actions.ActionTunnelStop, actions.ActionTunnelRestart,
-		actions.ActionTunnelEnable, actions.ActionTunnelDisable,
 		actions.ActionBackendRemove,
 		actions.ActionInstall, actions.ActionUninstall:
 		return true

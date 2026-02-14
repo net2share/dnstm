@@ -6,6 +6,7 @@ import (
 
 	"github.com/net2share/dnstm/internal/actions"
 	"github.com/net2share/dnstm/internal/config"
+	"github.com/net2share/dnstm/internal/router"
 )
 
 func init() {
@@ -77,11 +78,11 @@ func HandleConfigValidate(ctx *actions.Context) error {
 		ctx.Output.Info("Tunnels:")
 		for _, t := range cfg.Tunnels {
 			transportName := config.GetTransportTypeDisplayName(t.Transport)
-			enabled := "enabled"
-			if !t.IsEnabled() {
-				enabled = "disabled"
+			status := "stopped"
+			if router.NewTunnel(&t).IsActive() {
+				status = "running"
 			}
-			ctx.Output.Printf("  - %s (%s → %s, %s)\n", t.Tag, transportName, t.Backend, enabled)
+			ctx.Output.Printf("  - %s (%s → %s, %s)\n", t.Tag, transportName, t.Backend, status)
 		}
 	}
 
