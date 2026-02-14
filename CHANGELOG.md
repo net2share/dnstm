@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.5](https://github.com/net2share/dnstm/compare/v0.6.4...v0.6.5) (2026-02-14)
+
+
+### Features
+
+* add separators and external tools section to main menu ([#50](https://github.com/net2share/dnstm/issues/50)) ([73bf7fa](https://github.com/net2share/dnstm/commit/73bf7fad94518ee24958b550c86ce7ea2e522f02))
+* couple tunnel start/stop with enable/disable ([87d61da](https://github.com/net2share/dnstm/commit/87d61dab274a458ff578a8ab4b2541bda1d8a964))
+
+
+### Bug Fixes
+
+* read from /dev/tty and auto-install binaries in install script ([fb872ba](https://github.com/net2share/dnstm/commit/fb872ba7e19ac04c102135456aaf0757a909b858))
+
 ## [0.6.4](https://github.com/net2share/dnstm/compare/v0.6.3...v0.6.4) (2026-02-07)
 
 
