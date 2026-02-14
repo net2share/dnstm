@@ -36,29 +36,31 @@ func NewTunnel(cfg *config.TunnelConfig) *Tunnel {
 	}
 }
 
-// Start starts the tunnel service.
+// Start enables and starts the tunnel service.
 func (t *Tunnel) Start() error {
+	if err := service.EnableService(t.ServiceName); err != nil {
+		log.Printf("[warning] failed to enable service %s: %v", t.ServiceName, err)
+	}
 	return service.StartService(t.ServiceName)
 }
 
-// Stop stops the tunnel service.
+// Stop stops and disables the tunnel service.
 func (t *Tunnel) Stop() error {
-	return service.StopService(t.ServiceName)
+	if err := service.StopService(t.ServiceName); err != nil {
+		return err
+	}
+	if err := service.DisableService(t.ServiceName); err != nil {
+		log.Printf("[warning] failed to disable service %s: %v", t.ServiceName, err)
+	}
+	return nil
 }
 
-// Restart restarts the tunnel service.
+// Restart enables and restarts the tunnel service.
 func (t *Tunnel) Restart() error {
+	if err := service.EnableService(t.ServiceName); err != nil {
+		log.Printf("[warning] failed to enable service %s: %v", t.ServiceName, err)
+	}
 	return service.RestartService(t.ServiceName)
-}
-
-// Enable enables the tunnel service to start on boot.
-func (t *Tunnel) Enable() error {
-	return service.EnableService(t.ServiceName)
-}
-
-// Disable disables the tunnel service from starting on boot.
-func (t *Tunnel) Disable() error {
-	return service.DisableService(t.ServiceName)
 }
 
 // GetLogs returns recent logs from the tunnel.
@@ -88,12 +90,8 @@ func (t *Tunnel) IsInstalled() bool {
 
 // RemoveService removes the systemd service for this tunnel.
 func (t *Tunnel) RemoveService() error {
-	if t.IsActive() {
-		t.Stop()
-	}
-	if t.IsServiceEnabled() {
-		t.Disable()
-	}
+	service.StopService(t.ServiceName)
+	service.DisableService(t.ServiceName)
 	return service.RemoveService(t.ServiceName)
 }
 

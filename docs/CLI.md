@@ -88,8 +88,6 @@ dnstm tunnel remove -t <tag> [--force]     # Remove tunnel
 dnstm tunnel start -t <tag>               # Start tunnel
 dnstm tunnel stop -t <tag>                # Stop tunnel
 dnstm tunnel restart -t <tag>             # Restart tunnel
-dnstm tunnel enable -t <tag>              # Enable tunnel
-dnstm tunnel disable -t <tag>             # Disable tunnel
 dnstm tunnel logs -t <tag> [-n lines]     # Show tunnel logs
 dnstm tunnel status -t <tag>              # Show tunnel status with cert/key info
 ```
@@ -215,7 +213,7 @@ dnstm router mode multi        # Switch to multi-tunnel mode
 
 **Multi-tunnel mode:**
 
-- All enabled tunnels run simultaneously
+- All tunnels run simultaneously
 - DNS router handles domain-based routing
 - Each domain routes to its designated tunnel
 
@@ -302,9 +300,6 @@ sudo dnstm tunnel add -t main \
   --backend ss-primary \
   --domain t.example.com
 
-# Start
-sudo dnstm router start
-
 # Check status
 sudo dnstm router status
 ```
@@ -325,9 +320,6 @@ sudo dnstm tunnel add -t dnstt-1 \
   --transport dnstt \
   --backend socks \
   --domain t2.example.com
-
-# Start all
-sudo dnstm router start
 ```
 
 ### Switch Between Tunnels

@@ -100,23 +100,19 @@ func switchMode(ctx *actions.Context, cfg *config.Config, newMode string) error 
 
 	ctx.Output.Success(fmt.Sprintf("Switched to %s!", newModeName))
 
-	// Show next steps (different for CLI vs TUI)
+	// Show next steps
 	if ctx.IsInteractive {
 		ctx.Output.Println()
 		if newMode == "single" {
 			ctx.Output.Info("Next: Select 'Switch Active' to choose a tunnel")
-		} else {
-			ctx.Output.Info("Next: Select 'Start/Restart' to start all tunnels")
 		}
 		ctx.Output.EndProgress()
 	} else {
 		ctx.Output.Println()
-		ctx.Output.Info("Next steps:")
 		if newMode == "single" {
+			ctx.Output.Info("Next steps:")
 			ctx.Output.Println("  dnstm router switch <tag>  - Select active tunnel")
-			ctx.Output.Println("  dnstm router start         - Start the tunnel")
 		} else {
-			ctx.Output.Println("  dnstm router start   - Start all tunnels")
 			ctx.Output.Println("  dnstm router status  - View status")
 		}
 		ctx.Output.Println()

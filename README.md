@@ -124,9 +124,6 @@ sudo dnstm tunnel add -t slip-ss --transport slipstream --backend my-ss --domain
 # Add slipstream + custom backend (e.g., MTProto proxy)
 sudo dnstm backend add -t mtproto --type custom --address 127.0.0.1:8443
 sudo dnstm tunnel add -t slip-mtproto --transport slipstream --backend mtproto --domain t4.example.com
-
-# Start router
-sudo dnstm router start
 ```
 
 #### 3. Config File
@@ -216,7 +213,6 @@ All tunnels run simultaneously. DNS router handles domain-based routing.
 
 ```bash
 sudo dnstm router mode multi
-sudo dnstm router start
 ```
 
 ## Documentation

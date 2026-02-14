@@ -71,13 +71,24 @@ func HandleUpdate(ctx *actions.Context) error {
 		return nil
 	}
 
-	// Require --force to install updates
+	// Confirm updates
 	if !force {
 		if ctx.IsInteractive {
 			ctx.Output.EndProgress()
+			confirm, err := tui.RunConfirm(tui.ConfirmConfig{
+				Title:       "Install updates?",
+				Description: "The updates listed above will be installed.",
+			})
+			if err != nil {
+				return err
+			}
+			if !confirm {
+				return nil
+			}
+		} else {
+			ctx.Output.Info("Run with --force to install updates")
+			return nil
 		}
-		ctx.Output.Info("Run with --force to install updates")
-		return nil
 	}
 
 	// Phase 2: Perform updates (in progress view for TUI)

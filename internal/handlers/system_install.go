@@ -172,7 +172,6 @@ func HandleInstall(ctx *actions.Context) error {
 		ctx.Output.Info("Next steps:")
 		ctx.Output.Println("  1. Add backend (optional): dnstm backend add")
 		ctx.Output.Println("  2. Add tunnel: dnstm tunnel add")
-		ctx.Output.Println("  3. Start router: dnstm router start")
 		ctx.Output.Println()
 	}
 

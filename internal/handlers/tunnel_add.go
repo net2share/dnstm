@@ -40,8 +40,8 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 	transportType, err := tui.RunMenu(tui.MenuConfig{
 		Title: "Transport Type",
 		Options: []tui.MenuOption{
-			{Label: "Slipstream (Recommended)", Value: string(config.TransportSlipstream)},
 			{Label: "DNSTT", Value: string(config.TransportDNSTT)},
+			{Label: "Slipstream", Value: string(config.TransportSlipstream)},
 		},
 	})
 	if err != nil {
@@ -397,11 +397,8 @@ func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *con
 	}
 	ctx.Output.Status("Configuration saved")
 
-	// Start the tunnel
-	if err := tunnel.Enable(); err != nil {
-		ctx.Output.Warning("Failed to enable service: " + err.Error())
-	}
-	if err := tunnel.Start(); err != nil {
+	// Start the tunnel (and regenerate DNS router in multi mode)
+	if err := enableAndStartTunnel(ctx, cfg, tunnel); err != nil {
 		ctx.Output.Warning("Failed to start tunnel: " + err.Error())
 	} else {
 		ctx.Output.Status("Tunnel started")

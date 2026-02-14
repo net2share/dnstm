@@ -120,21 +120,16 @@ func (r *Router) switchToSingleMode() error {
 		r.config.Route.Active = active
 	}
 
-	// 4. Set enabled/disabled state for tunnels
+	// 4. Set enabled/disabled state for tunnels in config
+	//    (systemd enable/disable is handled by Start/Stop)
 	enabledTrue := true
 	enabledFalse := false
 	for i := range r.config.Tunnels {
 		t := &r.config.Tunnels[i]
 		if t.Tag == active {
 			t.Enabled = &enabledTrue
-			if tunnel, ok := r.tunnels[t.Tag]; ok {
-				tunnel.Enable()
-			}
 		} else {
 			t.Enabled = &enabledFalse
-			if tunnel, ok := r.tunnels[t.Tag]; ok {
-				tunnel.Disable()
-			}
 		}
 	}
 
@@ -227,8 +222,12 @@ func (r *Router) switchToMultiMode() error {
 	network.ClearNATOnly()
 	network.AllowPort53()
 
-	// 4. Update config mode
+	// 4. Update config mode and enable all tunnels
 	r.config.Route.Mode = "multi"
+	enabledTrue := true
+	for i := range r.config.Tunnels {
+		r.config.Tunnels[i].Enabled = &enabledTrue
+	}
 
 	// 5. Set default route if not set
 	if r.config.Route.Default == "" && len(r.config.Tunnels) > 0 {
@@ -279,12 +278,11 @@ func (r *Router) switchToMultiMode() error {
 		}
 	}
 
-	// 10. Start all enabled tunnels FIRST (before dnsrouter)
+	// 10. Start all tunnels FIRST (before dnsrouter)
+	//     Start() also enables the systemd service
 	for tag, tunnel := range r.tunnels {
-		if tunnel.Config.IsEnabled() {
-			if err := tunnel.Start(); err != nil {
-				return r.rollback(snapshot, fmt.Sprintf("failed to start tunnel %s: %v", tag, err))
-			}
+		if err := tunnel.Start(); err != nil {
+			return r.rollback(snapshot, fmt.Sprintf("failed to start tunnel %s: %v", tag, err))
 		}
 	}
 
@@ -323,18 +321,13 @@ func (r *Router) SwitchActiveTunnel(tag string) error {
 	builder := transport.NewBuilder()
 	sg := NewServiceGenerator()
 
-	// 1. Disable old active tunnel
+	// 1. Deactivate old tunnel (regenerate with multi-mode binding)
 	if currentActive != "" {
 		oldTunnelCfg := r.config.GetTunnelByTag(currentActive)
 		if oldTunnelCfg != nil {
 			// Disable in config
 			enabledFalse := false
 			oldTunnelCfg.Enabled = &enabledFalse
-
-			// Disable systemd service
-			if oldTunnel, ok := r.tunnels[currentActive]; ok {
-				oldTunnel.Disable()
-			}
 
 			oldBackend := r.config.GetBackendByTag(oldTunnelCfg.Backend)
 			if oldBackend != nil {
@@ -383,10 +376,7 @@ func (r *Router) SwitchActiveTunnel(tag string) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	// 6. Enable and start new active tunnel
-	if err := newTunnel.Enable(); err != nil {
-		return fmt.Errorf("failed to enable tunnel %s: %w", tag, err)
-	}
+	// 6. Start new active tunnel (Start also enables systemd service)
 	if err := newTunnel.Start(); err != nil {
 		return fmt.Errorf("failed to start tunnel %s: %w", tag, err)
 	}

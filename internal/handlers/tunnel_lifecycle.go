@@ -52,31 +52,17 @@ func HandleTunnelStart(ctx *actions.Context) error {
 		return failProgress(ctx, fmt.Errorf("failed to save config: %w", err))
 	}
 
-	// Enable systemd service
-	if err := tunnel.Enable(); err != nil {
-		ctx.Output.Warning("Failed to enable service: " + err.Error())
-	}
-
-	// Multi mode: regenerate DNS router config and restart DNS router
-	if cfg.IsMultiMode() {
-		if err := regenerateDNSRouter(cfg); err != nil {
-			ctx.Output.Warning("Failed to update DNS router: " + err.Error())
-		}
-	}
-
 	// Start or restart
 	if isRunning {
 		ctx.Output.Info("Restarting tunnel...")
-		if err := tunnel.Restart(); err != nil {
-			// Roll back enabled state
+		if err := enableAndStartTunnel(ctx, cfg, tunnel); err != nil {
 			rollbackEnabled(tunnelCfg, cfg, false)
 			return failProgress(ctx, fmt.Errorf("failed to restart tunnel: %w", err))
 		}
 		ctx.Output.Success(fmt.Sprintf("Tunnel '%s' restarted", tag))
 	} else {
 		ctx.Output.Info("Starting tunnel...")
-		if err := tunnel.Start(); err != nil {
-			// Roll back enabled state
+		if err := enableAndStartTunnel(ctx, cfg, tunnel); err != nil {
 			rollbackEnabled(tunnelCfg, cfg, false)
 			return failProgress(ctx, fmt.Errorf("failed to start tunnel: %w", err))
 		}
@@ -115,14 +101,9 @@ func HandleTunnelStop(ctx *actions.Context) error {
 	beginProgress(ctx, fmt.Sprintf("Stop Tunnel: %s", tag))
 	ctx.Output.Info("Stopping tunnel...")
 
-	// Stop the tunnel
+	// Stop the tunnel (also disables systemd service)
 	if err := tunnel.Stop(); err != nil {
 		return failProgress(ctx, fmt.Errorf("failed to stop tunnel: %w", err))
-	}
-
-	// Disable systemd service
-	if err := tunnel.Disable(); err != nil {
-		ctx.Output.Warning("Failed to disable service: " + err.Error())
 	}
 
 	// Disable in config
@@ -183,6 +164,21 @@ func HandleTunnelRestart(ctx *actions.Context) error {
 	ctx.Output.Success(fmt.Sprintf("Tunnel '%s' restarted", tag))
 	endProgress(ctx)
 	return nil
+}
+
+// enableAndStartTunnel regenerates DNS router config in multi mode,
+// and starts (or restarts) the tunnel. Start/Restart handle systemd enabling.
+func enableAndStartTunnel(ctx *actions.Context, cfg *config.Config, tunnel *router.Tunnel) error {
+	if cfg.IsMultiMode() {
+		if err := regenerateDNSRouter(cfg); err != nil {
+			ctx.Output.Warning("Failed to update DNS router: " + err.Error())
+		}
+	}
+
+	if tunnel.IsActive() {
+		return tunnel.Restart()
+	}
+	return tunnel.Start()
 }
 
 // regenerateDNSRouter regenerates DNS router config and restarts it.
