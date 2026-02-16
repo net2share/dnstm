@@ -3,7 +3,7 @@ module github.com/net2share/dnstm
 go 1.24.0
 
 require (
-	github.com/net2share/go-corelib v0.1.9
+	github.com/net2share/go-corelib v0.1.10
 	github.com/spf13/cobra v1.10.2
 	github.com/ulikunitz/xz v0.5.15
 	golang.org/x/crypto v0.18.0
