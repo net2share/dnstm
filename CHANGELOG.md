@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.6](https://github.com/net2share/dnstm/compare/v0.6.5...v0.6.6) (2026-02-16)
+
+
+### Bug Fixes
+
+* pass --force to update when user confirms in install script ([a702ce0](https://github.com/net2share/dnstm/commit/a702ce0b95c80c7df2c129205cfed0eaf82b0a77))
+
 ## [0.6.5](https://github.com/net2share/dnstm/compare/v0.6.4...v0.6.5) (2026-02-14)
 
 
