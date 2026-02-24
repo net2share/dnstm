@@ -1,0 +1,15 @@
+{
+  "ssh_target": "user@host-or-ssh-alias",
+  "dns_resolver": "8.8.8.8",
+  "domains": {
+    "dnstt_socks": "dnstt-socks.example.com",
+    "dnstt_ssh": "dnstt-ssh.example.com",
+    "slip_socks": "slip-socks.example.com",
+    "slip_ssh": "slip-ssh.example.com",
+    "slip_ss": "slip-ss.example.com"
+  },
+  "shadowsocks": {
+    "multi": { "method": "aes-256-gcm", "password": "your-multi-password" },
+    "single": { "method": "chacha20-ietf-poly1305", "password": "your-single-password" }
+  }
+}

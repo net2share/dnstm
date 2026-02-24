@@ -144,6 +144,99 @@ lsof -i :5310
 go test -v -timeout 10m ./tests/e2e/...
 ```
 
+## Remote E2E Tests
+
+The script `scripts/remote-e2e.sh` automates the full remote testing workflow against a server with dnstm deployed. It builds, deploys, installs, creates tunnels, and validates connectivity across all transport/backend combinations.
+
+### Prerequisites
+
+Local machine:
+- `go` (for building the binary)
+- `jq`, `curl`
+- `slipstream-client`, `dnstt-client`, `sslocal` in `$PATH`
+- SSH access to the target server
+
+Remote server:
+- NS records pointing test domains to the server IP
+- SSH root access
+
+### Setup
+
+Copy the example config and fill in your SSH target, domains, and credentials:
+
+```bash
+cp scripts/e2e-config.json.example scripts/e2e-config.json
+```
+
+```json
+{
+  "ssh_target": "user@host-or-ssh-alias",
+  "dns_resolver": "8.8.8.8",
+  "domains": {
+    "dnstt_socks": "dnstt-socks.example.com",
+    "dnstt_ssh": "dnstt-ssh.example.com",
+    "slip_socks": "slip-socks.example.com",
+    "slip_ssh": "slip-ssh.example.com",
+    "slip_ss": "slip-ss.example.com"
+  },
+  "shadowsocks": {
+    "multi": { "method": "aes-256-gcm", "password": "..." },
+    "single": { "method": "chacha20-ietf-poly1305", "password": "..." }
+  }
+}
+```
+
+- `ssh_target`: SSH config alias or `user@host` (required)
+- `dns_resolver`: public DNS resolver for client connections (default: `8.8.8.8`)
+
+### Usage
+
+```bash
+# Run all phases
+./scripts/remote-e2e.sh
+
+# Custom config file
+./scripts/remote-e2e.sh -c my-config.json
+
+# Run only a specific phase
+./scripts/remote-e2e.sh --phase multi
+```
+
+### Phases
+
+| Phase | What it tests |
+|-------|---------------|
+| `single` | Fresh install, `tunnel add` for all 5 types, each tested individually in single mode |
+| `multi` | Setup multi-mode state via `config load`, test 3 tunnels simultaneously |
+| `mode-switch` | Switch multi→single→multi, verify tunnels work after each switch |
+| `config-load` | Clean reinstall, `config load` with multi config, verify tunnels work |
+| `config-reload` | `config load` single config over existing multi, validate old resources cleaned up |
+
+Each phase is standalone — it sets up its own prerequisite state and can be run independently via `--phase`.
+
+### Output
+
+After all phases complete, the script generates `temp/e2e-connections.md` with connection commands for each tunnel on the server, along with fetched certs/pubkeys in `temp/certs/`.
+
+### Tunnel types tested
+
+| Tag | Transport | Backend | Test method |
+|-----|-----------|---------|-------------|
+| slip-socks | Slipstream | SOCKS | `slipstream-client` → curl |
+| slip-ssh | Slipstream | SSH | `slipstream-client` → `ssh -D` → curl |
+| slip-ss | Slipstream | Shadowsocks | `slipstream-client` → `sslocal` → curl |
+| dnstt-socks | DNSTT | SOCKS | `dnstt-client` → curl |
+| dnstt-ssh | DNSTT | SSH | `dnstt-client` → `ssh -D` → curl |
+
+All tests validate that `curl -x socks5h://127.0.0.1:PORT https://httpbin.org/ip` returns the server's public IP.
+
+### Remote E2E Notes
+
+- Each test uses a unique local port (incrementing from 10800) to avoid conflicts
+- Certificates and public keys are fetched from the remote and cached per phase
+- Client processes are automatically cleaned up after each test and on script exit
+- Individual test failures are counted but don't abort the run
+
 ## CI Integration
 
 ```yaml

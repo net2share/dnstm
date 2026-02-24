@@ -34,3 +34,6 @@ test-certs/
 # Test directories
 tests/.testconfig/
 tests/.testbin/
+
+# E2E test config (contains credentials)
+scripts/e2e-config.json
