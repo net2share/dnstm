@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.6](https://github.com/net2share/dnstm/compare/v0.6.5...v0.6.6) (2026-02-24)
+
+
+### Features
+
+* add remote e2e test script with named phases ([cf9ec70](https://github.com/net2share/dnstm/commit/cf9ec700cad4b822a4f37080df30c1abc8f27baf))
+
+
+### Bug Fixes
+
+* pass --force to update when user confirms in install script ([a702ce0](https://github.com/net2share/dnstm/commit/a702ce0b95c80c7df2c129205cfed0eaf82b0a77))
+
 ## [0.6.5](https://github.com/net2share/dnstm/compare/v0.6.4...v0.6.5) (2026-02-14)
 
 
