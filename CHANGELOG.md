@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.7](https://github.com/net2share/dnstm/compare/v0.6.6...v0.6.7) (2026-02-26)
+
+
+### Bug Fixes
+
+* bump sshtun-user to v0.3.5 ([#63](https://github.com/net2share/dnstm/issues/63)) ([500b896](https://github.com/net2share/dnstm/commit/500b8963201f527e83fdb10cef0f372000799662))
+
 ## [0.6.6](https://github.com/net2share/dnstm/compare/v0.6.5...v0.6.6) (2026-02-24)
 
 
