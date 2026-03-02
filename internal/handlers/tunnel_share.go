@@ -109,7 +109,8 @@ func HandleTunnelShare(ctx *actions.Context) error {
 
 	if ctx.IsInteractive {
 		infoCfg := actions.InfoConfig{
-			Title: fmt.Sprintf("Share: %s", tag),
+			Title:    fmt.Sprintf("Share: %s", tag),
+			CopyText: url,
 			Sections: []actions.InfoSection{
 				{
 					Title: "Client Config URL",

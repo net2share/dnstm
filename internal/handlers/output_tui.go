@@ -202,6 +202,7 @@ func (t *TUIOutput) ShowInfo(cfg actions.InfoConfig) error {
 	tuiCfg := tui.InfoConfig{
 		Title:       cfg.Title,
 		Description: cfg.Description,
+		CopyText:    cfg.CopyText,
 	}
 	for _, section := range cfg.Sections {
 		tuiSection := tui.InfoSection{

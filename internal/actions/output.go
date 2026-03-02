@@ -55,6 +55,7 @@ type InfoConfig struct {
 	Title       string
 	Description string
 	Sections    []InfoSection
+	CopyText    string // If set, enables copy-to-clipboard in TUI mode
 }
 
 // InfoSection represents a section in the info view.
