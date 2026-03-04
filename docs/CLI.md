@@ -90,7 +90,7 @@ dnstm tunnel stop -t <tag>                # Stop tunnel
 dnstm tunnel restart -t <tag>             # Restart tunnel
 dnstm tunnel logs -t <tag> [-n lines]     # Show tunnel logs
 dnstm tunnel status -t <tag>              # Show tunnel status with cert/key info
-dnstm tunnel share -t <tag> [flags]       # Generate shareable dnstm:// URL
+dnstm tunnel share -t <tag> [flags]       # Generate shareable dnst:// URL
 ```
 
 ### Tunnel Add Flags
@@ -113,7 +113,7 @@ dnstm tunnel add -t my-tunnel \
 
 ### Tunnel Share Flags
 
-Generate a `dnstm://` URL containing all connection info needed by the client (dnstc).
+Generate a `dnst://` URL containing all connection info needed by the client (dnstc).
 
 ```bash
 # Share a SOCKS/Shadowsocks tunnel

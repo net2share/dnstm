@@ -6,9 +6,9 @@ import (
 	"fmt"
 )
 
-const urlPrefix = "dnstm://"
+const urlPrefix = "dnst://"
 
-// Encode marshals a ClientConfig into a dnstm:// URL string.
+// Encode marshals a ClientConfig into a dnst:// URL string.
 func Encode(cfg *ClientConfig) (string, error) {
 	if cfg == nil {
 		return "", fmt.Errorf("config is nil")

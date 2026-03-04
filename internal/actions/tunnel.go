@@ -160,7 +160,7 @@ func init() {
 		Parent:            ActionTunnel,
 		Use:               "share",
 		Short:             "Generate a shareable client config URL",
-		Long:              "Generate a dnstm:// URL containing all client-needed connection info",
+		Long:              "Generate a dnst:// URL containing all client-needed connection info",
 		MenuLabel:         "Share",
 		RequiresRoot:      true,
 		RequiresInstalled: true,

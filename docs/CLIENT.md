@@ -12,11 +12,11 @@ sudo dnstm tunnel share -t my-tunnel
 sudo dnstm tunnel share -t my-tunnel --user tunnel-user --password secret
 ```
 
-This outputs a `dnstm://` URL containing all connection info (transport, domain, certificates/keys, backend credentials).
+This outputs a `dnst://` URL containing all connection info (transport, domain, certificates/keys, backend credentials).
 
 ```bash
 # On the client — import and connect
-dnstc tunnel import dnstm://...
+dnstc tunnel import dnst://...
 dnstc up
 ```
 

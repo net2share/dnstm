@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Decode parses a dnstm:// URL string into a ClientConfig.
+// Decode parses a dnst:// URL string into a ClientConfig.
 func Decode(url string) (*ClientConfig, error) {
 	if !strings.HasPrefix(url, urlPrefix) {
 		return nil, fmt.Errorf("invalid URL: missing %s prefix", urlPrefix)

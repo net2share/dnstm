@@ -23,7 +23,7 @@ A CLI tool to deploy and manage DNS tunnel servers on Linux. Run single tunnels 
 - Two operating modes: single-tunnel and multi-tunnel (DNS router)
 - Interactive menu and full CLI support
 - Auto-generated TLS certificates (Slipstream) and Curve25519 keys (DNSTT)
-- Shareable `dnstm://` URLs for easy client setup (`tunnel share`)
+- Shareable `dnst://` URLs for easy client setup (`tunnel share`)
 - Firewall configuration (UFW, firewalld, iptables)
 - systemd service management with security hardening
 - SSH tunnel user management with sshd hardening
@@ -185,7 +185,7 @@ Example `config.json` (certs/keys auto-generated):
 
 ### Share with Client
 
-Generate a `dnstm://` URL to share tunnel configuration with [dnstc](https://github.com/net2share/dnstc):
+Generate a `dnst://` URL to share tunnel configuration with [dnstc](https://github.com/net2share/dnstc):
 
 ```bash
 # SOCKS or Shadowsocks tunnel

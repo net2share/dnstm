@@ -16,7 +16,7 @@ func init() {
 	actions.SetTunnelHandler(actions.ActionTunnelShare, HandleTunnelShare)
 }
 
-// HandleTunnelShare generates a dnstm:// URL for client configuration.
+// HandleTunnelShare generates a dnst:// URL for client configuration.
 func HandleTunnelShare(ctx *actions.Context) error {
 	cfg, err := RequireConfig(ctx)
 	if err != nil {

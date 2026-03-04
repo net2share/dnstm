@@ -28,7 +28,7 @@ func TestRoundTrip_SlipstreamSocks(t *testing.T) {
 		t.Fatalf("Encode: %v", err)
 	}
 
-	if !strings.HasPrefix(url, "dnstm://") {
+	if !strings.HasPrefix(url, "dnst://") {
 		t.Fatalf("URL missing prefix: %s", url)
 	}
 
@@ -170,14 +170,14 @@ func TestDecode_InvalidPrefix(t *testing.T) {
 }
 
 func TestDecode_EmptyPayload(t *testing.T) {
-	_, err := Decode("dnstm://")
+	_, err := Decode("dnst://")
 	if err == nil {
 		t.Fatal("expected error for empty payload")
 	}
 }
 
 func TestDecode_InvalidBase64(t *testing.T) {
-	_, err := Decode("dnstm://!!!invalid!!!")
+	_, err := Decode("dnst://!!!invalid!!!")
 	if err == nil {
 		t.Fatal("expected error for invalid base64")
 	}
@@ -185,7 +185,7 @@ func TestDecode_InvalidBase64(t *testing.T) {
 
 func TestDecode_InvalidJSON(t *testing.T) {
 	encoded := base64.RawURLEncoding.EncodeToString([]byte("not json"))
-	_, err := Decode("dnstm://" + encoded)
+	_, err := Decode("dnst://" + encoded)
 	if err == nil {
 		t.Fatal("expected error for invalid JSON")
 	}
@@ -193,7 +193,7 @@ func TestDecode_InvalidJSON(t *testing.T) {
 
 func TestDecode_UnsupportedVersion(t *testing.T) {
 	encoded := base64.RawURLEncoding.EncodeToString([]byte(`{"v":0}`))
-	_, err := Decode("dnstm://" + encoded)
+	_, err := Decode("dnst://" + encoded)
 	if err == nil {
 		t.Fatal("expected error for unsupported version")
 	}

@@ -1,6 +1,6 @@
 package clientcfg
 
-// ClientConfig is the JSON payload embedded in a dnstm:// URL.
+// ClientConfig is the JSON payload embedded in a dnst:// URL.
 type ClientConfig struct {
 	Version   int             `json:"v"`
 	Tag       string          `json:"tag"`
