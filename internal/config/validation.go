@@ -75,6 +75,11 @@ func (c *Config) validateBackends() error {
 			if b.Address == "" {
 				return fmt.Errorf("backend '%s': address is required for type %s", b.Tag, b.Type)
 			}
+			if b.Type == BackendSOCKS && b.Socks != nil {
+				if b.Socks.User == "" || b.Socks.Password == "" {
+					return fmt.Errorf("backend '%s': socks auth requires both user and password", b.Tag)
+				}
+			}
 		case BackendShadowsocks:
 			if b.Shadowsocks == nil {
 				return fmt.Errorf("backend '%s': shadowsocks config is required for type %s", b.Tag, b.Type)

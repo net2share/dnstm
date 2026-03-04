@@ -130,6 +130,52 @@ func init() {
 		},
 	})
 
+	// Register backend.auth action
+	Register(&Action{
+		ID:                ActionBackendAuth,
+		Parent:            ActionBackend,
+		Use:               "auth",
+		Short:             "Configure SOCKS5 authentication",
+		Long:              "Enable, disable, or change SOCKS5 proxy authentication credentials",
+		MenuLabel:         "Authentication",
+		RequiresRoot:      true,
+		RequiresInstalled: true,
+		Args: &ArgsSpec{
+			Name:        "tag",
+			Description: "Backend tag",
+			Required:    true,
+			PickerFunc:  SocksBackendPicker,
+		},
+		Inputs: []InputField{
+			{
+				Name:        "disable",
+				Label:       "Disable authentication",
+				Type:        InputTypeBool,
+				Description: "Disable SOCKS5 authentication",
+			},
+			{
+				Name:        "user",
+				Label:       "Username",
+				ShortFlag:   'u',
+				Type:        InputTypeText,
+				Description: "SOCKS5 username",
+				ShowIf: func(ctx *Context) bool {
+					return !ctx.GetBool("disable")
+				},
+			},
+			{
+				Name:        "password",
+				Label:       "Password",
+				ShortFlag:   'p',
+				Type:        InputTypePassword,
+				Description: "SOCKS5 password",
+				ShowIf: func(ctx *Context) bool {
+					return !ctx.GetBool("disable")
+				},
+			},
+		},
+	})
+
 	// Register backend.remove action
 	Register(&Action{
 		ID:                ActionBackendRemove,
@@ -176,6 +222,33 @@ func BackendPicker(ctx *Context) (string, error) {
 			Label: label,
 			Value: b.Tag,
 		})
+	}
+
+	ctx.Set("_picker_options", options)
+	return "", nil
+}
+
+// SocksBackendPicker provides interactive selection filtered to SOCKS backends only.
+func SocksBackendPicker(ctx *Context) (string, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return "", err
+	}
+
+	var options []SelectOption
+	for _, b := range cfg.Backends {
+		if b.Type != config.BackendSOCKS {
+			continue
+		}
+		label := fmt.Sprintf("%s (SOCKS5)", b.Tag)
+		options = append(options, SelectOption{
+			Label: label,
+			Value: b.Tag,
+		})
+	}
+
+	if len(options) == 0 {
+		return "", fmt.Errorf("no SOCKS backends configured")
 	}
 
 	ctx.Set("_picker_options", options)

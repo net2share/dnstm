@@ -103,6 +103,19 @@ func HandleTunnelStatus(ctx *actions.Context) error {
 					Key: "Address", Value: backend.Address,
 				})
 			}
+			if backend.Type == config.BackendSOCKS {
+				if backend.HasSocksAuth() {
+					backendSection.Rows = append(backendSection.Rows,
+						actions.InfoRow{Key: "Auth", Value: "Enabled"},
+						actions.InfoRow{Key: "User", Value: backend.Socks.User},
+						actions.InfoRow{Key: "Password", Value: backend.Socks.Password},
+					)
+				} else {
+					backendSection.Rows = append(backendSection.Rows,
+						actions.InfoRow{Key: "Auth", Value: "Disabled"},
+					)
+				}
+			}
 			infoCfg.Sections = append(infoCfg.Sections, backendSection)
 		}
 	}
@@ -144,6 +157,15 @@ func HandleTunnelStatus(ctx *actions.Context) error {
 			ctx.Output.Printf("  Type:    %s\n", config.GetBackendTypeDisplayName(backend.Type))
 			if backend.Address != "" {
 				ctx.Output.Printf("  Address: %s\n", backend.Address)
+			}
+			if backend.Type == config.BackendSOCKS {
+				if backend.HasSocksAuth() {
+					ctx.Output.Printf("  Auth:     Enabled\n")
+					ctx.Output.Printf("  User:     %s\n", backend.Socks.User)
+					ctx.Output.Printf("  Password: %s\n", backend.Socks.Password)
+				} else {
+					ctx.Output.Printf("  Auth:     Disabled\n")
+				}
 			}
 			ctx.Output.Println()
 		}

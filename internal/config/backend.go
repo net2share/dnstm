@@ -18,12 +18,24 @@ type BackendConfig struct {
 	Type        BackendType        `json:"type"`
 	Address     string             `json:"address,omitempty"`
 	Shadowsocks *ShadowsocksConfig `json:"shadowsocks,omitempty"`
+	Socks       *SocksConfig       `json:"socks,omitempty"`
+}
+
+// SocksConfig holds SOCKS5 authentication configuration.
+type SocksConfig struct {
+	User     string `json:"user"`
+	Password string `json:"password"`
 }
 
 // ShadowsocksConfig holds Shadowsocks-specific configuration.
 type ShadowsocksConfig struct {
 	Method   string `json:"method,omitempty"`
 	Password string `json:"password"`
+}
+
+// HasSocksAuth returns true if SOCKS5 authentication is configured.
+func (b *BackendConfig) HasSocksAuth() bool {
+	return b.Socks != nil && b.Socks.User != "" && b.Socks.Password != ""
 }
 
 // IsManaged returns true if dnstm manages this backend type.

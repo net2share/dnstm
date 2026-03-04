@@ -49,6 +49,25 @@ func HandleBackendStatus(ctx *actions.Context) error {
 	}
 	infoCfg.Sections = append(infoCfg.Sections, mainSection)
 
+	// Show SOCKS5 auth config if applicable
+	if backend.Type == config.BackendSOCKS {
+		authSection := actions.InfoSection{
+			Title: "Authentication",
+		}
+		if backend.HasSocksAuth() {
+			authSection.Rows = []actions.InfoRow{
+				{Key: "Status", Value: "Enabled"},
+				{Key: "User", Value: backend.Socks.User},
+				{Key: "Password", Value: backend.Socks.Password},
+			}
+		} else {
+			authSection.Rows = []actions.InfoRow{
+				{Key: "Status", Value: "Disabled"},
+			}
+		}
+		infoCfg.Sections = append(infoCfg.Sections, authSection)
+	}
+
 	// Show shadowsocks config if applicable
 	if backend.Shadowsocks != nil {
 		ssSection := actions.InfoSection{
@@ -93,6 +112,18 @@ func HandleBackendStatus(ctx *actions.Context) error {
 		ctx.Output.KV("Category", getBackendCategory(backend)),
 		ctx.Output.KV("Removable", fmt.Sprintf("%v", !backend.IsBuiltIn() || (tag != "socks" && tag != "ssh"))),
 	})
+
+	if backend.Type == config.BackendSOCKS {
+		ctx.Output.Println()
+		ctx.Output.Println("Authentication:")
+		if backend.HasSocksAuth() {
+			ctx.Output.Printf("  Status:   Enabled\n")
+			ctx.Output.Printf("  User:     %s\n", backend.Socks.User)
+			ctx.Output.Printf("  Password: %s\n", backend.Socks.Password)
+		} else {
+			ctx.Output.Printf("  Status:   Disabled\n")
+		}
+	}
 
 	if backend.Shadowsocks != nil {
 		ctx.Output.Println()

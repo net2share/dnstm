@@ -600,6 +600,15 @@ func runBackendManageMenu(tag string) error {
 			{Label: "Status", Value: "status"},
 		}
 
+		// Show Authentication option for SOCKS backends
+		if backend.Type == config.BackendSOCKS {
+			authLabel := "Authentication: Disabled"
+			if backend.HasSocksAuth() {
+				authLabel = fmt.Sprintf("Authentication: %s", backend.Socks.User)
+			}
+			options = append(options, tui.MenuOption{Label: authLabel, Value: "auth"})
+		}
+
 		// Only show Remove for non-built-in backends
 		if !backend.IsBuiltIn() {
 			options = append(options, tui.MenuOption{Label: "Remove", Value: "remove"})
@@ -614,6 +623,13 @@ func runBackendManageMenu(tag string) error {
 		})
 		if err != nil || choice == "" || choice == "back" {
 			return errCancelled
+		}
+
+		if choice == "auth" {
+			if err := runBackendAuthMenu(tag, backend); err != nil && err != errCancelled {
+				_ = tui.ShowMessage(tui.AppMessage{Type: "error", Message: err.Error()})
+			}
+			continue
 		}
 
 		// Execute the action with the backend tag as argument
@@ -647,10 +663,51 @@ func getBackendDescription(b *config.BackendConfig) string {
 	return ""
 }
 
+// runBackendAuthMenu shows the authentication sub-menu for a SOCKS backend.
+func runBackendAuthMenu(tag string, backend *config.BackendConfig) error {
+	var options []tui.MenuOption
+	if backend.HasSocksAuth() {
+		options = []tui.MenuOption{
+			{Label: "Change credentials", Value: "change"},
+			{Label: "Disable", Value: "disable"},
+			{Label: "Back", Value: "back"},
+		}
+	} else {
+		options = []tui.MenuOption{
+			{Label: "Enable", Value: "enable"},
+			{Label: "Back", Value: "back"},
+		}
+	}
+
+	choice, err := tui.RunMenu(tui.MenuConfig{
+		Title:   "Authentication",
+		Options: options,
+	})
+	if err != nil || choice == "" || choice == "back" {
+		return errCancelled
+	}
+
+	switch choice {
+	case "disable":
+		ctx := newActionContext()
+		ctx.Values["tag"] = tag
+		ctx.Values["disable"] = true
+		action := actions.Get(actions.ActionBackendAuth)
+		if action == nil || action.Handler == nil {
+			return fmt.Errorf("backend auth handler not found")
+		}
+		return action.Handler(ctx)
+	case "enable", "change":
+		return runBackendAction(actions.ActionBackendAuth, tag)
+	}
+
+	return nil
+}
+
 // runBackendAction runs a backend action with the given tag as argument.
 func runBackendAction(actionID, backendTag string) error {
 	switch actionID {
-	case actions.ActionBackendStatus, actions.ActionBackendRemove:
+	case actions.ActionBackendStatus, actions.ActionBackendRemove, actions.ActionBackendAuth:
 		return runActionWithArgs(actionID, []string{backendTag})
 	default:
 		return RunAction(actionID)

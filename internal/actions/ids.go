@@ -9,6 +9,7 @@ const (
 	ActionBackendAdd       = "backend.add"
 	ActionBackendRemove    = "backend.remove"
 	ActionBackendStatus    = "backend.status"
+	ActionBackendAuth      = "backend.auth"
 
 	// Tunnel actions
 	ActionTunnel            = "tunnel"

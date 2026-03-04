@@ -23,12 +23,22 @@ func InstallMicrosocks(progressFn func(downloaded, total int64)) error {
 	return err
 }
 
-// ConfigureMicrosocks creates the systemd service for microsocks with the specified port.
+// ConfigureMicrosocks creates the systemd service for microsocks with the specified port (no auth).
 func ConfigureMicrosocks(port int) error {
+	return ConfigureMicrosocksWithAuth(port, "", "")
+}
+
+// ConfigureMicrosocksWithAuth creates the systemd service for microsocks with optional authentication.
+func ConfigureMicrosocksWithAuth(port int, user, password string) error {
 	mgr := binary.NewDefaultManager()
 	binaryPath, err := mgr.GetPath(binary.BinaryMicrosocks)
 	if err != nil {
 		return fmt.Errorf("microsocks binary not found: %w", err)
+	}
+
+	execStart := fmt.Sprintf("%s -i %s -p %d -q", binaryPath, MicrosocksBindAddr, port)
+	if user != "" && password != "" {
+		execStart = fmt.Sprintf("%s -i %s -p %d -q -u %s -P %s", binaryPath, MicrosocksBindAddr, port, user, password)
 	}
 
 	return service.CreateGenericService(&service.ServiceConfig{
@@ -36,10 +46,18 @@ func ConfigureMicrosocks(port int) error {
 		Description:      "Microsocks SOCKS5 Proxy",
 		User:             "nobody",
 		Group:            getNobodyGroup(),
-		ExecStart:        fmt.Sprintf("%s -i %s -p %d -q", binaryPath, MicrosocksBindAddr, port),
+		ExecStart:        execStart,
 		ReadOnlyPaths:    []string{binaryPath},
 		BindToPrivileged: false,
 	})
+}
+
+// ReconfigureMicrosocks reconfigures and restarts microsocks with the given auth settings.
+func ReconfigureMicrosocks(port int, user, password string) error {
+	if err := ConfigureMicrosocksWithAuth(port, user, password); err != nil {
+		return err
+	}
+	return RestartMicrosocks()
 }
 
 // FindAvailablePort finds an available port in the range 10000-60000.

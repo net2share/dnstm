@@ -61,7 +61,10 @@ func Generate(tunnel *config.TunnelConfig, backend *config.BackendConfig, opts G
 
 	switch backend.Type {
 	case config.BackendSOCKS:
-		// No extra fields needed
+		if backend.HasSocksAuth() {
+			cfg.Backend.User = backend.Socks.User
+			cfg.Backend.Password = backend.Socks.Password
+		}
 
 	case config.BackendSSH:
 		cfg.Backend.User = opts.User

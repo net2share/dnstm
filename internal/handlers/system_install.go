@@ -130,7 +130,13 @@ func HandleInstall(ctx *actions.Context) error {
 			if err := cfg.Save(); err != nil {
 				ctx.Output.Warning("Failed to save proxy port: " + err.Error())
 			}
-			if err := proxy.ConfigureMicrosocks(port); err != nil {
+			// Preserve existing auth config on reinstall
+			var socksUser, socksPass string
+			if socksBackend := cfg.GetBackendByTag("socks"); socksBackend != nil && socksBackend.HasSocksAuth() {
+				socksUser = socksBackend.Socks.User
+				socksPass = socksBackend.Socks.Password
+			}
+			if err := proxy.ConfigureMicrosocksWithAuth(port, socksUser, socksPass); err != nil {
 				ctx.Output.Warning("microsocks service config: " + err.Error())
 			} else {
 				if err := proxy.StartMicrosocks(); err != nil {
