@@ -9,7 +9,7 @@ import (
 
 // ServiceConfig contains configuration for a systemd service.
 type ServiceConfig struct {
-	Name             string   // Service name (e.g., "dnstt-server", "slipstream-server")
+	Name             string // Service name (e.g., "dnstt-server", "slipstream-server")
 	Description      string
 	User             string
 	Group            string
@@ -17,6 +17,10 @@ type ServiceConfig struct {
 	ReadOnlyPaths    []string // Paths that should be read-only
 	ReadWritePaths   []string // Paths that should be read-write
 	BindToPrivileged bool     // Whether service needs CAP_NET_BIND_SERVICE
+	Capabilities     []string // Additional Linux capabilities (e.g., "CAP_NET_RAW")
+	RuntimeDirectory string   // systemd RuntimeDirectory= value (creates /run/<value> owned by User)
+	BindsTo          string   // systemd BindsTo= (stop when target stops)
+	PartOf           string   // systemd PartOf= (restart/stop with target)
 }
 
 // RealSystemdManager implements SystemdManager using actual systemd commands.
@@ -124,15 +128,36 @@ func CreateGenericService(cfg *ServiceConfig) error {
 	}
 
 	// Build capabilities section
-	var capsSection string
+	caps := append([]string{}, cfg.Capabilities...)
 	if cfg.BindToPrivileged {
-		capsSection = "AmbientCapabilities=CAP_NET_BIND_SERVICE\nCapabilityBoundingSet=CAP_NET_BIND_SERVICE\n"
+		caps = append(caps, "CAP_NET_BIND_SERVICE")
+	}
+	var capsSection string
+	if len(caps) > 0 {
+		capStr := strings.Join(caps, " ")
+		capsSection = fmt.Sprintf("AmbientCapabilities=%s\nCapabilityBoundingSet=%s\n", capStr, capStr)
+	}
+
+	// Build runtime directory section
+	var runtimeSection string
+	if cfg.RuntimeDirectory != "" {
+		runtimeSection = fmt.Sprintf("RuntimeDirectory=%s\nRuntimeDirectoryMode=0755\n", cfg.RuntimeDirectory)
+	}
+
+	// Build unit dependency section
+	var unitDeps string
+	if cfg.BindsTo != "" {
+		unitDeps += fmt.Sprintf("BindsTo=%s\nAfter=%s\n", cfg.BindsTo, cfg.BindsTo)
+	}
+	if cfg.PartOf != "" {
+		unitDeps += fmt.Sprintf("PartOf=%s\n", cfg.PartOf)
 	}
 
 	serviceContent := fmt.Sprintf(`[Unit]
 Description=%s
 After=network-online.target
 Wants=network-online.target
+%s
 
 [Service]
 Type=simple
@@ -149,7 +174,7 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
-%s%sProtectKernelTunables=yes
+%s%s%sProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
 RestrictRealtime=yes
@@ -159,7 +184,7 @@ LockPersonality=yes
 
 [Install]
 WantedBy=multi-user.target
-`, cfg.Description, cfg.User, cfg.Group, cfg.ExecStart, pathsSection, capsSection)
+`, cfg.Description, unitDeps, cfg.User, cfg.Group, cfg.ExecStart, pathsSection, capsSection, runtimeSection)
 
 	if err := os.WriteFile(servicePath, []byte(serviceContent), 0644); err != nil {
 		return fmt.Errorf("failed to write service file: %w", err)
