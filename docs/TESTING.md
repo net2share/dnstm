@@ -182,12 +182,17 @@ cp scripts/e2e-config.json.example scripts/e2e-config.json
   "shadowsocks": {
     "multi": { "method": "aes-256-gcm", "password": "..." },
     "single": { "method": "chacha20-ietf-poly1305", "password": "..." }
+  },
+  "socks_auth": {
+    "user": "your-socks-user",
+    "password": "your-socks-password"
   }
 }
 ```
 
 - `ssh_target`: SSH config alias or `user@host` (required)
 - `dns_resolver`: public DNS resolver for client connections (default: `8.8.8.8`)
+- `socks_auth`: SOCKS5 authentication credentials for auth tests (optional, enables auth tests in `single` and `config-reload` phases)
 
 ### Usage
 
@@ -206,11 +211,11 @@ cp scripts/e2e-config.json.example scripts/e2e-config.json
 
 | Phase | What it tests |
 |-------|---------------|
-| `single` | Fresh install, `tunnel add` for all 5 types, each tested individually in single mode |
+| `single` | Fresh install, `tunnel add` for all 5 types, each tested individually in single mode, SOCKS auth enable/disable with both transports |
 | `multi` | Setup multi-mode state via `config load`, test 3 tunnels simultaneously |
 | `mode-switch` | Switch multi→single→multi, verify tunnels work after each switch |
 | `config-load` | Clean reinstall, `config load` with multi config, verify tunnels work |
-| `config-reload` | `config load` single config over existing multi, validate old resources cleaned up |
+| `config-reload` | `config load` single config (with SOCKS auth) over existing multi, validate cleanup and auth enforcement |
 
 Each phase is standalone — it sets up its own prerequisite state and can be run independently via `--phase`.
 
