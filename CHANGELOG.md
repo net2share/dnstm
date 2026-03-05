@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.7.0](https://github.com/hiddify/dnstm/compare/v0.6.7...v0.7.0) (2026-03-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* separate tunnels from backends
+* migrate to action-based architecture
+* restructure architecture with router, transport instances, and standalone sshtun-user ([#35](https://github.com/hiddify/dnstm/issues/35))
+* rewrite architecture with router and transport instances ([#33](https://github.com/hiddify/dnstm/issues/33))
+* add Shadowsocks provider and consolidate user management ([#28](https://github.com/hiddify/dnstm/issues/28))
+* Provider installation no longer automatically sets up SOCKS proxy or SSH tunnel users. These are now managed separately.
+* add Slipstream-Rust and improve SSH user management ([#19](https://github.com/hiddify/dnstm/issues/19))
+
+### Features
+
+* add CLI commands and integrate sshtun-user module ([#13](https://github.com/hiddify/dnstm/issues/13)) ([908c80a](https://github.com/hiddify/dnstm/commit/908c80ac41f52bbff67f4ccf3cf6173a5cf2f266))
+* add remote e2e test script with named phases ([cf9ec70](https://github.com/hiddify/dnstm/commit/cf9ec700cad4b822a4f37080df30c1abc8f27baf))
+* add separators and external tools section to main menu ([#50](https://github.com/hiddify/dnstm/issues/50)) ([73bf7fa](https://github.com/hiddify/dnstm/commit/73bf7fad94518ee24958b550c86ce7ea2e522f02))
+* add Shadowsocks provider and consolidate user management ([#28](https://github.com/hiddify/dnstm/issues/28)) ([fec1b1e](https://github.com/hiddify/dnstm/commit/fec1b1e512ea0c2eb4b121cd985975aad2819b39))
+* add Slipstream-Rust and improve SSH user management ([#19](https://github.com/hiddify/dnstm/issues/19)) ([ad5ba5b](https://github.com/hiddify/dnstm/commit/ad5ba5b66d9f2217dce92545739601563a0fe531))
+* add TUI progress views with scrolling and centralized binary manager ([d566b78](https://github.com/hiddify/dnstm/commit/d566b78c22589d079e3c0bbf85de5d87aa6a1fd5))
+* add tunnel share command with dnst:// URL scheme ([#66](https://github.com/hiddify/dnstm/issues/66)) ([f8f8076](https://github.com/hiddify/dnstm/commit/f8f8076eda05f8a41485cc8d1b6b6dead9157bcf))
+* add uninstall option to completely remove dnstt ([#10](https://github.com/hiddify/dnstm/issues/10)) ([ed46431](https://github.com/hiddify/dnstm/commit/ed46431793c21bc7045c1a405c71e0b861f189c9))
+* add update command with pinned binary versions ([#43](https://github.com/hiddify/dnstm/issues/43)) ([0c8fdfd](https://github.com/hiddify/dnstm/commit/0c8fdfd690e8aca47e38cd505dec3d14939cf850))
+* couple tunnel start/stop with enable/disable ([87d61da](https://github.com/hiddify/dnstm/commit/87d61dab274a458ff578a8ab4b2541bda1d8a964))
+* decouple SOCKS and SSH user management from providers ([#20](https://github.com/hiddify/dnstm/issues/20)) ([9ba6a6a](https://github.com/hiddify/dnstm/commit/9ba6a6ac2584d5a7f41b7e40e1546386e31ffbf0))
+* enhance config load with cleanup and path validation ([98c70d1](https://github.com/hiddify/dnstm/commit/98c70d17e0ea7c9467c10fe836f758d1f0c7be0b))
+* fix TUI flickering between menu transitions ([5e9af93](https://github.com/hiddify/dnstm/commit/5e9af937cd379bead89e5b41a3d95d75cb6b5f46))
+* make MTU configurable in TUI interactive flow ([#69](https://github.com/hiddify/dnstm/issues/69)) ([6022421](https://github.com/hiddify/dnstm/commit/60224214c8ecb6abffc1e4034b22b0299465fc23))
+* restructure architecture with router, transport instances, and standalone sshtun-user ([#35](https://github.com/hiddify/dnstm/issues/35)) ([37e609e](https://github.com/hiddify/dnstm/commit/37e609ecc01ef788fa3c9e8eade2da36bfdcc56a))
+* rewrite architecture with router and transport instances ([#33](https://github.com/hiddify/dnstm/issues/33)) ([dd923bf](https://github.com/hiddify/dnstm/commit/dd923bfcfe187004f8a57876f43912fae2394461))
+* rewrite CLI with Cobra, huh, and shared go-corelib/tui ([#15](https://github.com/hiddify/dnstm/issues/15)) ([84058b4](https://github.com/hiddify/dnstm/commit/84058b45849ce83a538d6d0f649eb72aff195ecb))
+* rewrite dnstm in Go ([701d3e1](https://github.com/hiddify/dnstm/commit/701d3e105a3200fb16f8f9db2eeea45ac564b24d))
+* switch dnstt binaries to GitHub releases ([#17](https://github.com/hiddify/dnstm/issues/17)) ([b1f407c](https://github.com/hiddify/dnstm/commit/b1f407c6d88446ad5404cce9cf1d385743137207))
+
+
+### Bug Fixes
+
+* bump sshtun-user to v0.3.5 ([#63](https://github.com/hiddify/dnstm/issues/63)) ([500b896](https://github.com/hiddify/dnstm/commit/500b8963201f527e83fdb10cef0f372000799662))
+* detect correct nobody group for microsocks service ([69c0e35](https://github.com/hiddify/dnstm/commit/69c0e35b0ddade5f14b3b184f3c01f182df4b7e0))
+* improve install UX and fix uninstall/tunnel-add bugs ([49b0955](https://github.com/hiddify/dnstm/commit/49b0955d5fac7b180457fd3dee94b73405706f4a))
+* pass --force to update when user confirms in install script ([a702ce0](https://github.com/hiddify/dnstm/commit/a702ce0b95c80c7df2c129205cfed0eaf82b0a77))
+* prefer glibc microsocks build and restart services on reconfig ([#30](https://github.com/hiddify/dnstm/issues/30)) ([f8d8138](https://github.com/hiddify/dnstm/commit/f8d8138f19d6d13d0404216953d171cd377cb423))
+* read from /dev/tty and auto-install binaries in install script ([fb872ba](https://github.com/hiddify/dnstm/commit/fb872ba7e19ac04c102135456aaf0757a909b858))
+
+
+### Code Refactoring
+
+* migrate to action-based architecture ([3f43347](https://github.com/hiddify/dnstm/commit/3f4334779a6f1ef892f87f934cf242b05d565e00))
+* separate tunnels from backends ([dca42e7](https://github.com/hiddify/dnstm/commit/dca42e79d2355833c1284629d0d73719ee02ba8f))
+
 ## [0.6.7](https://github.com/net2share/dnstm/compare/v0.6.6...v0.6.7) (2026-02-26)
 
 
