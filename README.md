@@ -27,7 +27,7 @@ A CLI tool to deploy and manage DNS tunnel servers on Linux. Run single tunnels 
 - Firewall configuration (UFW, firewalld, iptables)
 - systemd service management with security hardening
 - SSH tunnel user management with sshd hardening
-- Integrated microsocks SOCKS5 proxy
+- Integrated microsocks SOCKS5 proxy with optional authentication
 
 ## System Overview
 
@@ -115,6 +115,9 @@ sudo dnstm
 # Add slipstream + socks tunnel
 sudo dnstm tunnel add -t slip-socks --transport slipstream --backend socks --domain t1.example.com
 
+# Configure SOCKS5 authentication (optional)
+sudo dnstm backend auth -t socks --user myuser --password mypass
+
 # Add dnstt + ssh tunnel
 sudo dnstm tunnel add -t dnstt-ssh --transport dnstt --backend ssh --domain t2.example.com
 
@@ -138,6 +141,11 @@ Example `config.json` (certs/keys auto-generated):
 ```json
 {
   "backends": [
+    {
+      "tag": "socks",
+      "type": "socks",
+      "socks": { "user": "myuser", "password": "mypass" }
+    },
     {
       "tag": "my-ss",
       "type": "shadowsocks",

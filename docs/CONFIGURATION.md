@@ -85,6 +85,22 @@ Forward traffic to a SOCKS5 proxy (e.g., microsocks).
 }
 ```
 
+With optional username/password authentication:
+
+```json
+{
+  "tag": "socks",
+  "type": "socks",
+  "address": "127.0.0.1:1080",
+  "socks": {
+    "user": "myuser",
+    "password": "mypass"
+  }
+}
+```
+
+Authentication can also be configured via CLI: `dnstm backend auth -t socks --user myuser --password mypass`
+
 ### SSH Backend
 
 Forward traffic to an SSH server.
@@ -370,3 +386,36 @@ Provide paths to use existing certificates:
 ```
 
 **Note:** Both `cert` and `key` must be provided together. Files must be readable by the dnstm user.
+
+### Example Config (With SOCKS5 Authentication)
+
+Enable username/password authentication on the built-in SOCKS5 proxy:
+
+```json
+{
+  "backends": [
+    {
+      "tag": "socks",
+      "type": "socks",
+      "socks": {
+        "user": "myuser",
+        "password": "mypass"
+      }
+    }
+  ],
+  "tunnels": [
+    {
+      "tag": "my-slip",
+      "transport": "slipstream",
+      "backend": "socks",
+      "domain": "t.example.com",
+      "port": 5310
+    }
+  ],
+  "route": {
+    "mode": "multi"
+  }
+}
+```
+
+The SOCKS5 credentials are applied to microsocks during `config load` and included in generated `dnst://` share URLs.
