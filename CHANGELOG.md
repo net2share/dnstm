@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.8](https://github.com/net2share/dnstm/compare/v0.6.7...v0.6.8) (2026-03-06)
+
+
+### Features
+
+* add SOCKS5 authentication for built-in backend ([#70](https://github.com/net2share/dnstm/issues/70)) ([236c30d](https://github.com/net2share/dnstm/commit/236c30d39523f15da4a75b6d203411d487822c6b))
+* add tunnel share command with dnst:// URL scheme ([#66](https://github.com/net2share/dnstm/issues/66)) ([f8f8076](https://github.com/net2share/dnstm/commit/f8f8076eda05f8a41485cc8d1b6b6dead9157bcf))
+* make MTU configurable in TUI interactive flow ([#69](https://github.com/net2share/dnstm/issues/69)) ([6022421](https://github.com/net2share/dnstm/commit/60224214c8ecb6abffc1e4034b22b0299465fc23))
+
 ## [0.6.7](https://github.com/net2share/dnstm/compare/v0.6.6...v0.6.7) (2026-02-26)
 
 
