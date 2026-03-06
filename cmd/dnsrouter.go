@@ -25,9 +25,14 @@ var dnsrouterServeCmd = &cobra.Command{
 	RunE:  runDNSRouterServe,
 }
 
+
+
 func init() {
 	rootCmd.AddCommand(dnsrouterCmd)
 	dnsrouterCmd.AddCommand(dnsrouterServeCmd)
+	rootCmd.PersistentFlags().StringVarP(&config.ConfigDir, "confdir", "C", "", "Config directory")
+	rootCmd.PersistentFlags().StringVarP(&config.TunnelsDir, "tunnelsdir", "T", "", "Tunnels directory")
+
 }
 
 func runDNSRouterServe(cmd *cobra.Command, args []string) error {

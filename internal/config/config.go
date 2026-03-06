@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 )
 
-const (
+var (
 	ConfigDir  = "/etc/dnstm"
 	ConfigFile = "config.json"
 	TunnelsDir = "/etc/dnstm/tunnels"

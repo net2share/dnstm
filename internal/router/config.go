@@ -5,11 +5,7 @@ import (
 )
 
 // Re-export constants from config package
-const (
-	ConfigDir  = config.ConfigDir
-	ConfigFile = config.ConfigFile
-	TunnelsDir = config.TunnelsDir
-)
+
 
 // Mode defines the operating mode of dnstm.
 type Mode string

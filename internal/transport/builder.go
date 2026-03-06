@@ -13,9 +13,6 @@ import (
 	"github.com/net2share/dnstm/internal/system"
 )
 
-const (
-	ConfigDir = "/etc/dnstm"
-)
 
 // Binary path getters using the binary manager.
 // These return the path based on the current environment (test vs production).
@@ -107,7 +104,7 @@ func (b *Builder) BuildTunnelService(tunnel *config.TunnelConfig, backend *confi
 	}
 
 	// Create tunnel config directory
-	configDir := filepath.Join(ConfigDir, "tunnels", tunnel.Tag)
+	configDir := filepath.Join(config.ConfigDir, "tunnels", tunnel.Tag)
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}

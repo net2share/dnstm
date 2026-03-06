@@ -97,7 +97,7 @@ func (t *Tunnel) RemoveService() error {
 
 // SetPermissions sets the correct permissions for the tunnel files.
 func (t *Tunnel) SetPermissions() error {
-	configDir := filepath.Join(ConfigDir, "tunnels", t.Tag)
+	configDir := filepath.Join(config.ConfigDir, "tunnels", t.Tag)
 
 	// Set ownership of tunnel config directory
 	if err := exec.Command("chown", "-R", system.DnstmUser+":"+system.DnstmUser, configDir).Run(); err != nil {
@@ -112,7 +112,7 @@ func (t *Tunnel) SetPermissions() error {
 
 // GetConfigDir returns the tunnel-specific config directory.
 func (t *Tunnel) GetConfigDir() string {
-	return filepath.Join(ConfigDir, "tunnels", t.Tag)
+	return filepath.Join(config.ConfigDir, "tunnels", t.Tag)
 }
 
 // RemoveConfigDir removes the tunnel-specific config directory.
