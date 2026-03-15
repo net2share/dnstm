@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -44,6 +46,7 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 		Options: []tui.MenuOption{
 			{Label: "DNSTT", Value: string(config.TransportDNSTT)},
 			{Label: "Slipstream", Value: string(config.TransportSlipstream)},
+			{Label: "MasterDNS", Value: string(config.TransportMasterDNS)},
 		},
 	})
 	if err != nil {
@@ -158,6 +161,32 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 		}
 	}
 
+	// Get encryption method for MasterDNS
+	masterDNSEncMethod := 1 // default: XOR
+	if config.TransportType(transportType) == config.TransportMasterDNS {
+		encMethodStr, encMethodErr := tui.RunMenu(tui.MenuConfig{
+			Title: "Encryption Method",
+			Options: []tui.MenuOption{
+				{Label: "XOR (recommended, fastest)", Value: "1"},
+				{Label: "ChaCha20", Value: "2"},
+				{Label: "AES-128-GCM", Value: "3"},
+				{Label: "AES-192-GCM", Value: "4"},
+				{Label: "AES-256-GCM (strongest)", Value: "5"},
+				{Label: "None (no encryption)", Value: "0"},
+			},
+		})
+		if encMethodErr != nil {
+			return encMethodErr
+		}
+		if encMethodStr == "" {
+			return nil
+		}
+		parsed, parseErr := strconv.Atoi(encMethodStr)
+		if parseErr == nil {
+			masterDNSEncMethod = parsed
+		}
+	}
+
 	// Build tunnel config
 	tunnelCfg := &config.TunnelConfig{
 		Tag:       tag,
@@ -169,6 +198,11 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 	// Transport-specific configuration
 	if tunnelCfg.Transport == config.TransportDNSTT {
 		tunnelCfg.DNSTT = &config.DNSTTConfig{MTU: mtu}
+	}
+	if tunnelCfg.Transport == config.TransportMasterDNS {
+		tunnelCfg.MasterDNS = &config.MasterDNSConfig{
+			EncryptionMethod: masterDNSEncMethod,
+		}
 	}
 
 	// Allocate port
@@ -193,8 +227,8 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 	transportType := config.TransportType(transportStr)
 
 	// Validate transport type
-	if transportType != config.TransportSlipstream && transportType != config.TransportDNSTT {
-		return fmt.Errorf("invalid transport type: %s (must be slipstream or dnstt)", transportType)
+	if transportType != config.TransportSlipstream && transportType != config.TransportDNSTT && transportType != config.TransportMasterDNS {
+		return fmt.Errorf("invalid transport type: %s (must be slipstream, dnstt, or masterdns)", transportType)
 	}
 
 	// Validate backend exists and is compatible
@@ -208,6 +242,12 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 		return actions.NewActionError(
 			"incompatible transport and backend",
 			"DNSTT transport does not support Shadowsocks backend",
+		)
+	}
+	if transportType == config.TransportMasterDNS && backend.Type == config.BackendShadowsocks {
+		return actions.NewActionError(
+			"incompatible transport and backend",
+			"MasterDNS transport does not support Shadowsocks backend",
 		)
 	}
 
@@ -240,6 +280,15 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 			mtu = 1232
 		}
 		tunnelCfg.DNSTT = &config.DNSTTConfig{MTU: mtu}
+	}
+	if transportType == config.TransportMasterDNS {
+		encMethod := ctx.GetInt("encryption-method")
+		if encMethod == 0 {
+			encMethod = 1 // default XOR
+		}
+		tunnelCfg.MasterDNS = &config.MasterDNSConfig{
+			EncryptionMethod: encMethod,
+		}
 	}
 
 	// Allocate port
@@ -347,6 +396,7 @@ func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *con
 	ctx.Output.Step(currentStep, totalSteps, "Generating cryptographic material...")
 	var fingerprint string
 	var publicKey string
+	var masterDNSKey string
 	if tunnelCfg.Transport == config.TransportSlipstream {
 		certInfo, err := certs.GetOrCreateInDir(tunnelDir, tunnelCfg.Domain)
 		if err != nil {
@@ -366,6 +416,16 @@ func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *con
 		publicKey = keyInfo.PublicKey
 		tunnelCfg.DNSTT.PrivateKey = keyInfo.PrivateKeyPath
 		ctx.Output.Status("Curve25519 keys ready")
+	} else if tunnelCfg.Transport == config.TransportMasterDNS {
+		if tunnelCfg.MasterDNS.EncryptionKey == "" {
+			key, genErr := generateMasterDNSKey()
+			if genErr != nil {
+				return fmt.Errorf("failed to generate encryption key: %w", genErr)
+			}
+			tunnelCfg.MasterDNS.EncryptionKey = key
+		}
+		masterDNSKey = tunnelCfg.MasterDNS.EncryptionKey
+		ctx.Output.Status("Encryption key ready")
 	}
 
 	// Step 4: Create systemd service
@@ -452,6 +512,15 @@ func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *con
 		ctx.Output.Info("Public Key:")
 		ctx.Output.Println(publicKey)
 	}
+	if masterDNSKey != "" {
+		ctx.Output.Println()
+		ctx.Output.Info("MasterDNS Encryption Key (share with clients):")
+		ctx.Output.Println(masterDNSKey)
+		ctx.Output.Info(fmt.Sprintf("Encryption Method: %d (%s)",
+			tunnelCfg.MasterDNS.EncryptionMethod,
+			config.GetMasterDNSEncryptionMethodName(tunnelCfg.MasterDNS.EncryptionMethod),
+		))
+	}
 
 	if ctx.IsInteractive {
 		ctx.Output.EndProgress()
@@ -462,6 +531,15 @@ func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *con
 	return nil
 }
 
+// generateMasterDNSKey generates a random 32-byte hex encryption key for MasterDnsVPN.
+func generateMasterDNSKey() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
 // buildBackendOptions builds menu options for backend selection.
 func buildBackendOptions(cfg *config.Config, transportType config.TransportType) []tui.MenuOption {
 	var options []tui.MenuOption
@@ -470,6 +548,9 @@ func buildBackendOptions(cfg *config.Config, transportType config.TransportType)
 		// Check compatibility
 		if transportType == config.TransportDNSTT && b.Type == config.BackendShadowsocks {
 			continue // DNSTT doesn't support shadowsocks
+		}
+		if transportType == config.TransportMasterDNS && b.Type == config.BackendShadowsocks {
+			continue // MasterDNS doesn't support shadowsocks
 		}
 
 		typeName := config.GetBackendTypeDisplayName(b.Type)
