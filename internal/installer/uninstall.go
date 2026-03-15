@@ -67,6 +67,7 @@ func PerformFullUninstall(output actions.OutputWriter, isInteractive bool) error
 		"/usr/local/bin/ssserver",
 		"/usr/local/bin/sshtun-user",
 		"/usr/local/bin/microsocks",
+		"/usr/local/bin/masterdns-server",
 	}
 	for _, bin := range binaries {
 		if _, err := os.Stat(bin); err == nil {

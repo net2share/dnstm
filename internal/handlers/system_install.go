@@ -112,6 +112,10 @@ func HandleInstall(ctx *actions.Context) error {
 		ctx.Output.Warning("sshtun-user: " + err.Error())
 	}
 
+	if err := transport.EnsureMasterDNSInstalledWithStatus(statusFn); err != nil {
+		ctx.Output.Warning("masterdns-server: " + err.Error())
+	}
+
 	if !proxy.IsMicrosocksInstalled() {
 		ctx.Output.Info("Installing microsocks...")
 		if err := proxy.InstallMicrosocks(nil); err != nil {

@@ -108,7 +108,7 @@ func (c *Config) validateTunnels() error {
 			return fmt.Errorf("tunnel '%s': transport is required", t.Tag)
 		}
 
-		if t.Transport != TransportSlipstream && t.Transport != TransportDNSTT {
+		if t.Transport != TransportSlipstream && t.Transport != TransportDNSTT && t.Transport != TransportMasterDNS {
 			return fmt.Errorf("tunnel '%s': unknown transport %s", t.Tag, t.Transport)
 		}
 
@@ -154,6 +154,13 @@ func (c *Config) validateTunnels() error {
 				return fmt.Errorf("tunnel '%s': dnstt.mtu must be between 512 and 1400", t.Tag)
 			}
 		}
+
+		// Validate MasterDNS-specific config
+		if t.Transport == TransportMasterDNS && t.MasterDNS != nil {
+			if t.MasterDNS.EncryptionMethod < 0 || t.MasterDNS.EncryptionMethod > 5 {
+				return fmt.Errorf("tunnel '%s': masterdns.encryption_method must be between 0 and 5", t.Tag)
+			}
+		}
 	}
 
 	return nil
@@ -188,6 +195,10 @@ func validateTransportBackendCompatibility(transport TransportType, backend Back
 	// DNSTT doesn't support shadowsocks (no SIP003 plugin support)
 	if transport == TransportDNSTT && backend == BackendShadowsocks {
 		return fmt.Errorf("dnstt transport does not support shadowsocks backend (no SIP003 plugin support)")
+	}
+	// MasterDNS doesn't support shadowsocks
+	if transport == TransportMasterDNS && backend == BackendShadowsocks {
+		return fmt.Errorf("masterdns transport does not support shadowsocks backend")
 	}
 	return nil
 }

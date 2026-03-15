@@ -3,6 +3,7 @@ package binary
 
 import (
 	"archive/tar"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,23 +26,27 @@ const (
 	BinarySSServer         BinaryType = "ssserver"
 	BinaryMicrosocks       BinaryType = "microsocks"
 	BinarySSHTunUser       BinaryType = "sshtun-user"
+	BinaryMasterDNSServer  BinaryType = "masterdns-server"
 
 	// Client binaries (used in testing)
 	BinaryDNSTTClient      BinaryType = "dnstt-client"
 	BinarySlipstreamClient BinaryType = "slipstream-client"
 	BinarySSLocal          BinaryType = "sslocal"
+	BinaryMasterDNSClient  BinaryType = "masterdns-client"
 )
 
 // BinaryDef defines how to obtain a binary.
 type BinaryDef struct {
-	Type          BinaryType
-	EnvVar        string              // Environment variable for custom path
-	URLPattern    string              // Download URL pattern with {version}, {os}, {arch} placeholders
-	PinnedVersion string              // Expected version for this dnstm release
-	Archive       bool                // If true, URL points to an archive
-	ArchiveDir    string              // Directory inside archive where binary is located
-	Platforms     map[string][]string // Supported os -> []arch
-	SkipUpdate    bool                // If true, skip in update process
+	Type              BinaryType
+	EnvVar            string              // Environment variable for custom path
+	URLPattern        string              // Download URL pattern with {version}, {os}, {arch} placeholders
+	PinnedVersion     string              // Expected version for this dnstm release
+	Archive           bool                // If true, URL points to an archive
+	ArchiveDir        string              // Directory inside archive where binary is located
+	ArchiveFormat     string              // Archive format: "tar.xz" (default), "tar.gz"
+	ArchiveBinaryName string              // Binary name pattern inside archive (supports {mdnsOS}, {mdnsArch}); defaults to string(Type)
+	Platforms         map[string][]string // Supported os -> []arch
+	SkipUpdate        bool                // If true, skip in update process
 }
 
 // DefaultBinaries contains definitions for all supported binaries.
@@ -96,6 +101,18 @@ var DefaultBinaries = map[BinaryType]BinaryDef{
 			"linux": {"amd64", "arm64"},
 		},
 	},
+	BinaryMasterDNSServer: {
+		Type:              BinaryMasterDNSServer,
+		EnvVar:            "DNSTM_MASTERDNS_SERVER_PATH",
+		URLPattern:        "https://github.com/masterking32/MasterDnsVPN/releases/latest/download/MasterDnsVPN_Server_{mdnsOS}_{mdnsArch}.tar.gz",
+		Archive:           true,
+		ArchiveFormat:     "tar.gz",
+		ArchiveBinaryName: "MasterDnsVPN_Server_{mdnsOS}_{mdnsArch}",
+		Platforms: map[string][]string{
+			"linux":  {"amd64", "arm64"},
+			"darwin": {"arm64"},
+		},
+	},
 
 	// Client binaries - pinned versions for testing only
 	BinaryDNSTTClient: {
@@ -127,6 +144,18 @@ var DefaultBinaries = map[BinaryType]BinaryDef{
 		Platforms: map[string][]string{
 			"linux":  {"amd64", "arm64"},
 			"darwin": {"amd64", "arm64"},
+		},
+	},
+	BinaryMasterDNSClient: {
+		Type:              BinaryMasterDNSClient,
+		EnvVar:            "DNSTM_TEST_MASTERDNS_CLIENT_PATH",
+		URLPattern:        "https://github.com/masterking32/MasterDnsVPN/releases/latest/download/MasterDnsVPN_Client_{mdnsOS}_{mdnsArch}.tar.gz",
+		Archive:           true,
+		ArchiveFormat:     "tar.gz",
+		ArchiveBinaryName: "MasterDnsVPN_Client_{mdnsOS}_{mdnsArch}",
+		Platforms: map[string][]string{
+			"linux":  {"amd64", "arm64"},
+			"darwin": {"arm64"},
 		},
 	},
 }
@@ -318,7 +347,8 @@ func (m *Manager) download(def BinaryDef, destPath, version string) error {
 	}
 
 	if def.Archive {
-		return m.extractFromArchive(resp.Body, def, destPath)
+		archiveBinaryName := m.resolveArchiveBinaryName(def, version)
+		return m.extractFromArchive(resp.Body, def.ArchiveFormat, archiveBinaryName, destPath)
 	}
 
 	return m.saveToFile(resp.Body, destPath)
@@ -326,33 +356,70 @@ func (m *Manager) download(def BinaryDef, destPath, version string) error {
 
 // buildURLWithVersion constructs the download URL with a specific version.
 func (m *Manager) buildURLWithVersion(def BinaryDef, version string) string {
-	url := def.URLPattern
+	return m.applySubstitutions(def.URLPattern, version)
+}
 
-	// Version replacement
-	if version != "" {
-		url = strings.ReplaceAll(url, "{version}", version)
+// getMasterDNSOS returns the MasterDnsVPN OS string for URL construction.
+func (m *Manager) getMasterDNSOS() string {
+	switch m.os {
+	case "linux":
+		return "Linux"
+	case "darwin":
+		return "MacOS"
+	case "windows":
+		return "Windows"
+	default:
+		return m.os
 	}
+}
 
-	// Standard replacements
-	url = strings.ReplaceAll(url, "{os}", m.os)
-	url = strings.ReplaceAll(url, "{arch}", m.arch)
+// getMasterDNSArch returns the MasterDnsVPN architecture string for URL construction.
+func (m *Manager) getMasterDNSArch() string {
+	switch m.arch {
+	case "amd64":
+		return "AMD64"
+	case "arm64":
+		return "ARM64"
+	default:
+		return m.arch
+	}
+}
 
-	// Windows extension
+// resolveArchiveBinaryName resolves the binary name inside an archive, applying substitutions.
+func (m *Manager) resolveArchiveBinaryName(def BinaryDef, version string) string {
+	pattern := def.ArchiveBinaryName
+	if pattern == "" {
+		name := string(def.Type)
+		if m.os == "windows" {
+			name += ".exe"
+		}
+		return name
+	}
+	name := m.applySubstitutions(pattern, version)
+	if m.os == "windows" && !strings.HasSuffix(name, ".exe") {
+		name += ".exe"
+	}
+	return name
+}
+
+// applySubstitutions applies all URL/name substitutions to a pattern string.
+func (m *Manager) applySubstitutions(pattern, version string) string {
+	s := pattern
+	if version != "" {
+		s = strings.ReplaceAll(s, "{version}", version)
+	}
+	s = strings.ReplaceAll(s, "{os}", m.os)
+	s = strings.ReplaceAll(s, "{arch}", m.arch)
 	ext := ""
 	if m.os == "windows" {
 		ext = ".exe"
 	}
-	url = strings.ReplaceAll(url, "{ext}", ext)
-
-	// Shadowsocks uses different arch naming
-	ssArch := m.getShadowsocksArch()
-	url = strings.ReplaceAll(url, "{ssarch}", ssArch)
-
-	// Microsocks uses different arch naming
-	microsocksArch := m.getMicrosocksArch()
-	url = strings.ReplaceAll(url, "{microsocksarch}", microsocksArch)
-
-	return url
+	s = strings.ReplaceAll(s, "{ext}", ext)
+	s = strings.ReplaceAll(s, "{ssarch}", m.getShadowsocksArch())
+	s = strings.ReplaceAll(s, "{microsocksarch}", m.getMicrosocksArch())
+	s = strings.ReplaceAll(s, "{mdnsOS}", m.getMasterDNSOS())
+	s = strings.ReplaceAll(s, "{mdnsArch}", m.getMasterDNSArch())
+	return s
 }
 
 // getShadowsocksArch returns the shadowsocks-rust architecture string.
@@ -435,20 +502,25 @@ func (m *Manager) saveToFile(r io.Reader, path string) error {
 	return err
 }
 
-// extractFromArchive extracts a specific binary from a tar.xz archive.
-func (m *Manager) extractFromArchive(r io.Reader, def BinaryDef, destPath string) error {
-	// Decompress xz
-	xzReader, err := xz.NewReader(r)
-	if err != nil {
-		return fmt.Errorf("failed to create xz reader: %w", err)
-	}
+// extractFromArchive extracts a specific binary from a tar archive (xz or gz compressed).
+func (m *Manager) extractFromArchive(r io.Reader, format, binaryName, destPath string) error {
+	var tarReader *tar.Reader
 
-	// Read tar
-	tarReader := tar.NewReader(xzReader)
-
-	binaryName := string(def.Type)
-	if m.os == "windows" {
-		binaryName += ".exe"
+	switch format {
+	case "tar.gz", "gz":
+		gzReader, err := gzip.NewReader(r)
+		if err != nil {
+			return fmt.Errorf("failed to create gzip reader: %w", err)
+		}
+		defer gzReader.Close()
+		tarReader = tar.NewReader(gzReader)
+	default:
+		// Default: tar.xz
+		xzReader, err := xz.NewReader(r)
+		if err != nil {
+			return fmt.Errorf("failed to create xz reader: %w", err)
+		}
+		tarReader = tar.NewReader(xzReader)
 	}
 
 	for {

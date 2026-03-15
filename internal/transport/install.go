@@ -19,6 +19,8 @@ func EnsureTransportBinariesInstalled(transport config.TransportType) error {
 		return EnsureSlipstreamInstalled()
 	case config.TransportDNSTT:
 		return EnsureDnsttInstalled()
+	case config.TransportMasterDNS:
+		return EnsureMasterDNSInstalled()
 	default:
 		return nil
 	}
@@ -72,6 +74,16 @@ func EnsureSSHTunUserInstalled() error {
 // EnsureSSHTunUserInstalledWithStatus installs sshtun-user with status callback.
 func EnsureSSHTunUserInstalledWithStatus(statusFn StatusFunc) error {
 	return ensureBinaryInstalled(binary.BinarySSHTunUser, "sshtun-user", statusFn)
+}
+
+// EnsureMasterDNSInstalled installs masterdns-server if not present.
+func EnsureMasterDNSInstalled() error {
+	return EnsureMasterDNSInstalledWithStatus(nil)
+}
+
+// EnsureMasterDNSInstalledWithStatus installs masterdns-server with status callback.
+func EnsureMasterDNSInstalledWithStatus(statusFn StatusFunc) error {
+	return ensureBinaryInstalled(binary.BinaryMasterDNSServer, "masterdns-server", statusFn)
 }
 
 // IsSSHTunUserInstalled checks if sshtun-user binary is installed.

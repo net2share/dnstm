@@ -54,6 +54,12 @@ func SSHTunUserBinaryPath() string {
 	return path
 }
 
+// MasterDNSBinaryPath returns the path to masterdns-server.
+func MasterDNSBinaryPath() string {
+	path, _ := getBinManager().GetPath(binary.BinaryMasterDNSServer)
+	return path
+}
+
 // BuildOptions configures how the transport should bind.
 type BuildOptions struct {
 	BindHost string // "127.0.0.1" for multi mode, or external IP for single mode
@@ -70,11 +76,12 @@ func NewBuilder() *Builder {
 
 // TunnelBuildResult contains the result of building a tunnel service.
 type TunnelBuildResult struct {
-	ExecStart    string
-	ConfigDir    string
-	ReadPaths    []string
-	WritePaths   []string
-	BindToPort53 bool
+	ExecStart        string
+	ConfigDir        string
+	WorkingDirectory string
+	ReadPaths        []string
+	WritePaths       []string
+	BindToPort53     bool
 }
 
 // CreateService creates a systemd service for the tunnel.
@@ -85,6 +92,7 @@ func (r *TunnelBuildResult) CreateService(serviceName string) error {
 		User:             system.DnstmUser,
 		Group:            system.DnstmUser,
 		ExecStart:        r.ExecStart,
+		WorkingDirectory: r.WorkingDirectory,
 		ReadOnlyPaths:    r.ReadPaths,
 		ReadWritePaths:   r.WritePaths,
 		BindToPrivileged: r.BindToPort53,
@@ -133,6 +141,8 @@ func (b *Builder) BuildTunnelService(tunnel *config.TunnelConfig, backend *confi
 		return b.buildSlipstreamTunnel(tunnel, backend, targetAddr, opts, result)
 	case config.TransportDNSTT:
 		return b.buildDNSTTTunnel(tunnel, backend, targetAddr, opts, result)
+	case config.TransportMasterDNS:
+		return b.buildMasterDNSTunnel(tunnel, backend, targetAddr, opts, result)
 	default:
 		return nil, fmt.Errorf("unknown transport type: %s", tunnel.Transport)
 	}
@@ -246,6 +256,98 @@ func (b *Builder) buildDNSTTTunnel(tunnel *config.TunnelConfig, backend *config.
 
 	result.ExecStart = fmt.Sprintf("%s %s", DNSTTBinaryPath(), strings.Join(args, " "))
 	return result, nil
+}
+
+// buildMasterDNSTunnel builds a MasterDnsVPN-based tunnel service.
+// It writes a server_config.toml to the tunnel's config directory and sets
+// WorkingDirectory so the binary picks it up automatically.
+func (b *Builder) buildMasterDNSTunnel(tunnel *config.TunnelConfig, backend *config.BackendConfig, targetAddr string, opts *BuildOptions, result *TunnelBuildResult) (*TunnelBuildResult, error) {
+	// MasterDNS doesn't support Shadowsocks
+	if backend.Type == config.BackendShadowsocks {
+		return nil, fmt.Errorf("MasterDNS transport does not support Shadowsocks backend")
+	}
+
+	if tunnel.MasterDNS == nil || tunnel.MasterDNS.EncryptionKey == "" {
+		return nil, fmt.Errorf("masterdns encryption key not set for tunnel %s", tunnel.Tag)
+	}
+
+	// Determine protocol type and forwarding based on backend
+	protocolType := "TCP"
+	useExternalSocks5 := false
+	if backend.Type == config.BackendSOCKS {
+		protocolType = "SOCKS5"
+		useExternalSocks5 = true
+	}
+
+	// Parse forward host and port from target address
+	forwardIP := "127.0.0.1"
+	forwardPort := 1080
+	if targetAddr != "" {
+		if host, portStr, err := splitHostPort(targetAddr); err == nil {
+			forwardIP = host
+			forwardPort = portStr
+		}
+	}
+
+	encMethod := tunnel.MasterDNS.EncryptionMethod
+
+	// Write server_config.toml to the tunnel config directory
+	configPath := filepath.Join(result.ConfigDir, "server_config.toml")
+	tomlContent := fmt.Sprintf(`# MasterDnsVPN server configuration (managed by dnstm)
+UDP_HOST = "%s"
+UDP_PORT = %d
+DOMAIN = ["%s"]
+PROTOCOL_TYPE = "%s"
+USE_EXTERNAL_SOCKS5 = %v
+FORWARD_IP = "%s"
+FORWARD_PORT = %d
+SOCKS5_AUTH = false
+SOCKS5_USER = ""
+SOCKS5_PASS = ""
+DATA_ENCRYPTION_METHOD = %d
+ENCRYPTION_KEY = "%s"
+CONFIG_VERSION = 3.0
+`,
+		opts.BindHost,
+		opts.BindPort,
+		tunnel.Domain,
+		protocolType,
+		useExternalSocks5,
+		forwardIP,
+		forwardPort,
+		encMethod,
+		tunnel.MasterDNS.EncryptionKey,
+	)
+
+	if err := os.WriteFile(configPath, []byte(tomlContent), 0640); err != nil {
+		return nil, fmt.Errorf("failed to write server_config.toml: %w", err)
+	}
+	if err := system.ChownToDnstm(configPath); err != nil {
+		return nil, fmt.Errorf("failed to set config file ownership: %w", err)
+	}
+
+	result.ReadPaths = append(result.ReadPaths, configPath)
+	result.WritePaths = append(result.WritePaths, result.ConfigDir)
+
+	// The binary reads server_config.toml from its working directory
+	result.ExecStart = MasterDNSBinaryPath()
+	result.WorkingDirectory = result.ConfigDir
+
+	return result, nil
+}
+
+// splitHostPort splits a "host:port" string into host and int port.
+func splitHostPort(addr string) (string, int, error) {
+	parts := strings.SplitN(addr, ":", 2)
+	if len(parts) != 2 {
+		return "", 0, fmt.Errorf("invalid address: %s", addr)
+	}
+	port := 0
+	_, err := fmt.Sscanf(parts[1], "%d", &port)
+	if err != nil {
+		return "", 0, fmt.Errorf("invalid port in address %s: %w", addr, err)
+	}
+	return parts[0], port, nil
 }
 
 // RegenerateTunnelService regenerates a tunnel's systemd service with new bind options.

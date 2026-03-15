@@ -14,6 +14,7 @@ type ServiceConfig struct {
 	User             string
 	Group            string
 	ExecStart        string
+	WorkingDirectory string   // Optional working directory for the service process
 	ReadOnlyPaths    []string // Paths that should be read-only
 	ReadWritePaths   []string // Paths that should be read-write
 	BindToPrivileged bool     // Whether service needs CAP_NET_BIND_SERVICE
@@ -129,6 +130,12 @@ func CreateGenericService(cfg *ServiceConfig) error {
 		capsSection = "AmbientCapabilities=CAP_NET_BIND_SERVICE\nCapabilityBoundingSet=CAP_NET_BIND_SERVICE\n"
 	}
 
+	// Build working directory section
+	var workingDirSection string
+	if cfg.WorkingDirectory != "" {
+		workingDirSection = fmt.Sprintf("WorkingDirectory=%s\n", cfg.WorkingDirectory)
+	}
+
 	serviceContent := fmt.Sprintf(`[Unit]
 Description=%s
 After=network-online.target
@@ -139,7 +146,7 @@ Type=simple
 User=%s
 Group=%s
 ExecStart=%s
-Restart=always
+%sRestart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
@@ -159,7 +166,7 @@ LockPersonality=yes
 
 [Install]
 WantedBy=multi-user.target
-`, cfg.Description, cfg.User, cfg.Group, cfg.ExecStart, pathsSection, capsSection)
+`, cfg.Description, cfg.User, cfg.Group, cfg.ExecStart, workingDirSection, pathsSection, capsSection)
 
 	if err := os.WriteFile(servicePath, []byte(serviceContent), 0644); err != nil {
 		return fmt.Errorf("failed to write service file: %w", err)
