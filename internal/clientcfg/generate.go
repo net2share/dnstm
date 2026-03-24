@@ -54,6 +54,14 @@ func Generate(tunnel *config.TunnelConfig, backend *config.BackendConfig, opts G
 			return nil, fmt.Errorf("failed to read public key: %w", err)
 		}
 		cfg.Transport.PubKey = pubKey
+
+	case config.TransportVayDNS:
+		pubKeyPath := filepath.Join(tunnelDir, "server.pub")
+		pubKey, err := keys.ReadPublicKey(pubKeyPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read public key: %w", err)
+		}
+		cfg.Transport.PubKey = pubKey
 	}
 
 	// Build backend config

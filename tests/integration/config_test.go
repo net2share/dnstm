@@ -153,6 +153,20 @@ func TestConfigSerialization(t *testing.T) {
 					PrivateKey: "/path/to/key",
 				},
 			},
+			{
+				Tag:       "tunnel-c",
+				Transport: config.TransportVayDNS,
+				Backend:   "socks",
+				Domain:    "c.example.com",
+				Port:      5312,
+				VayDNS: &config.VayDNSConfig{
+					MTU:         1100,
+					PrivateKey:  "/path/to/vaydns-key",
+					IdleTimeout: "15s",
+					KeepAlive:   "3s",
+					Fallback:    "127.0.0.1:8888",
+				},
+			},
 		},
 	}
 
@@ -179,8 +193,8 @@ func TestConfigSerialization(t *testing.T) {
 		t.Errorf("len(Backends) = %d, want 2", len(loaded.Backends))
 	}
 
-	if len(loaded.Tunnels) != 2 {
-		t.Errorf("len(Tunnels) = %d, want 2", len(loaded.Tunnels))
+	if len(loaded.Tunnels) != 3 {
+		t.Errorf("len(Tunnels) = %d, want 3", len(loaded.Tunnels))
 	}
 
 	// Verify shadowsocks config
@@ -206,6 +220,27 @@ func TestConfigSerialization(t *testing.T) {
 	if dnstt.DNSTT.MTU != 1200 {
 		t.Errorf("dnstt.DNSTT.MTU = %d, want 1200", dnstt.DNSTT.MTU)
 	}
+
+	// Verify VayDNS config
+	vaydns := loaded.GetTunnelByTag("tunnel-c")
+	if vaydns == nil {
+		t.Fatal("tunnel-c not found")
+	}
+	if vaydns.VayDNS == nil {
+		t.Fatal("vaydns.VayDNS is nil")
+	}
+	if vaydns.VayDNS.MTU != 1100 {
+		t.Errorf("vaydns.VayDNS.MTU = %d, want 1100", vaydns.VayDNS.MTU)
+	}
+	if vaydns.VayDNS.IdleTimeout != "15s" {
+		t.Errorf("vaydns.VayDNS.IdleTimeout = %q, want '15s'", vaydns.VayDNS.IdleTimeout)
+	}
+	if vaydns.VayDNS.KeepAlive != "3s" {
+		t.Errorf("vaydns.VayDNS.KeepAlive = %q, want '3s'", vaydns.VayDNS.KeepAlive)
+	}
+	if vaydns.VayDNS.Fallback != "127.0.0.1:8888" {
+		t.Errorf("vaydns.VayDNS.Fallback = %q, want '127.0.0.1:8888'", vaydns.VayDNS.Fallback)
+	}
 }
 
 func TestConfigApplyDefaults(t *testing.T) {
@@ -219,14 +254,18 @@ func TestConfigApplyDefaults(t *testing.T) {
 				Transport: config.TransportSlipstream,
 				Backend:   "socks",
 				Domain:    "a.example.com",
-				// No port, no enabled
 			},
 			{
 				Tag:       "tunnel-b",
 				Transport: config.TransportDNSTT,
 				Backend:   "socks",
 				Domain:    "b.example.com",
-				// No port, no enabled, no DNSTT config
+			},
+			{
+				Tag:       "tunnel-c",
+				Transport: config.TransportVayDNS,
+				Backend:   "socks",
+				Domain:    "c.example.com",
 			},
 		},
 	}
@@ -265,6 +304,21 @@ func TestConfigApplyDefaults(t *testing.T) {
 	}
 	if dnstt.DNSTT.MTU != 1232 {
 		t.Errorf("DNSTT.MTU = %d, want 1232", dnstt.DNSTT.MTU)
+	}
+
+	// Verify VayDNS defaults
+	vaydns := cfg.GetTunnelByTag("tunnel-c")
+	if vaydns.VayDNS == nil {
+		t.Fatal("VayDNS config should be created")
+	}
+	if vaydns.VayDNS.MTU != 1232 {
+		t.Errorf("VayDNS.MTU = %d, want 1232", vaydns.VayDNS.MTU)
+	}
+	if vaydns.VayDNS.IdleTimeout != "10s" {
+		t.Errorf("VayDNS.IdleTimeout = %q, want '10s'", vaydns.VayDNS.IdleTimeout)
+	}
+	if vaydns.VayDNS.KeepAlive != "2s" {
+		t.Errorf("VayDNS.KeepAlive = %q, want '2s'", vaydns.VayDNS.KeepAlive)
 	}
 }
 

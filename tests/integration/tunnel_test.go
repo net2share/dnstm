@@ -149,6 +149,143 @@ func TestTunnelAdd_DNSTT_ShadowsocksIncompatibility(t *testing.T) {
 	}
 }
 
+func TestTunnelAdd_VayDNS(t *testing.T) {
+	env := NewTestEnv(t)
+
+	cfg := env.DefaultConfig()
+	if err := env.WriteConfig(cfg); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	loaded, err := env.ReadConfig()
+	if err != nil {
+		t.Fatalf("failed to read config: %v", err)
+	}
+
+	loaded.Tunnels = append(loaded.Tunnels, config.TunnelConfig{
+		Tag:       "test-vaydns",
+		Transport: config.TransportVayDNS,
+		Backend:   "socks",
+		Domain:    "vaydns.example.com",
+		Port:      5312,
+		Enabled:   boolPtr(true),
+		VayDNS: &config.VayDNSConfig{
+			MTU:         1200,
+			PrivateKey:  "/path/to/key",
+			IdleTimeout: "10s",
+			KeepAlive:   "2s",
+		},
+	})
+
+	if err := env.WriteConfig(loaded); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	reloaded, err := env.ReadConfig()
+	if err != nil {
+		t.Fatalf("failed to reload config: %v", err)
+	}
+
+	tunnel := reloaded.GetTunnelByTag("test-vaydns")
+	if tunnel == nil {
+		t.Fatal("tunnel not found")
+	}
+
+	if tunnel.Transport != config.TransportVayDNS {
+		t.Errorf("transport = %v, want %v", tunnel.Transport, config.TransportVayDNS)
+	}
+
+	if tunnel.VayDNS == nil {
+		t.Fatal("VayDNS config is nil")
+	}
+
+	if tunnel.VayDNS.MTU != 1200 {
+		t.Errorf("MTU = %d, want 1200", tunnel.VayDNS.MTU)
+	}
+
+	if tunnel.VayDNS.IdleTimeout != "10s" {
+		t.Errorf("IdleTimeout = %q, want '10s'", tunnel.VayDNS.IdleTimeout)
+	}
+
+	if tunnel.VayDNS.KeepAlive != "2s" {
+		t.Errorf("KeepAlive = %q, want '2s'", tunnel.VayDNS.KeepAlive)
+	}
+
+	if !tunnel.IsVayDNS() {
+		t.Error("IsVayDNS() should return true")
+	}
+}
+
+func TestTunnelAdd_VayDNS_ShadowsocksIncompatibility(t *testing.T) {
+	cfg := &config.Config{
+		Backends: []config.BackendConfig{
+			{
+				Tag:  "ss",
+				Type: config.BackendShadowsocks,
+				Shadowsocks: &config.ShadowsocksConfig{
+					Password: "test",
+				},
+			},
+		},
+		Tunnels: []config.TunnelConfig{
+			{
+				Tag:       "vaydns-with-ss",
+				Transport: config.TransportVayDNS,
+				Backend:   "ss",
+				Domain:    "test.example.com",
+			},
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error for VayDNS + Shadowsocks combination")
+	}
+
+	if !strings.Contains(err.Error(), "shadowsocks") {
+		t.Errorf("error = %q, expected to mention shadowsocks", err.Error())
+	}
+}
+
+func TestTunnelAdd_VayDNS_WithFallback(t *testing.T) {
+	env := NewTestEnv(t)
+
+	cfg := env.DefaultConfig()
+	cfg.Tunnels = append(cfg.Tunnels, config.TunnelConfig{
+		Tag:       "vaydns-fallback",
+		Transport: config.TransportVayDNS,
+		Backend:   "socks",
+		Domain:    "fb.example.com",
+		Port:      5313,
+		VayDNS: &config.VayDNSConfig{
+			MTU:      1232,
+			Fallback: "127.0.0.1:8888",
+		},
+	})
+
+	if err := env.WriteConfig(cfg); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	loaded, err := env.ReadConfig()
+	if err != nil {
+		t.Fatalf("failed to read config: %v", err)
+	}
+
+	tunnel := loaded.GetTunnelByTag("vaydns-fallback")
+	if tunnel == nil {
+		t.Fatal("tunnel not found")
+	}
+
+	if tunnel.VayDNS == nil {
+		t.Fatal("VayDNS config is nil")
+	}
+
+	if tunnel.VayDNS.Fallback != "127.0.0.1:8888" {
+		t.Errorf("Fallback = %q, want '127.0.0.1:8888'", tunnel.VayDNS.Fallback)
+	}
+}
+
 func TestTunnelList(t *testing.T) {
 	env := NewTestEnv(t)
 
@@ -363,6 +500,28 @@ func TestTunnelValidation(t *testing.T) {
 				DNSTT:     &config.DNSTTConfig{MTU: 2000},
 			},
 			wantErr: "dnstt.mtu must be between",
+		},
+		{
+			name: "vaydns mtu too low",
+			tunnel: config.TunnelConfig{
+				Tag:       "vaydns-low-mtu",
+				Transport: config.TransportVayDNS,
+				Backend:   "socks",
+				Domain:    "test.example.com",
+				VayDNS:    &config.VayDNSConfig{MTU: 100},
+			},
+			wantErr: "vaydns.mtu must be between",
+		},
+		{
+			name: "vaydns mtu too high",
+			tunnel: config.TunnelConfig{
+				Tag:       "vaydns-high-mtu",
+				Transport: config.TransportVayDNS,
+				Backend:   "socks",
+				Domain:    "test.example.com",
+				VayDNS:    &config.VayDNSConfig{MTU: 2000},
+			},
+			wantErr: "vaydns.mtu must be between",
 		},
 	}
 

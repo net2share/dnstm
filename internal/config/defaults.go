@@ -59,6 +59,20 @@ func (c *Config) ApplyDefaults() {
 				t.DNSTT.MTU = 1232
 			}
 		}
+		if t.Transport == TransportVayDNS {
+			if t.VayDNS == nil {
+				t.VayDNS = &VayDNSConfig{}
+			}
+			if t.VayDNS.MTU == 0 {
+				t.VayDNS.MTU = 1232
+			}
+			if t.VayDNS.IdleTimeout == "" {
+				t.VayDNS.IdleTimeout = "10s"
+			}
+			if t.VayDNS.KeepAlive == "" {
+				t.VayDNS.KeepAlive = "2s"
+			}
+		}
 	}
 
 	// Backend shadowsocks method default
