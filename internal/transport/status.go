@@ -11,7 +11,6 @@ func IsInstalled() bool {
 		binary.BinaryDNSTTServer,
 		binary.BinarySlipstreamServer,
 		binary.BinarySSServer,
-		binary.BinaryVayDNSServer,
 	}
 
 	for _, bin := range binaries {
@@ -32,7 +31,6 @@ func GetMissingBinaries() []string {
 		binary.BinaryDNSTTServer,
 		binary.BinarySlipstreamServer,
 		binary.BinarySSServer,
-		binary.BinaryVayDNSServer,
 	}
 
 	for _, bin := range binaries {
