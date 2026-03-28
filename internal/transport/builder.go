@@ -294,7 +294,8 @@ func (b *Builder) buildVayDNSTunnel(tunnel *config.TunnelConfig, backend *config
 	if n := tunnel.VayDNS.VayDNSClientIDSizeForFlag(); n > 0 {
 		args = append(args, "-clientid-size", strconv.Itoa(n))
 	}
-	args = append(args, "-record-type", "txt")
+	// Do not pass -record-type: many deployed vaydns-server builds predate that flag and exit
+	// with "flag provided but not defined". Upstream default is TXT where the flag exists.
 
 	result.ExecStart = fmt.Sprintf("%s %s", VayDNSBinaryPath(), strings.Join(args, " "))
 	return result, nil
