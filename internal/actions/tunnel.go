@@ -292,6 +292,24 @@ func init() {
 				Default: "1232",
 				ShowIf:  func(ctx *Context) bool { return !ctx.IsInteractive },
 			},
+			{
+				Name:        "dnstt_compat",
+				Label:       "DNSTT wire compatibility (VayDNS)",
+				Type:        InputTypeBool,
+				Description: "Match vaydns-server -dnstt-compat for legacy dnstt clients",
+				ShowIf: func(ctx *Context) bool {
+					return !ctx.IsInteractive && config.TransportType(ctx.GetString("transport")) == config.TransportVayDNS
+				},
+			},
+			{
+				Name:        "clientid_size",
+				Label:       "VayDNS client ID size (bytes)",
+				Type:        InputTypeNumber,
+				Description: "Optional; default 2. Ignored when DNSTT compatibility is enabled",
+				ShowIf: func(ctx *Context) bool {
+					return !ctx.IsInteractive && config.TransportType(ctx.GetString("transport")) == config.TransportVayDNS
+				},
+			},
 		},
 	})
 

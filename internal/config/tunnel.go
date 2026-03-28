@@ -36,11 +36,52 @@ type DNSTTConfig struct {
 
 // VayDNSConfig holds VayDNS-specific configuration.
 type VayDNSConfig struct {
-	MTU         int    `json:"mtu,omitempty"`
-	PrivateKey  string `json:"private_key,omitempty"`
-	IdleTimeout string `json:"idle_timeout,omitempty"`
-	KeepAlive   string `json:"keep_alive,omitempty"`
-	Fallback    string `json:"fallback,omitempty"`
+	MTU          int    `json:"mtu,omitempty"`
+	PrivateKey   string `json:"private_key,omitempty"`
+	IdleTimeout  string `json:"idle_timeout,omitempty"`
+	KeepAlive    string `json:"keep_alive,omitempty"`
+	Fallback     string `json:"fallback,omitempty"`
+	DnsttCompat  bool   `json:"dnstt_compat,omitempty"`
+	ClientIDSize int    `json:"clientid_size,omitempty"`
+}
+
+// ResolvedVayDNSIdleTimeout returns the idle-timeout string for vaydns-server, applying defaults when empty.
+func (v *VayDNSConfig) ResolvedVayDNSIdleTimeout() string {
+	if v == nil {
+		return "60s"
+	}
+	if v.IdleTimeout != "" {
+		return v.IdleTimeout
+	}
+	if v.DnsttCompat {
+		return "2m"
+	}
+	return "60s"
+}
+
+// ResolvedVayDNSKeepAlive returns the keepalive string for vaydns-server, applying defaults when empty.
+func (v *VayDNSConfig) ResolvedVayDNSKeepAlive() string {
+	if v == nil {
+		return "10s"
+	}
+	if v.KeepAlive != "" {
+		return v.KeepAlive
+	}
+	return "10s"
+}
+
+// VayDNSClientIDSizeForFlag returns the value for -clientid-size, or 0 if the flag must be omitted (-dnstt-compat).
+func (v *VayDNSConfig) VayDNSClientIDSizeForFlag() int {
+	if v == nil {
+		return 2
+	}
+	if v.DnsttCompat {
+		return 0
+	}
+	if v.ClientIDSize <= 0 {
+		return 2
+	}
+	return v.ClientIDSize
 }
 
 // IsEnabled returns true if the tunnel is enabled.

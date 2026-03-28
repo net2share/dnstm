@@ -102,7 +102,7 @@ var DefaultBinaries = map[BinaryType]BinaryDef{
 		Type:          BinaryVayDNSServer,
 		EnvVar:        "DNSTM_VAYDNS_SERVER_PATH",
 		URLPattern:    "https://github.com/net2share/vaydns/releases/download/{version}/vaydns-server-{os}-{arch}{ext}",
-		PinnedVersion: "v0.2.0",
+		PinnedVersion: "v0.2.4",
 		Platforms: map[string][]string{
 			"linux":   {"amd64", "arm64"},
 			"darwin":  {"amd64", "arm64"},
@@ -146,7 +146,7 @@ var DefaultBinaries = map[BinaryType]BinaryDef{
 		Type:          BinaryVayDNSClient,
 		EnvVar:        "DNSTM_TEST_VAYDNS_CLIENT_PATH",
 		URLPattern:    "https://github.com/net2share/vaydns/releases/download/{version}/vaydns-client-{os}-{arch}{ext}",
-		PinnedVersion: "v0.2.0", // Manual bump only
+		PinnedVersion: "v0.2.4", // Manual bump only
 		Platforms: map[string][]string{
 			"linux":   {"amd64", "arm64"},
 			"darwin":  {"amd64", "arm64"},

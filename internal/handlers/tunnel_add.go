@@ -159,6 +159,18 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 		}
 	}
 
+	var vaydnsDnsttCompat bool
+	if config.TransportType(transportType) == config.TransportVayDNS {
+		confirm, confirmErr := tui.RunConfirm(tui.ConfirmConfig{
+			Title:       "DNSTT-compatible wire format?",
+			Description: "Enable only if clients use legacy dnstt-compatible mode (-dnstt-compat). Uses longer idle timeout and 8-byte client IDs on the server.",
+		})
+		if confirmErr != nil {
+			return confirmErr
+		}
+		vaydnsDnsttCompat = confirm
+	}
+
 	// Build tunnel config
 	tunnelCfg := &config.TunnelConfig{
 		Tag:       tag,
@@ -172,7 +184,10 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 		tunnelCfg.DNSTT = &config.DNSTTConfig{MTU: mtu}
 	}
 	if tunnelCfg.Transport == config.TransportVayDNS {
-		tunnelCfg.VayDNS = &config.VayDNSConfig{MTU: mtu}
+		tunnelCfg.VayDNS = &config.VayDNSConfig{
+			MTU:         mtu,
+			DnsttCompat: vaydnsDnsttCompat,
+		}
 	}
 
 	// Allocate port
@@ -249,7 +264,14 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 		if mtu == 0 {
 			mtu = 1232
 		}
-		tunnelCfg.VayDNS = &config.VayDNSConfig{MTU: mtu}
+		v := &config.VayDNSConfig{
+			MTU:         mtu,
+			DnsttCompat: ctx.GetBool("dnstt_compat"),
+		}
+		if cid := ctx.GetInt("clientid_size"); cid != 0 {
+			v.ClientIDSize = cid
+		}
+		tunnelCfg.VayDNS = v
 	}
 
 	// Allocate port

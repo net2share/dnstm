@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"regexp"
+	"time"
 )
 
 var tagRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`)
@@ -159,6 +160,22 @@ func (c *Config) validateTunnels() error {
 		if t.Transport == TransportVayDNS && t.VayDNS != nil {
 			if t.VayDNS.MTU != 0 && (t.VayDNS.MTU < 512 || t.VayDNS.MTU > 1400) {
 				return fmt.Errorf("tunnel '%s': vaydns.mtu must be between 512 and 1400", t.Tag)
+			}
+			if !t.VayDNS.DnsttCompat && t.VayDNS.ClientIDSize < 0 {
+				return fmt.Errorf("tunnel '%s': vaydns.clientid_size must not be negative", t.Tag)
+			}
+			idleStr := t.VayDNS.ResolvedVayDNSIdleTimeout()
+			keepStr := t.VayDNS.ResolvedVayDNSKeepAlive()
+			idle, err := time.ParseDuration(idleStr)
+			if err != nil {
+				return fmt.Errorf("tunnel '%s': invalid vaydns.idle_timeout: %w", t.Tag, err)
+			}
+			keep, err := time.ParseDuration(keepStr)
+			if err != nil {
+				return fmt.Errorf("tunnel '%s': invalid vaydns.keep_alive: %w", t.Tag, err)
+			}
+			if keep >= idle {
+				return fmt.Errorf("tunnel '%s': vaydns.keep_alive must be less than vaydns.idle_timeout", t.Tag)
 			}
 		}
 	}

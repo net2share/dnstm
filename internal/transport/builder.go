@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/net2share/dnstm/internal/binary"
@@ -280,17 +281,20 @@ func (b *Builder) buildVayDNSTunnel(tunnel *config.TunnelConfig, backend *config
 		"-mtu", mtu,
 		"-domain", tunnel.Domain,
 		"-upstream", targetAddr,
+		"-idle-timeout", tunnel.VayDNS.ResolvedVayDNSIdleTimeout(),
+		"-keepalive", tunnel.VayDNS.ResolvedVayDNSKeepAlive(),
 	}
 
-	if tunnel.VayDNS.IdleTimeout != "" {
-		args = append(args, "-idle-timeout", tunnel.VayDNS.IdleTimeout)
-	}
-	if tunnel.VayDNS.KeepAlive != "" {
-		args = append(args, "-keepalive", tunnel.VayDNS.KeepAlive)
-	}
 	if tunnel.VayDNS.Fallback != "" {
 		args = append(args, "-fallback", tunnel.VayDNS.Fallback)
 	}
+	if tunnel.VayDNS.DnsttCompat {
+		args = append(args, "-dnstt-compat")
+	}
+	if n := tunnel.VayDNS.VayDNSClientIDSizeForFlag(); n > 0 {
+		args = append(args, "-clientid-size", strconv.Itoa(n))
+	}
+	args = append(args, "-record-type", "txt")
 
 	result.ExecStart = fmt.Sprintf("%s %s", VayDNSBinaryPath(), strings.Join(args, " "))
 	return result, nil

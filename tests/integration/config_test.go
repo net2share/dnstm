@@ -267,6 +267,15 @@ func TestConfigApplyDefaults(t *testing.T) {
 				Backend:   "socks",
 				Domain:    "c.example.com",
 			},
+			{
+				Tag:       "tunnel-d",
+				Transport: config.TransportVayDNS,
+				Backend:   "socks",
+				Domain:    "d.example.com",
+				VayDNS: &config.VayDNSConfig{
+					DnsttCompat: true,
+				},
+			},
 		},
 	}
 
@@ -314,11 +323,28 @@ func TestConfigApplyDefaults(t *testing.T) {
 	if vaydns.VayDNS.MTU != 1232 {
 		t.Errorf("VayDNS.MTU = %d, want 1232", vaydns.VayDNS.MTU)
 	}
-	if vaydns.VayDNS.IdleTimeout != "10s" {
-		t.Errorf("VayDNS.IdleTimeout = %q, want '10s'", vaydns.VayDNS.IdleTimeout)
+	if vaydns.VayDNS.IdleTimeout != "60s" {
+		t.Errorf("VayDNS.IdleTimeout = %q, want '60s'", vaydns.VayDNS.IdleTimeout)
 	}
-	if vaydns.VayDNS.KeepAlive != "2s" {
-		t.Errorf("VayDNS.KeepAlive = %q, want '2s'", vaydns.VayDNS.KeepAlive)
+	if vaydns.VayDNS.KeepAlive != "10s" {
+		t.Errorf("VayDNS.KeepAlive = %q, want '10s'", vaydns.VayDNS.KeepAlive)
+	}
+	if vaydns.VayDNS.ClientIDSize != 2 {
+		t.Errorf("VayDNS.ClientIDSize = %d, want 2", vaydns.VayDNS.ClientIDSize)
+	}
+
+	vaydnsCompat := cfg.GetTunnelByTag("tunnel-d")
+	if vaydnsCompat.VayDNS == nil {
+		t.Fatal("tunnel-d VayDNS config should be created")
+	}
+	if vaydnsCompat.VayDNS.IdleTimeout != "2m" {
+		t.Errorf("compat VayDNS.IdleTimeout = %q, want '2m'", vaydnsCompat.VayDNS.IdleTimeout)
+	}
+	if vaydnsCompat.VayDNS.KeepAlive != "10s" {
+		t.Errorf("compat VayDNS.KeepAlive = %q, want '10s'", vaydnsCompat.VayDNS.KeepAlive)
+	}
+	if vaydnsCompat.VayDNS.ClientIDSize != 0 {
+		t.Errorf("compat VayDNS.ClientIDSize = %d, want 0 (server uses 8-byte ID)", vaydnsCompat.VayDNS.ClientIDSize)
 	}
 }
 
