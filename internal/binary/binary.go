@@ -25,11 +25,13 @@ const (
 	BinarySSServer         BinaryType = "ssserver"
 	BinaryMicrosocks       BinaryType = "microsocks"
 	BinarySSHTunUser       BinaryType = "sshtun-user"
+	BinaryVayDNSServer     BinaryType = "vaydns-server"
 
 	// Client binaries (used in testing)
 	BinaryDNSTTClient      BinaryType = "dnstt-client"
 	BinarySlipstreamClient BinaryType = "slipstream-client"
 	BinarySSLocal          BinaryType = "sslocal"
+	BinaryVayDNSClient     BinaryType = "vaydns-client"
 )
 
 // BinaryDef defines how to obtain a binary.
@@ -96,6 +98,17 @@ var DefaultBinaries = map[BinaryType]BinaryDef{
 			"linux": {"amd64", "arm64"},
 		},
 	},
+	BinaryVayDNSServer: {
+		Type:          BinaryVayDNSServer,
+		EnvVar:        "DNSTM_VAYDNS_SERVER_PATH",
+		URLPattern:    "https://github.com/net2share/vaydns/releases/download/{version}/vaydns-server-{os}-{arch}{ext}",
+		PinnedVersion: "v0.2.4",
+		Platforms: map[string][]string{
+			"linux":   {"amd64", "arm64"},
+			"darwin":  {"amd64", "arm64"},
+			"windows": {"amd64"},
+		},
+	},
 
 	// Client binaries - pinned versions for testing only
 	BinaryDNSTTClient: {
@@ -127,6 +140,17 @@ var DefaultBinaries = map[BinaryType]BinaryDef{
 		Platforms: map[string][]string{
 			"linux":  {"amd64", "arm64"},
 			"darwin": {"amd64", "arm64"},
+		},
+	},
+	BinaryVayDNSClient: {
+		Type:          BinaryVayDNSClient,
+		EnvVar:        "DNSTM_TEST_VAYDNS_CLIENT_PATH",
+		URLPattern:    "https://github.com/net2share/vaydns/releases/download/{version}/vaydns-client-{os}-{arch}{ext}",
+		PinnedVersion: "v0.2.4", // Manual bump only
+		Platforms: map[string][]string{
+			"linux":   {"amd64", "arm64"},
+			"darwin":  {"amd64", "arm64"},
+			"windows": {"amd64"},
 		},
 	},
 }

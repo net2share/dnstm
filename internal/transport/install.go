@@ -19,6 +19,8 @@ func EnsureTransportBinariesInstalled(transport config.TransportType) error {
 		return EnsureSlipstreamInstalled()
 	case config.TransportDNSTT:
 		return EnsureDnsttInstalled()
+	case config.TransportVayDNS:
+		return EnsureVayDNSInstalled()
 	default:
 		return nil
 	}
@@ -62,6 +64,16 @@ func EnsureShadowsocksInstalled() error {
 // EnsureShadowsocksInstalledWithStatus installs ssserver with status callback.
 func EnsureShadowsocksInstalledWithStatus(statusFn StatusFunc) error {
 	return ensureBinaryInstalled(binary.BinarySSServer, "ssserver", statusFn)
+}
+
+// EnsureVayDNSInstalled installs vaydns-server if not present.
+func EnsureVayDNSInstalled() error {
+	return EnsureVayDNSInstalledWithStatus(nil)
+}
+
+// EnsureVayDNSInstalledWithStatus installs vaydns-server with status callback.
+func EnsureVayDNSInstalledWithStatus(statusFn StatusFunc) error {
+	return ensureBinaryInstalled(binary.BinaryVayDNSServer, "vaydns-server", statusFn)
 }
 
 // EnsureSSHTunUserInstalled installs sshtun-user if not present.

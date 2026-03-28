@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/net2share/dnstm/internal/binary"
@@ -51,6 +52,12 @@ func SSServerBinaryPath() string {
 // SSHTunUserBinaryPath returns the path to sshtun-user.
 func SSHTunUserBinaryPath() string {
 	path, _ := getBinManager().GetPath(binary.BinarySSHTunUser)
+	return path
+}
+
+// VayDNSBinaryPath returns the path to vaydns-server.
+func VayDNSBinaryPath() string {
+	path, _ := getBinManager().GetPath(binary.BinaryVayDNSServer)
 	return path
 }
 
@@ -133,6 +140,8 @@ func (b *Builder) BuildTunnelService(tunnel *config.TunnelConfig, backend *confi
 		return b.buildSlipstreamTunnel(tunnel, backend, targetAddr, opts, result)
 	case config.TransportDNSTT:
 		return b.buildDNSTTTunnel(tunnel, backend, targetAddr, opts, result)
+	case config.TransportVayDNS:
+		return b.buildVayDNSTunnel(tunnel, backend, targetAddr, opts, result)
 	default:
 		return nil, fmt.Errorf("unknown transport type: %s", tunnel.Transport)
 	}
@@ -245,6 +254,50 @@ func (b *Builder) buildDNSTTTunnel(tunnel *config.TunnelConfig, backend *config.
 	}
 
 	result.ExecStart = fmt.Sprintf("%s %s", DNSTTBinaryPath(), strings.Join(args, " "))
+	return result, nil
+}
+
+// buildVayDNSTunnel builds a VayDNS-based tunnel service.
+func (b *Builder) buildVayDNSTunnel(tunnel *config.TunnelConfig, backend *config.BackendConfig, targetAddr string, opts *BuildOptions, result *TunnelBuildResult) (*TunnelBuildResult, error) {
+	if backend.Type == config.BackendShadowsocks {
+		return nil, fmt.Errorf("VayDNS transport does not support Shadowsocks backend")
+	}
+
+	if tunnel.VayDNS == nil || tunnel.VayDNS.PrivateKey == "" {
+		return nil, fmt.Errorf("vaydns private key path not set for tunnel %s", tunnel.Tag)
+	}
+
+	privKeyPath := tunnel.VayDNS.PrivateKey
+	result.ReadPaths = append(result.ReadPaths, privKeyPath)
+
+	mtu := "1232"
+	if tunnel.VayDNS.MTU > 0 {
+		mtu = fmt.Sprintf("%d", tunnel.VayDNS.MTU)
+	}
+
+	args := []string{
+		"-udp", fmt.Sprintf("%s:%d", opts.BindHost, opts.BindPort),
+		"-privkey-file", privKeyPath,
+		"-mtu", mtu,
+		"-domain", tunnel.Domain,
+		"-upstream", targetAddr,
+		"-idle-timeout", tunnel.VayDNS.ResolvedVayDNSIdleTimeout(),
+		"-keepalive", tunnel.VayDNS.ResolvedVayDNSKeepAlive(),
+	}
+
+	if tunnel.VayDNS.Fallback != "" {
+		args = append(args, "-fallback", tunnel.VayDNS.Fallback)
+	}
+	if tunnel.VayDNS.DnsttCompat {
+		args = append(args, "-dnstt-compat")
+	}
+	if n := tunnel.VayDNS.VayDNSClientIDSizeForFlag(); n > 0 {
+		args = append(args, "-clientid-size", strconv.Itoa(n))
+	}
+	// Do not pass -record-type: many deployed vaydns-server builds predate that flag and exit
+	// with "flag provided but not defined". Upstream default is TXT where the flag exists.
+
+	result.ExecStart = fmt.Sprintf("%s %s", VayDNSBinaryPath(), strings.Join(args, " "))
 	return result, nil
 }
 
