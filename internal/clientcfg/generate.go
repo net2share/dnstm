@@ -62,6 +62,13 @@ func Generate(tunnel *config.TunnelConfig, backend *config.BackendConfig, opts G
 			return nil, fmt.Errorf("failed to read public key: %w", err)
 		}
 		cfg.Transport.PubKey = pubKey
+
+		if tunnel.VayDNS != nil {
+			cfg.Transport.DnsttCompat = tunnel.VayDNS.DnsttCompat
+			cfg.Transport.ClientIDSize = tunnel.VayDNS.VayDNSClientIDSizeForFlag()
+			cfg.Transport.IdleTimeout = tunnel.VayDNS.ResolvedVayDNSIdleTimeout()
+			cfg.Transport.KeepAlive = tunnel.VayDNS.ResolvedVayDNSKeepAlive()
+		}
 	}
 
 	// Build backend config

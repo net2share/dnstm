@@ -162,6 +162,88 @@ func TestRoundTrip_SSHWithKey(t *testing.T) {
 	}
 }
 
+func TestRoundTrip_VayDNS_Default(t *testing.T) {
+	original := &ClientConfig{
+		Version: 1,
+		Tag:     "vaydns-socks",
+		Transport: TransportConfig{
+			Type:         "vaydns",
+			Domain:       "v.example.com",
+			PubKey:       "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
+			ClientIDSize: 2,
+			IdleTimeout:  "60s",
+			KeepAlive:    "10s",
+		},
+		Backend: BackendConfig{
+			Type: "socks",
+		},
+	}
+
+	url, err := Encode(original)
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+
+	decoded, err := Decode(url)
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+
+	if decoded.Transport.PubKey != original.Transport.PubKey {
+		t.Errorf("pubkey: got %q, want %q", decoded.Transport.PubKey, original.Transport.PubKey)
+	}
+	if decoded.Transport.DnsttCompat != false {
+		t.Errorf("dnstt_compat: got %v, want false", decoded.Transport.DnsttCompat)
+	}
+	if decoded.Transport.ClientIDSize != 2 {
+		t.Errorf("clientid_size: got %d, want 2", decoded.Transport.ClientIDSize)
+	}
+	if decoded.Transport.IdleTimeout != "60s" {
+		t.Errorf("idle_timeout: got %q, want '60s'", decoded.Transport.IdleTimeout)
+	}
+	if decoded.Transport.KeepAlive != "10s" {
+		t.Errorf("keepalive: got %q, want '10s'", decoded.Transport.KeepAlive)
+	}
+}
+
+func TestRoundTrip_VayDNS_DnsttCompat(t *testing.T) {
+	original := &ClientConfig{
+		Version: 1,
+		Tag:     "vaydns-compat",
+		Transport: TransportConfig{
+			Type:        "vaydns",
+			Domain:      "v.example.com",
+			PubKey:      "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
+			DnsttCompat: true,
+			IdleTimeout: "2m",
+			KeepAlive:   "10s",
+		},
+		Backend: BackendConfig{
+			Type: "socks",
+		},
+	}
+
+	url, err := Encode(original)
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+
+	decoded, err := Decode(url)
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+
+	if decoded.Transport.DnsttCompat != true {
+		t.Errorf("dnstt_compat: got %v, want true", decoded.Transport.DnsttCompat)
+	}
+	if decoded.Transport.ClientIDSize != 0 {
+		t.Errorf("clientid_size: got %d, want 0 (omitted in compat mode)", decoded.Transport.ClientIDSize)
+	}
+	if decoded.Transport.IdleTimeout != "2m" {
+		t.Errorf("idle_timeout: got %q, want '2m'", decoded.Transport.IdleTimeout)
+	}
+}
+
 func TestDecode_InvalidPrefix(t *testing.T) {
 	_, err := Decode("https://example.com")
 	if err == nil {

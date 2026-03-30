@@ -10,10 +10,16 @@ type ClientConfig struct {
 
 // TransportConfig describes the DNS transport layer.
 type TransportConfig struct {
-	Type   string `json:"type"`             // "slipstream" or "dnstt"
+	Type   string `json:"type"`             // "slipstream", "dnstt", or "vaydns"
 	Domain string `json:"domain"`           // NS domain
 	Cert   string `json:"cert,omitempty"`   // PEM string (slipstream)
-	PubKey string `json:"pubkey,omitempty"` // 64-char hex (dnstt)
+	PubKey string `json:"pubkey,omitempty"` // 64-char hex (dnstt, vaydns)
+
+	// VayDNS-specific fields (must match server settings)
+	DnsttCompat  bool   `json:"dnstt_compat,omitempty"`   // server uses -dnstt-compat
+	ClientIDSize int    `json:"clientid_size,omitempty"`   // server -clientid-size (default 2)
+	IdleTimeout  string `json:"idle_timeout,omitempty"`    // server -idle-timeout
+	KeepAlive    string `json:"keepalive,omitempty"`       // server -keepalive
 }
 
 // BackendConfig describes the backend service behind the tunnel.
