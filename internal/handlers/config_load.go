@@ -198,7 +198,7 @@ func HandleConfigLoad(ctx *actions.Context) error {
 				ctx.Output.Printf("    Cert:        %s\n", certPath)
 				ctx.Output.Printf("    Key:         %s\n", keyPath)
 			}
-		} else if tunnel.Transport == config.TransportDNSTT {
+		} else if tunnel.Transport == config.TransportDNSTT || tunnel.Transport == config.TransportVayDNS {
 			pubKeyPath := filepath.Join(tunnelDir, "server.pub")
 			pubKey, err := keys.ReadPublicKey(pubKeyPath)
 			if err == nil {
@@ -307,6 +307,36 @@ func ensureTunnelService(ctx *actions.Context, tunnelCfg *config.TunnelConfig, c
 				return fmt.Errorf("failed to generate keys: %w", err)
 			}
 			tunnelCfg.DNSTT.PrivateKey = keyInfo.PrivateKeyPath
+			ctx.Output.Status(fmt.Sprintf("Generated keys for %s", tunnelCfg.Domain))
+		}
+	} else if tunnelCfg.Transport == config.TransportVayDNS {
+		// Initialize VayDNS config if nil
+		if tunnelCfg.VayDNS == nil {
+			tunnelCfg.VayDNS = &config.VayDNSConfig{}
+		}
+
+		// Check if private key path is provided
+		if tunnelCfg.VayDNS.PrivateKey != "" {
+			// Validate key file exists and is readable by dnstm user
+			if _, err := os.Stat(tunnelCfg.VayDNS.PrivateKey); err != nil {
+				return fmt.Errorf("private key file not found: %s", tunnelCfg.VayDNS.PrivateKey)
+			}
+			canRead, err := system.CanDnstmUserReadFile(tunnelCfg.VayDNS.PrivateKey)
+			if err != nil {
+				return fmt.Errorf("failed to check key permissions: %w", err)
+			}
+			if !canRead {
+				return fmt.Errorf("dnstm user cannot read private key file: %s", tunnelCfg.VayDNS.PrivateKey)
+			}
+
+			ctx.Output.Status(fmt.Sprintf("Using provided key for %s", tunnelCfg.Domain))
+		} else {
+			// No key path provided, generate new keys into tunnel dir
+			keyInfo, err := keys.GetOrCreateInDir(tunnelDir)
+			if err != nil {
+				return fmt.Errorf("failed to generate keys: %w", err)
+			}
+			tunnelCfg.VayDNS.PrivateKey = keyInfo.PrivateKeyPath
 			ctx.Output.Status(fmt.Sprintf("Generated keys for %s", tunnelCfg.Domain))
 		}
 	}

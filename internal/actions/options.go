@@ -52,5 +52,6 @@ func ValidTransportTypes() []string {
 	return []string{
 		string(config.TransportSlipstream),
 		string(config.TransportDNSTT),
+		string(config.TransportVayDNS),
 	}
 }

@@ -55,6 +55,19 @@ func HandleTunnelStatus(ctx *actions.Context) error {
 			Key: "MTU", Value: fmt.Sprintf("%d", tunnelCfg.DNSTT.MTU),
 		})
 	}
+	if tunnelCfg.Transport == config.TransportVayDNS && tunnelCfg.VayDNS != nil {
+		v := tunnelCfg.VayDNS
+		mainSection.Rows = append(mainSection.Rows,
+			actions.InfoRow{Key: "MTU", Value: fmt.Sprintf("%d", v.MTU)},
+			actions.InfoRow{Key: "Idle Timeout", Value: v.ResolvedVayDNSIdleTimeout()},
+			actions.InfoRow{Key: "Keepalive", Value: v.ResolvedVayDNSKeepAlive()},
+		)
+		if v.DnsttCompat {
+			mainSection.Rows = append(mainSection.Rows, actions.InfoRow{Key: "Compat", Value: "dnstt"})
+		} else if v.ClientIDSize > 0 {
+			mainSection.Rows = append(mainSection.Rows, actions.InfoRow{Key: "Client ID", Value: fmt.Sprintf("%d bytes", v.ClientIDSize)})
+		}
+	}
 	infoCfg.Sections = append(infoCfg.Sections, mainSection)
 
 	// Show certificate/key info based on transport type
@@ -74,7 +87,7 @@ func HandleTunnelStatus(ctx *actions.Context) error {
 			}
 			infoCfg.Sections = append(infoCfg.Sections, certSection)
 		}
-	} else if tunnelCfg.Transport == config.TransportDNSTT {
+	} else if tunnelCfg.Transport == config.TransportDNSTT || tunnelCfg.Transport == config.TransportVayDNS {
 		pubKeyPath := filepath.Join(tunnelDir, "server.pub")
 		pubKey, err := keys.ReadPublicKey(pubKeyPath)
 		if err == nil {
@@ -140,7 +153,7 @@ func HandleTunnelStatus(ctx *actions.Context) error {
 			ctx.Output.Println(certs.FormatFingerprint(fingerprint))
 			ctx.Output.Println()
 		}
-	} else if tunnelCfg.Transport == config.TransportDNSTT {
+	} else if tunnelCfg.Transport == config.TransportDNSTT || tunnelCfg.Transport == config.TransportVayDNS {
 		pubKeyPath := filepath.Join(tunnelDir, "server.pub")
 		pubKey, err := keys.ReadPublicKey(pubKeyPath)
 		if err == nil {

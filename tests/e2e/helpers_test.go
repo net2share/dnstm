@@ -294,6 +294,10 @@ func nameToBinaryType(name string) binary.BinaryType {
 		return binary.BinarySSServer
 	case "microsocks":
 		return binary.BinaryMicrosocks
+	case "vaydns-client":
+		return binary.BinaryVayDNSClient
+	case "vaydns-server":
+		return binary.BinaryVayDNSServer
 	default:
 		return ""
 	}
