@@ -161,7 +161,7 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 	}
 
 	var vaydnsDnsttCompat bool
-	var vaydnsClientIDSize int
+	var vaydnsClientIDSize, vaydnsQueueSize int
 	var vaydnsIdleTimeout, vaydnsKeepAlive string
 	if config.TransportType(transportType) == config.TransportVayDNS {
 		confirm, confirmErr := tui.RunConfirm(tui.ConfirmConfig{
@@ -257,6 +257,31 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 			vaydnsKeepAlive = keepStr
 			break
 		}
+
+		// queue-size
+		for {
+			qsStr, confirmed, qsErr := tui.RunInput(tui.InputConfig{
+				Title:       "Queue Size",
+				Description: "Packet queue size for transport (1-65535)",
+				Value:       "512",
+			})
+			if qsErr != nil {
+				return qsErr
+			}
+			if !confirmed {
+				return nil
+			}
+			if qsStr == "" {
+				qsStr = "512"
+			}
+			parsed, parseErr := strconv.Atoi(qsStr)
+			if parseErr != nil || parsed < 1 || parsed > 65535 {
+				ctx.Output.Error("Queue size must be between 1 and 65535")
+				continue
+			}
+			vaydnsQueueSize = parsed
+			break
+		}
 	}
 
 	// Build tunnel config
@@ -278,6 +303,7 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 			ClientIDSize: vaydnsClientIDSize,
 			IdleTimeout:  vaydnsIdleTimeout,
 			KeepAlive:    vaydnsKeepAlive,
+			QueueSize:    vaydnsQueueSize,
 		}
 	}
 
@@ -364,12 +390,16 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 		}
 
 		v := &config.VayDNSConfig{
-			MTU:          mtu,
-			DnsttCompat:  dnsttCompat,
-			ClientIDSize: cid,
-			IdleTimeout:  ctx.GetString("idle-timeout"),
-			KeepAlive:    ctx.GetString("keepalive"),
-			Fallback:     ctx.GetString("fallback"),
+			MTU:           mtu,
+			DnsttCompat:   dnsttCompat,
+			ClientIDSize:  cid,
+			IdleTimeout:   ctx.GetString("idle-timeout"),
+			KeepAlive:     ctx.GetString("keepalive"),
+			Fallback:      ctx.GetString("fallback"),
+			QueueSize:     ctx.GetInt("queue-size"),
+			KCPWindowSize: ctx.GetInt("kcp-window-size"),
+			QueueOverflow: ctx.GetString("queue-overflow"),
+			LogLevel:      ctx.GetString("log-level"),
 		}
 		tunnelCfg.VayDNS = v
 	}

@@ -36,13 +36,17 @@ type DNSTTConfig struct {
 
 // VayDNSConfig holds VayDNS-specific configuration.
 type VayDNSConfig struct {
-	MTU          int    `json:"mtu,omitempty"`
-	PrivateKey   string `json:"private_key,omitempty"`
-	IdleTimeout  string `json:"idle_timeout,omitempty"`
-	KeepAlive    string `json:"keep_alive,omitempty"`
-	Fallback     string `json:"fallback,omitempty"`
-	DnsttCompat  bool   `json:"dnstt_compat,omitempty"`
-	ClientIDSize int    `json:"clientid_size,omitempty"`
+	MTU            int    `json:"mtu,omitempty"`
+	PrivateKey     string `json:"private_key,omitempty"`
+	IdleTimeout    string `json:"idle_timeout,omitempty"`
+	KeepAlive      string `json:"keep_alive,omitempty"`
+	Fallback       string `json:"fallback,omitempty"`
+	DnsttCompat    bool   `json:"dnstt_compat,omitempty"`
+	ClientIDSize   int    `json:"clientid_size,omitempty"`
+	QueueSize      int    `json:"queue_size,omitempty"`
+	KCPWindowSize  int    `json:"kcp_window_size,omitempty"`
+	QueueOverflow  string `json:"queue_overflow,omitempty"`
+	LogLevel       string `json:"log_level,omitempty"`
 }
 
 // ResolvedVayDNSIdleTimeout returns the idle-timeout string for vaydns-server, applying defaults when empty.

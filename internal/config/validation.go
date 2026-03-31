@@ -180,6 +180,25 @@ func (c *Config) validateTunnels() error {
 			if keep >= idle {
 				return fmt.Errorf("tunnel '%s': vaydns.keep_alive must be less than vaydns.idle_timeout", t.Tag)
 			}
+			if t.VayDNS.QueueSize < 0 {
+				return fmt.Errorf("tunnel '%s': vaydns.queue_size must be positive", t.Tag)
+			}
+			if t.VayDNS.KCPWindowSize < 0 {
+				return fmt.Errorf("tunnel '%s': vaydns.kcp_window_size must not be negative", t.Tag)
+			}
+			if t.VayDNS.KCPWindowSize > 0 && t.VayDNS.QueueSize > 0 && t.VayDNS.KCPWindowSize > t.VayDNS.QueueSize {
+				return fmt.Errorf("tunnel '%s': vaydns.kcp_window_size must be <= vaydns.queue_size", t.Tag)
+			}
+			if t.VayDNS.QueueOverflow != "" && t.VayDNS.QueueOverflow != "drop" && t.VayDNS.QueueOverflow != "block" {
+				return fmt.Errorf("tunnel '%s': vaydns.queue_overflow must be 'drop' or 'block'", t.Tag)
+			}
+			if t.VayDNS.LogLevel != "" {
+				switch t.VayDNS.LogLevel {
+				case "debug", "info", "warning", "error":
+				default:
+					return fmt.Errorf("tunnel '%s': vaydns.log_level must be debug, info, warning, or error", t.Tag)
+				}
+			}
 		}
 	}
 

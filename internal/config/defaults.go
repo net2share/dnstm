@@ -79,6 +79,12 @@ func (c *Config) ApplyDefaults() {
 			if t.VayDNS.KeepAlive == "" {
 				t.VayDNS.KeepAlive = "10s"
 			}
+			if t.VayDNS.QueueSize == 0 {
+				t.VayDNS.QueueSize = 512
+			}
+			// KCPWindowSize 0 means queue-size/2 — leave it as 0 (vaydns-server handles default)
+			// QueueOverflow "" means "drop" — leave empty (vaydns-server handles default)
+			// LogLevel "" means "info" — leave empty (vaydns-server handles default)
 		}
 	}
 

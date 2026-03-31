@@ -337,6 +337,42 @@ func init() {
 					return !ctx.IsInteractive && config.TransportType(ctx.GetString("transport")) == config.TransportVayDNS
 				},
 			},
+			{
+				Name:        "queue-size",
+				Label:       "VayDNS queue size",
+				Type:        InputTypeNumber,
+				Description: "Packet queue size (default 512). Must be > 0",
+				ShowIf: func(ctx *Context) bool {
+					return !ctx.IsInteractive && config.TransportType(ctx.GetString("transport")) == config.TransportVayDNS
+				},
+			},
+			{
+				Name:        "kcp-window-size",
+				Label:       "VayDNS KCP window size",
+				Type:        InputTypeNumber,
+				Description: "KCP send/receive window in packets (default: queue-size/2). Must be <= queue-size",
+				ShowIf: func(ctx *Context) bool {
+					return !ctx.IsInteractive && config.TransportType(ctx.GetString("transport")) == config.TransportVayDNS
+				},
+			},
+			{
+				Name:        "queue-overflow",
+				Label:       "VayDNS queue overflow mode",
+				Type:        InputTypeText,
+				Description: "Queue overflow behavior: drop (default) or block",
+				ShowIf: func(ctx *Context) bool {
+					return !ctx.IsInteractive && config.TransportType(ctx.GetString("transport")) == config.TransportVayDNS
+				},
+			},
+			{
+				Name:        "log-level",
+				Label:       "VayDNS log level",
+				Type:        InputTypeText,
+				Description: "Log level: debug, info (default), warning, error",
+				ShowIf: func(ctx *Context) bool {
+					return !ctx.IsInteractive && config.TransportType(ctx.GetString("transport")) == config.TransportVayDNS
+				},
+			},
 		},
 	})
 

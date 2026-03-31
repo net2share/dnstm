@@ -294,6 +294,18 @@ func (b *Builder) buildVayDNSTunnel(tunnel *config.TunnelConfig, backend *config
 	if n := tunnel.VayDNS.VayDNSClientIDSizeForFlag(); n > 0 {
 		args = append(args, "-clientid-size", strconv.Itoa(n))
 	}
+	if tunnel.VayDNS.QueueSize > 0 && tunnel.VayDNS.QueueSize != 512 {
+		args = append(args, "-queue-size", strconv.Itoa(tunnel.VayDNS.QueueSize))
+	}
+	if tunnel.VayDNS.KCPWindowSize > 0 {
+		args = append(args, "-kcp-window-size", strconv.Itoa(tunnel.VayDNS.KCPWindowSize))
+	}
+	if tunnel.VayDNS.QueueOverflow != "" && tunnel.VayDNS.QueueOverflow != "drop" {
+		args = append(args, "-queue-overflow", tunnel.VayDNS.QueueOverflow)
+	}
+	if tunnel.VayDNS.LogLevel != "" && tunnel.VayDNS.LogLevel != "info" {
+		args = append(args, "-log-level", tunnel.VayDNS.LogLevel)
+	}
 	// Do not pass -record-type: the DNS router does not yet support non-TXT record types.
 	// VayDNS defaults to TXT, which is what we need.
 
