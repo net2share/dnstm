@@ -43,8 +43,8 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 	transportType, err := tui.RunMenu(tui.MenuConfig{
 		Title: "Transport Type",
 		Options: []tui.MenuOption{
-			{Label: "DNSTT", Value: string(config.TransportDNSTT)},
 			{Label: "VayDNS", Value: string(config.TransportVayDNS)},
+			{Label: "DNSTT", Value: string(config.TransportDNSTT)},
 			{Label: "Slipstream", Value: string(config.TransportSlipstream)},
 		},
 	})
@@ -166,7 +166,7 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 	if config.TransportType(transportType) == config.TransportVayDNS {
 		confirm, confirmErr := tui.RunConfirm(tui.ConfirmConfig{
 			Title:       "DNSTT-compatible wire format?",
-			Description: "Enable only if clients use legacy dnstt-compatible mode (-dnstt-compat). Uses longer idle timeout and 8-byte client IDs on the server.",
+			Description: "Enable only if clients use dnstt-client and don't have vaydns-client. Uses 8-byte client IDs. May not work on some highly restricted UDP resolvers.",
 		})
 		if confirmErr != nil {
 			return confirmErr
@@ -262,7 +262,7 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 		for {
 			qsStr, confirmed, qsErr := tui.RunInput(tui.InputConfig{
 				Title:       "Queue Size",
-				Description: "Packet queue size for transport (1-65535)",
+				Description: "Packet queue size for transport (32-65535)",
 				Value:       "512",
 			})
 			if qsErr != nil {
@@ -275,8 +275,8 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 				qsStr = "512"
 			}
 			parsed, parseErr := strconv.Atoi(qsStr)
-			if parseErr != nil || parsed < 1 || parsed > 65535 {
-				ctx.Output.Error("Queue size must be between 1 and 65535")
+			if parseErr != nil || parsed < 32 || parsed > 65535 {
+				ctx.Output.Error("Queue size must be between 32 and 65535")
 				continue
 			}
 			vaydnsQueueSize = parsed
@@ -286,13 +286,13 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 		// record-type: only if not dnstt-compat (compat forces txt)
 		if !vaydnsDnsttCompat {
 			rtOptions := []tui.MenuOption{
-				{Label: "TXT (default)", Value: "txt"},
+				{Label: "TXT", Value: "txt"},
 				{Label: "CNAME", Value: "cname"},
+				{Label: "NS", Value: "ns"},
+				{Label: "MX", Value: "mx"},
+				{Label: "SRV", Value: "srv"},
 				{Label: "A", Value: "a"},
 				{Label: "AAAA", Value: "aaaa"},
-				{Label: "MX", Value: "mx"},
-				{Label: "NS", Value: "ns"},
-				{Label: "SRV", Value: "srv"},
 			}
 			rtValue, rtErr := tui.RunMenu(tui.MenuConfig{
 				Title:   "DNS Record Type",

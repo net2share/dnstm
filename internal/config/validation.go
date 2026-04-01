@@ -180,8 +180,8 @@ func (c *Config) validateTunnels() error {
 			if keep >= idle {
 				return fmt.Errorf("tunnel '%s': vaydns.keep_alive must be less than vaydns.idle_timeout", t.Tag)
 			}
-			if t.VayDNS.QueueSize < 0 {
-				return fmt.Errorf("tunnel '%s': vaydns.queue_size must be positive", t.Tag)
+			if t.VayDNS.QueueSize != 0 && t.VayDNS.QueueSize < 32 {
+				return fmt.Errorf("tunnel '%s': vaydns.queue_size must be at least 32", t.Tag)
 			}
 			if t.VayDNS.KCPWindowSize < 0 {
 				return fmt.Errorf("tunnel '%s': vaydns.kcp_window_size must not be negative", t.Tag)

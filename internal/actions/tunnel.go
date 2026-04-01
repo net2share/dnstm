@@ -296,7 +296,7 @@ func init() {
 				Name:        "dnstt-compat",
 				Label:       "DNSTT wire compatibility (VayDNS)",
 				Type:        InputTypeBool,
-				Description: "Match vaydns-server -dnstt-compat for legacy dnstt clients",
+				Description: "Enable for clients using dnstt-client instead of vaydns-client",
 				ShowIf: func(ctx *Context) bool {
 					return !ctx.IsInteractive && config.TransportType(ctx.GetString("transport")) == config.TransportVayDNS
 				},
@@ -341,7 +341,7 @@ func init() {
 				Name:        "queue-size",
 				Label:       "VayDNS queue size",
 				Type:        InputTypeNumber,
-				Description: "Packet queue size (default 512). Must be > 0",
+				Description: "Packet queue size (default 512). Must be at least 32",
 				ShowIf: func(ctx *Context) bool {
 					return !ctx.IsInteractive && config.TransportType(ctx.GetString("transport")) == config.TransportVayDNS
 				},
