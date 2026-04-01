@@ -18,12 +18,13 @@ const (
 
 // VersionManifest stores installed versions of transport binaries.
 type VersionManifest struct {
-	SlipstreamServer string    `json:"slipstream-server,omitempty"`
-	SSServer         string    `json:"ssserver,omitempty"`
-	Microsocks       string    `json:"microsocks,omitempty"`
-	SSHTunUser       string    `json:"sshtun-user,omitempty"`
-	VayDNSServer     string    `json:"vaydns-server,omitempty"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	SlipstreamServer     string    `json:"slipstream-server,omitempty"`
+	SlipstreamPlusServer string    `json:"slipstream-plus-server,omitempty"`
+	SSServer             string    `json:"ssserver,omitempty"`
+	Microsocks           string    `json:"microsocks,omitempty"`
+	SSHTunUser           string    `json:"sshtun-user,omitempty"`
+	VayDNSServer         string    `json:"vaydns-server,omitempty"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 // GetManifestPath returns the path to the version manifest file.
@@ -83,6 +84,8 @@ func (m *VersionManifest) GetVersion(binaryName string) string {
 		return m.SSHTunUser
 	case "vaydns-server":
 		return m.VayDNSServer
+	case "slipstream-plus-server":
+		return m.SlipstreamPlusServer
 	default:
 		return ""
 	}
@@ -101,6 +104,8 @@ func (m *VersionManifest) SetVersion(binaryName, version string) {
 		m.SSHTunUser = version
 	case "vaydns-server":
 		m.VayDNSServer = version
+	case "slipstream-plus-server":
+		m.SlipstreamPlusServer = version
 	}
 }
 

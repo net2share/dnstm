@@ -98,6 +98,7 @@ func checkBinaryUpdates(manifest *VersionManifest) []BinaryUpdate {
 		binary.BinaryMicrosocks,
 		binary.BinarySSHTunUser,
 		binary.BinaryVayDNSServer,
+		binary.BinarySlipstreamPlusServer,
 	}
 
 	for _, binType := range binariesToCheck {

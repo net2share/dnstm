@@ -25,13 +25,15 @@ const (
 	BinarySSServer         BinaryType = "ssserver"
 	BinaryMicrosocks       BinaryType = "microsocks"
 	BinarySSHTunUser       BinaryType = "sshtun-user"
-	BinaryVayDNSServer     BinaryType = "vaydns-server"
+	BinaryVayDNSServer          BinaryType = "vaydns-server"
+	BinarySlipstreamPlusServer  BinaryType = "slipstream-plus-server"
 
 	// Client binaries (used in testing)
-	BinaryDNSTTClient      BinaryType = "dnstt-client"
-	BinarySlipstreamClient BinaryType = "slipstream-client"
-	BinarySSLocal          BinaryType = "sslocal"
-	BinaryVayDNSClient     BinaryType = "vaydns-client"
+	BinaryDNSTTClient           BinaryType = "dnstt-client"
+	BinarySlipstreamClient      BinaryType = "slipstream-client"
+	BinarySSLocal               BinaryType = "sslocal"
+	BinaryVayDNSClient          BinaryType = "vaydns-client"
+	BinarySlipstreamPlusClient  BinaryType = "slipstream-plus-client"
 )
 
 // BinaryDef defines how to obtain a binary.
@@ -109,6 +111,15 @@ var DefaultBinaries = map[BinaryType]BinaryDef{
 			"windows": {"amd64"},
 		},
 	},
+	BinarySlipstreamPlusServer: {
+		Type:          BinarySlipstreamPlusServer,
+		EnvVar:        "DNSTM_SLIPSTREAM_PLUS_SERVER_PATH",
+		URLPattern:    "https://github.com/Fox-Fig/slipstream-rust-deploy/releases/latest/download/slipstream-server-{os}-{arch}",
+		PinnedVersion: "latest",
+		Platforms: map[string][]string{
+			"linux": {"amd64", "arm64"},
+		},
+	},
 
 	// Client binaries - pinned versions for testing only
 	BinaryDNSTTClient: {
@@ -151,6 +162,15 @@ var DefaultBinaries = map[BinaryType]BinaryDef{
 			"linux":   {"amd64", "arm64"},
 			"darwin":  {"amd64", "arm64"},
 			"windows": {"amd64"},
+		},
+	},
+	BinarySlipstreamPlusClient: {
+		Type:          BinarySlipstreamPlusClient,
+		EnvVar:        "DNSTM_TEST_SLIPSTREAM_PLUS_CLIENT_PATH",
+		URLPattern:    "https://github.com/Fox-Fig/slipstream-rust-deploy/releases/latest/download/slipstream-client-{os}-{arch}",
+		PinnedVersion: "latest", // Manual bump only
+		Platforms: map[string][]string{
+			"linux": {"amd64", "arm64"},
 		},
 	},
 }

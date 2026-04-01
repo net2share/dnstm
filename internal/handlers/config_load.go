@@ -189,7 +189,7 @@ func HandleConfigLoad(ctx *actions.Context) error {
 	for _, tunnel := range newCfg.Tunnels {
 		ctx.Output.Printf("\n  %s (%s):\n", tunnel.Tag, tunnel.Domain)
 		tunnelDir := filepath.Join(config.TunnelsDir, tunnel.Tag)
-		if tunnel.Transport == config.TransportSlipstream {
+		if tunnel.Transport == config.TransportSlipstream || tunnel.Transport == config.TransportSlipstreamPlus {
 			certPath := filepath.Join(tunnelDir, "cert.pem")
 			keyPath := filepath.Join(tunnelDir, "key.pem")
 			fingerprint, err := certs.ReadCertificateFingerprint(certPath)
@@ -277,6 +277,46 @@ func ensureTunnelService(ctx *actions.Context, tunnelCfg *config.TunnelConfig, c
 			}
 			tunnelCfg.Slipstream.Cert = certInfo.CertPath
 			tunnelCfg.Slipstream.Key = certInfo.KeyPath
+			ctx.Output.Status(fmt.Sprintf("Generated certificate for %s", tunnelCfg.Domain))
+		}
+	} else if tunnelCfg.Transport == config.TransportSlipstreamPlus {
+		if tunnelCfg.SlipstreamPlus == nil {
+			tunnelCfg.SlipstreamPlus = &config.SlipstreamPlusConfig{}
+		}
+		certProvided := tunnelCfg.SlipstreamPlus.Cert != ""
+		keyProvided := tunnelCfg.SlipstreamPlus.Key != ""
+		if certProvided || keyProvided {
+			if !certProvided || !keyProvided {
+				return fmt.Errorf("both cert and key paths must be provided for tunnel %s", tunnelCfg.Tag)
+			}
+			if _, err := os.Stat(tunnelCfg.SlipstreamPlus.Cert); err != nil {
+				return fmt.Errorf("certificate file not found: %s", tunnelCfg.SlipstreamPlus.Cert)
+			}
+			canRead, err := system.CanDnstmUserReadFile(tunnelCfg.SlipstreamPlus.Cert)
+			if err != nil {
+				return fmt.Errorf("failed to check certificate permissions: %w", err)
+			}
+			if !canRead {
+				return fmt.Errorf("dnstm user cannot read certificate file: %s", tunnelCfg.SlipstreamPlus.Cert)
+			}
+			if _, err := os.Stat(tunnelCfg.SlipstreamPlus.Key); err != nil {
+				return fmt.Errorf("key file not found: %s", tunnelCfg.SlipstreamPlus.Key)
+			}
+			canRead, err = system.CanDnstmUserReadFile(tunnelCfg.SlipstreamPlus.Key)
+			if err != nil {
+				return fmt.Errorf("failed to check key permissions: %w", err)
+			}
+			if !canRead {
+				return fmt.Errorf("dnstm user cannot read key file: %s", tunnelCfg.SlipstreamPlus.Key)
+			}
+			ctx.Output.Status(fmt.Sprintf("Using provided certificate for %s", tunnelCfg.Domain))
+		} else {
+			certInfo, err := certs.GetOrCreateInDir(tunnelDir, tunnelCfg.Domain)
+			if err != nil {
+				return fmt.Errorf("failed to generate certificate: %w", err)
+			}
+			tunnelCfg.SlipstreamPlus.Cert = certInfo.CertPath
+			tunnelCfg.SlipstreamPlus.Key = certInfo.KeyPath
 			ctx.Output.Status(fmt.Sprintf("Generated certificate for %s", tunnelCfg.Domain))
 		}
 	} else if tunnelCfg.Transport == config.TransportDNSTT {

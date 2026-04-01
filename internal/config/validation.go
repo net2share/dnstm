@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"regexp"
 	"time"
 )
@@ -109,7 +110,7 @@ func (c *Config) validateTunnels() error {
 			return fmt.Errorf("tunnel '%s': transport is required", t.Tag)
 		}
 
-		if t.Transport != TransportSlipstream && t.Transport != TransportDNSTT && t.Transport != TransportVayDNS {
+		if t.Transport != TransportSlipstream && t.Transport != TransportSlipstreamPlus && t.Transport != TransportDNSTT && t.Transport != TransportVayDNS {
 			return fmt.Errorf("tunnel '%s': unknown transport %s", t.Tag, t.Transport)
 		}
 
@@ -148,6 +149,21 @@ func (c *Config) validateTunnels() error {
 			return fmt.Errorf("tunnel '%s': domain '%s' already used by %s", t.Tag, t.Domain, existing)
 		}
 		usedDomains[t.Domain] = t.Tag
+
+		// Validate Slipstream Plus-specific config
+		if t.Transport == TransportSlipstreamPlus && t.SlipstreamPlus != nil {
+			if t.SlipstreamPlus.MaxConnections < 0 {
+				return fmt.Errorf("tunnel '%s': slipstream_plus.max_connections must not be negative", t.Tag)
+			}
+			if t.SlipstreamPlus.IdleTimeoutSeconds < 0 {
+				return fmt.Errorf("tunnel '%s': slipstream_plus.idle_timeout_seconds must not be negative", t.Tag)
+			}
+			if t.SlipstreamPlus.Fallback != "" {
+				if _, _, err := net.SplitHostPort(t.SlipstreamPlus.Fallback); err != nil {
+					return fmt.Errorf("tunnel '%s': slipstream_plus.fallback must be host:port: %w", t.Tag, err)
+				}
+			}
+		}
 
 		// Validate DNSTT-specific config
 		if t.Transport == TransportDNSTT && t.DNSTT != nil {
