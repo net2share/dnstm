@@ -58,41 +58,6 @@ func (vm *VersionManifest) Save() error {
 }
 
 // GetVersion returns the installed version for a binary.
-func (m *VersionManifest) GetVersion(binaryName string) string {
-	switch binaryName {
-	case "slipstream-server":
-		return m.SlipstreamServer
-	case "ssserver":
-		return m.SSServer
-	case "microsocks":
-		return m.Microsocks
-	case "sshtun-user":
-		return m.SSHTunUser
-	case "vaydns-server":
-		return m.VayDNSServer
-	case "slipstream-plus-server":
-		return m.SlipstreamPlusServer
-	default:
-		return ""
-	}
-}
-
-// SetVersion sets the installed version for a binary.
-func (m *VersionManifest) SetVersion(binaryName, version string) {
-	switch binaryName {
-	case "slipstream-server":
-		m.SlipstreamServer = version
-	case "ssserver":
-		m.SSServer = version
-	case "microsocks":
-		m.Microsocks = version
-	case "sshtun-user":
-		m.SSHTunUser = version
-	case "vaydns-server":
-		m.VayDNSServer = version
-	case "slipstream-plus-server":
-		m.SlipstreamPlusServer = version
-	}
 func (vm *VersionManifest) GetVersion(name string) string {
 	return vm.m.GetVersion(name)
 }
