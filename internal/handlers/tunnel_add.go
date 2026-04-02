@@ -46,6 +46,7 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 			{Label: "VayDNS", Value: string(config.TransportVayDNS)},
 			{Label: "DNSTT", Value: string(config.TransportDNSTT)},
 			{Label: "Slipstream", Value: string(config.TransportSlipstream)},
+			{Label: "Slipstream Plus", Value: string(config.TransportSlipstreamPlus)},
 		},
 	})
 	if err != nil {
@@ -335,6 +336,9 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 			RecordType:   vaydnsRecordType,
 		}
 	}
+	if tunnelCfg.Transport == config.TransportSlipstreamPlus {
+		tunnelCfg.SlipstreamPlus = &config.SlipstreamPlusConfig{}
+	}
 
 	// Allocate port
 	port := cfg.AllocateNextPort()
@@ -358,8 +362,8 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 	transportType := config.TransportType(transportStr)
 
 	// Validate transport type
-	if transportType != config.TransportSlipstream && transportType != config.TransportDNSTT && transportType != config.TransportVayDNS {
-		return fmt.Errorf("invalid transport type: %s (must be slipstream, dnstt, or vaydns)", transportType)
+	if transportType != config.TransportSlipstream && transportType != config.TransportSlipstreamPlus && transportType != config.TransportDNSTT && transportType != config.TransportVayDNS {
+		return fmt.Errorf("invalid transport type: %s (must be slipstream, slipstream-plus, dnstt, or vaydns)", transportType)
 	}
 
 	// Validate backend exists and is compatible
@@ -451,6 +455,9 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 			RecordType:    recordType,
 		}
 		tunnelCfg.VayDNS = v
+	}
+	if transportType == config.TransportSlipstreamPlus {
+		tunnelCfg.SlipstreamPlus = &config.SlipstreamPlusConfig{}
 	}
 
 	// Allocate port
@@ -585,6 +592,18 @@ func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *con
 			Cert: certInfo.CertPath,
 			Key:  certInfo.KeyPath,
 		}
+		ctx.Output.Status("TLS certificate ready")
+	} else if tunnelCfg.Transport == config.TransportSlipstreamPlus {
+		certInfo, err := certs.GetOrCreateInDir(tunnelDir, tunnelCfg.Domain)
+		if err != nil {
+			return fmt.Errorf("failed to generate certificate: %w", err)
+		}
+		fingerprint = certInfo.Fingerprint
+		if tunnelCfg.SlipstreamPlus == nil {
+			tunnelCfg.SlipstreamPlus = &config.SlipstreamPlusConfig{}
+		}
+		tunnelCfg.SlipstreamPlus.Cert = certInfo.CertPath
+		tunnelCfg.SlipstreamPlus.Key = certInfo.KeyPath
 		ctx.Output.Status("TLS certificate ready")
 	} else if tunnelCfg.Transport == config.TransportDNSTT {
 		keyInfo, err := keys.GetOrCreateInDir(tunnelDir)

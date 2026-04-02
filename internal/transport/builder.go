@@ -61,6 +61,12 @@ func VayDNSBinaryPath() string {
 	return path
 }
 
+// SlipstreamPlusBinaryPath returns the path to slipstream-plus-server.
+func SlipstreamPlusBinaryPath() string {
+	path, _ := getBinManager().GetPath(binary.BinarySlipstreamPlusServer)
+	return path
+}
+
 // BuildOptions configures how the transport should bind.
 type BuildOptions struct {
 	BindHost string // "127.0.0.1" for multi mode, or external IP for single mode
@@ -142,6 +148,8 @@ func (b *Builder) BuildTunnelService(tunnel *config.TunnelConfig, backend *confi
 		return b.buildDNSTTTunnel(tunnel, backend, targetAddr, opts, result)
 	case config.TransportVayDNS:
 		return b.buildVayDNSTunnel(tunnel, backend, targetAddr, opts, result)
+	case config.TransportSlipstreamPlus:
+		return b.buildSlipstreamPlusTunnel(tunnel, backend, targetAddr, opts, result)
 	default:
 		return nil, fmt.Errorf("unknown transport type: %s", tunnel.Transport)
 	}
@@ -221,6 +229,97 @@ func (b *Builder) buildSlipstreamShadowsocksTunnel(tunnel *config.TunnelConfig, 
 	result.ExecStart = fmt.Sprintf("%s -c %s", SSServerBinaryPath(), configPath)
 	result.ReadPaths = append(result.ReadPaths, configPath)
 
+	return result, nil
+}
+
+// buildSlipstreamPlusTunnel builds a Slipstream Plus-based tunnel service.
+func (b *Builder) buildSlipstreamPlusTunnel(tunnel *config.TunnelConfig, backend *config.BackendConfig, targetAddr string, opts *BuildOptions, result *TunnelBuildResult) (*TunnelBuildResult, error) {
+	if tunnel.SlipstreamPlus == nil || tunnel.SlipstreamPlus.Cert == "" || tunnel.SlipstreamPlus.Key == "" {
+		return nil, fmt.Errorf("slipstream-plus cert/key paths not set for tunnel %s", tunnel.Tag)
+	}
+
+	certPath := tunnel.SlipstreamPlus.Cert
+	keyPath := tunnel.SlipstreamPlus.Key
+	result.ReadPaths = append(result.ReadPaths, certPath, keyPath)
+
+	if backend.Type == config.BackendShadowsocks {
+		return b.buildSlipstreamPlusShadowsocksTunnel(tunnel, backend, certPath, keyPath, opts, result)
+	}
+
+	args := []string{
+		"--dns-listen-host", opts.BindHost,
+		"--domain", tunnel.Domain,
+		"--dns-listen-port", fmt.Sprintf("%d", opts.BindPort),
+		"--target-address", targetAddr,
+		"--cert", certPath,
+		"--key", keyPath,
+	}
+	if tunnel.SlipstreamPlus.MaxConnections > 0 {
+		args = append(args, "--max-connections", fmt.Sprintf("%d", tunnel.SlipstreamPlus.MaxConnections))
+	}
+	if tunnel.SlipstreamPlus.IdleTimeoutSeconds > 0 {
+		args = append(args, "--idle-timeout-seconds", fmt.Sprintf("%d", tunnel.SlipstreamPlus.IdleTimeoutSeconds))
+	}
+	if tunnel.SlipstreamPlus.Fallback != "" {
+		args = append(args, "--fallback", tunnel.SlipstreamPlus.Fallback)
+	}
+	if tunnel.SlipstreamPlus.ResetSeed != "" {
+		args = append(args, "--reset-seed", tunnel.SlipstreamPlus.ResetSeed)
+		result.ReadPaths = append(result.ReadPaths, tunnel.SlipstreamPlus.ResetSeed)
+	}
+
+	result.ExecStart = fmt.Sprintf("%s %s", SlipstreamPlusBinaryPath(), strings.Join(args, " "))
+	return result, nil
+}
+
+// buildSlipstreamPlusShadowsocksTunnel builds a Slipstream Plus + Shadowsocks tunnel using SIP003 plugin mode.
+func (b *Builder) buildSlipstreamPlusShadowsocksTunnel(tunnel *config.TunnelConfig, backend *config.BackendConfig, certPath, keyPath string, opts *BuildOptions, result *TunnelBuildResult) (*TunnelBuildResult, error) {
+	if backend.Shadowsocks == nil {
+		return nil, fmt.Errorf("shadowsocks backend missing configuration")
+	}
+
+	method := backend.Shadowsocks.Method
+	if method == "" {
+		method = "aes-256-gcm"
+	}
+
+	pluginOpts := fmt.Sprintf("domain=%s;dns-listen-host=%s;dns-listen-port=%d;cert=%s;key=%s",
+		tunnel.Domain, opts.BindHost, opts.BindPort, certPath, keyPath)
+	if tunnel.SlipstreamPlus.MaxConnections > 0 {
+		pluginOpts += fmt.Sprintf(";max-connections=%d", tunnel.SlipstreamPlus.MaxConnections)
+	}
+	if tunnel.SlipstreamPlus.IdleTimeoutSeconds > 0 {
+		pluginOpts += fmt.Sprintf(";idle-timeout-seconds=%d", tunnel.SlipstreamPlus.IdleTimeoutSeconds)
+	}
+	if tunnel.SlipstreamPlus.Fallback != "" {
+		pluginOpts += fmt.Sprintf(";fallback=%s", tunnel.SlipstreamPlus.Fallback)
+	}
+
+	ssConfig := map[string]interface{}{
+		"server":      opts.BindHost,
+		"server_port": opts.BindPort,
+		"password":    backend.Shadowsocks.Password,
+		"method":      method,
+		"mode":        "tcp_only",
+		"plugin":      SlipstreamPlusBinaryPath(),
+		"plugin_opts": pluginOpts,
+		"plugin_mode": "tcp_only",
+	}
+
+	configPath := filepath.Join(result.ConfigDir, "config.json")
+	data, err := json.MarshalIndent(ssConfig, "", "    ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal config: %w", err)
+	}
+	if err := os.WriteFile(configPath, data, 0644); err != nil {
+		return nil, fmt.Errorf("failed to write config: %w", err)
+	}
+	if err := system.ChownToDnstm(configPath); err != nil {
+		return nil, fmt.Errorf("failed to set config file ownership: %w", err)
+	}
+
+	result.ExecStart = fmt.Sprintf("%s -c %s", SSServerBinaryPath(), configPath)
+	result.ReadPaths = append(result.ReadPaths, configPath)
 	return result, nil
 }
 

@@ -77,10 +77,13 @@ func HandleTunnelStatus(ctx *actions.Context) error {
 
 	// Show certificate/key info based on transport type
 	tunnelDir := filepath.Join(config.TunnelsDir, tunnelCfg.Tag)
-	if tunnelCfg.Transport == config.TransportSlipstream {
+	if tunnelCfg.Transport == config.TransportSlipstream || tunnelCfg.Transport == config.TransportSlipstreamPlus {
 		certPath := filepath.Join(tunnelDir, "cert.pem")
 		if tunnelCfg.Slipstream != nil && tunnelCfg.Slipstream.Cert != "" {
 			certPath = tunnelCfg.Slipstream.Cert
+		}
+		if tunnelCfg.SlipstreamPlus != nil && tunnelCfg.SlipstreamPlus.Cert != "" {
+			certPath = tunnelCfg.SlipstreamPlus.Cert
 		}
 		fingerprint, err := certs.ReadCertificateFingerprint(certPath)
 		if err == nil {
@@ -147,10 +150,13 @@ func HandleTunnelStatus(ctx *actions.Context) error {
 	ctx.Output.Println()
 	ctx.Output.Println(tunnel.GetFormattedInfo())
 
-	if tunnelCfg.Transport == config.TransportSlipstream {
+	if tunnelCfg.Transport == config.TransportSlipstream || tunnelCfg.Transport == config.TransportSlipstreamPlus {
 		certPath := filepath.Join(tunnelDir, "cert.pem")
 		if tunnelCfg.Slipstream != nil && tunnelCfg.Slipstream.Cert != "" {
 			certPath = tunnelCfg.Slipstream.Cert
+		}
+		if tunnelCfg.SlipstreamPlus != nil && tunnelCfg.SlipstreamPlus.Cert != "" {
+			certPath = tunnelCfg.SlipstreamPlus.Cert
 		}
 		fingerprint, err := certs.ReadCertificateFingerprint(certPath)
 		if err == nil {

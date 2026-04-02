@@ -17,6 +17,13 @@ const (
 
 // VersionManifest wraps binman.VersionManifest with DNSTM-specific path handling.
 type VersionManifest struct {
+	SlipstreamServer     string    `json:"slipstream-server,omitempty"`
+	SlipstreamPlusServer string    `json:"slipstream-plus-server,omitempty"`
+	SSServer             string    `json:"ssserver,omitempty"`
+	Microsocks           string    `json:"microsocks,omitempty"`
+	SSHTunUser           string    `json:"sshtun-user,omitempty"`
+	VayDNSServer         string    `json:"vaydns-server,omitempty"`
+	UpdatedAt            time.Time `json:"updated_at"`
 	m *binman.VersionManifest
 }
 

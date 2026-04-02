@@ -4,28 +4,40 @@ package config
 type TransportType string
 
 const (
-	TransportSlipstream TransportType = "slipstream"
-	TransportDNSTT      TransportType = "dnstt"
-	TransportVayDNS     TransportType = "vaydns"
+	TransportSlipstream     TransportType = "slipstream"
+	TransportSlipstreamPlus TransportType = "slipstream-plus"
+	TransportDNSTT          TransportType = "dnstt"
+	TransportVayDNS         TransportType = "vaydns"
 )
 
 // TunnelConfig configures a DNS tunnel.
 type TunnelConfig struct {
-	Tag        string            `json:"tag"`
-	Enabled    *bool             `json:"enabled,omitempty"`
-	Transport  TransportType     `json:"transport"`
-	Backend    string            `json:"backend"`
-	Domain     string            `json:"domain"`
-	Port       int               `json:"port,omitempty"`
-	Slipstream *SlipstreamConfig `json:"slipstream,omitempty"`
-	DNSTT      *DNSTTConfig      `json:"dnstt,omitempty"`
-	VayDNS     *VayDNSConfig     `json:"vaydns,omitempty"`
+	Tag            string                `json:"tag"`
+	Enabled        *bool                 `json:"enabled,omitempty"`
+	Transport      TransportType         `json:"transport"`
+	Backend        string                `json:"backend"`
+	Domain         string                `json:"domain"`
+	Port           int                   `json:"port,omitempty"`
+	Slipstream     *SlipstreamConfig     `json:"slipstream,omitempty"`
+	SlipstreamPlus *SlipstreamPlusConfig `json:"slipstream_plus,omitempty"`
+	DNSTT          *DNSTTConfig          `json:"dnstt,omitempty"`
+	VayDNS         *VayDNSConfig         `json:"vaydns,omitempty"`
 }
 
 // SlipstreamConfig holds Slipstream-specific configuration.
 type SlipstreamConfig struct {
 	Cert string `json:"cert,omitempty"`
 	Key  string `json:"key,omitempty"`
+}
+
+// SlipstreamPlusConfig holds Slipstream Plus-specific configuration.
+type SlipstreamPlusConfig struct {
+	Cert               string `json:"cert,omitempty"`
+	Key                string `json:"key,omitempty"`
+	MaxConnections     int    `json:"max_connections,omitempty"`
+	IdleTimeoutSeconds int    `json:"idle_timeout_seconds,omitempty"`
+	Fallback           string `json:"fallback,omitempty"`
+	ResetSeed          string `json:"reset_seed,omitempty"`
 }
 
 // DNSTTConfig holds DNSTT-specific configuration.
@@ -116,6 +128,11 @@ func (t *TunnelConfig) IsSlipstream() bool {
 	return t.Transport == TransportSlipstream
 }
 
+// IsSlipstreamPlus returns true if this is a Slipstream Plus tunnel.
+func (t *TunnelConfig) IsSlipstreamPlus() bool {
+	return t.Transport == TransportSlipstreamPlus
+}
+
 // IsDNSTT returns true if this is a DNSTT tunnel.
 func (t *TunnelConfig) IsDNSTT() bool {
 	return t.Transport == TransportDNSTT
@@ -130,6 +147,7 @@ func (t *TunnelConfig) IsVayDNS() bool {
 func GetTransportTypes() []TransportType {
 	return []TransportType{
 		TransportSlipstream,
+		TransportSlipstreamPlus,
 		TransportDNSTT,
 		TransportVayDNS,
 	}
@@ -140,6 +158,8 @@ func GetTransportTypeDisplayName(t TransportType) string {
 	switch t {
 	case TransportSlipstream:
 		return "Slipstream"
+	case TransportSlipstreamPlus:
+		return "Slipstream Plus"
 	case TransportDNSTT:
 		return "DNSTT"
 	case TransportVayDNS:

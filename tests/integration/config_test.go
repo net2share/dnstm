@@ -167,6 +167,20 @@ func TestConfigSerialization(t *testing.T) {
 					Fallback:    "127.0.0.1:8888",
 				},
 			},
+			{
+				Tag:       "tunnel-d",
+				Transport: config.TransportSlipstreamPlus,
+				Backend:   "socks",
+				Domain:    "d.example.com",
+				Port:      5313,
+				SlipstreamPlus: &config.SlipstreamPlusConfig{
+					Cert:               "/path/to/plus-cert",
+					Key:                "/path/to/plus-key",
+					MaxConnections:     128,
+					IdleTimeoutSeconds: 30,
+					Fallback:           "127.0.0.1:9999",
+				},
+			},
 		},
 	}
 
@@ -193,8 +207,8 @@ func TestConfigSerialization(t *testing.T) {
 		t.Errorf("len(Backends) = %d, want 2", len(loaded.Backends))
 	}
 
-	if len(loaded.Tunnels) != 3 {
-		t.Errorf("len(Tunnels) = %d, want 3", len(loaded.Tunnels))
+	if len(loaded.Tunnels) != 4 {
+		t.Errorf("len(Tunnels) = %d, want 4", len(loaded.Tunnels))
 	}
 
 	// Verify shadowsocks config
@@ -241,6 +255,24 @@ func TestConfigSerialization(t *testing.T) {
 	if vaydns.VayDNS.Fallback != "127.0.0.1:8888" {
 		t.Errorf("vaydns.VayDNS.Fallback = %q, want '127.0.0.1:8888'", vaydns.VayDNS.Fallback)
 	}
+
+	// Verify Slipstream Plus config
+	plus := loaded.GetTunnelByTag("tunnel-d")
+	if plus == nil {
+		t.Fatal("tunnel-d not found")
+	}
+	if plus.SlipstreamPlus == nil {
+		t.Fatal("plus.SlipstreamPlus is nil")
+	}
+	if plus.SlipstreamPlus.MaxConnections != 128 {
+		t.Errorf("plus.SlipstreamPlus.MaxConnections = %d, want 128", plus.SlipstreamPlus.MaxConnections)
+	}
+	if plus.SlipstreamPlus.IdleTimeoutSeconds != 30 {
+		t.Errorf("plus.SlipstreamPlus.IdleTimeoutSeconds = %d, want 30", plus.SlipstreamPlus.IdleTimeoutSeconds)
+	}
+	if plus.SlipstreamPlus.Fallback != "127.0.0.1:9999" {
+		t.Errorf("plus.SlipstreamPlus.Fallback = %q, want '127.0.0.1:9999'", plus.SlipstreamPlus.Fallback)
+	}
 }
 
 func TestConfigApplyDefaults(t *testing.T) {
@@ -275,6 +307,12 @@ func TestConfigApplyDefaults(t *testing.T) {
 				VayDNS: &config.VayDNSConfig{
 					DnsttCompat: true,
 				},
+			},
+			{
+				Tag:       "tunnel-e",
+				Transport: config.TransportSlipstreamPlus,
+				Backend:   "socks",
+				Domain:    "e.example.com",
 			},
 		},
 	}
@@ -345,6 +383,17 @@ func TestConfigApplyDefaults(t *testing.T) {
 	}
 	if vaydnsCompat.VayDNS.ClientIDSize != 0 {
 		t.Errorf("compat VayDNS.ClientIDSize = %d, want 0 (server uses 8-byte ID)", vaydnsCompat.VayDNS.ClientIDSize)
+	}
+
+	plus := cfg.GetTunnelByTag("tunnel-e")
+	if plus.SlipstreamPlus == nil {
+		t.Fatal("SlipstreamPlus config should be created")
+	}
+	if plus.SlipstreamPlus.MaxConnections != 256 {
+		t.Errorf("SlipstreamPlus.MaxConnections = %d, want 256", plus.SlipstreamPlus.MaxConnections)
+	}
+	if plus.SlipstreamPlus.IdleTimeoutSeconds != 60 {
+		t.Errorf("SlipstreamPlus.IdleTimeoutSeconds = %d, want 60", plus.SlipstreamPlus.IdleTimeoutSeconds)
 	}
 }
 
