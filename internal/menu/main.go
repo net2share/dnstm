@@ -419,6 +419,8 @@ func runTunnelManageMenu(tag string) error {
 		// Build context-aware options
 		options := []tui.MenuOption{
 			{Label: "Status", Value: "status"},
+			{Label: "Stats", Value: "stats"},
+			{Label: "Metrics", Value: "metrics"},
 			{Label: "Share", Value: "share"},
 			{Label: "Logs", Value: "logs"},
 		}
@@ -478,7 +480,8 @@ func runTunnelAction(actionID, tunnelTag string) error {
 	// Special handling for actions that need the tunnel tag
 	switch actionID {
 	case actions.ActionTunnelStatus, actions.ActionTunnelShare, actions.ActionTunnelLogs,
-		actions.ActionTunnelStart, actions.ActionTunnelStop, actions.ActionTunnelRestart, actions.ActionTunnelRemove:
+		actions.ActionTunnelStart, actions.ActionTunnelStop, actions.ActionTunnelRestart,
+		actions.ActionTunnelRemove, actions.ActionTunnelStats, actions.ActionTunnelMetrics:
 		return runActionWithArgs(actionID, []string{tunnelTag})
 	default:
 		return RunAction(actionID)
