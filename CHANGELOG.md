@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.7.0](https://github.com/net2share/dnstm/compare/v0.6.8...v0.7.0) (2026-04-02)
+
+
+### Features
+
+* add VayDNS transport support ([#78](https://github.com/net2share/dnstm/issues/78)) ([dcba892](https://github.com/net2share/dnstm/commit/dcba892d810d3570203638b39e94d2ecb8a7784d))
+* improve TUI menus, share output, and update flow ([2d46059](https://github.com/net2share/dnstm/commit/2d46059aba61d13400ad5969fb52009d741f9e93))
+* **vaydns:** add full VayDNS config support to TUI and CLI ([7e70d37](https://github.com/net2share/dnstm/commit/7e70d37633447f90e19d7e005731a670b9312d10))
+* **vaydns:** add queue-size, kcp-window-size, queue-overflow, log-level ([fae0e84](https://github.com/net2share/dnstm/commit/fae0e8457ed1dea6e338b1296746b580f1401e2d))
+* **vaydns:** add record-type support ([0f16054](https://github.com/net2share/dnstm/commit/0f1605412bd44cc0961ef2874bdb11804700d2f5))
+
+
+### Bug Fixes
+
+* enforce domain uniqueness only in multi mode ([d009f7e](https://github.com/net2share/dnstm/commit/d009f7e7095b6bc301b9626190de33324cb63050))
+* **vaydns:** add missing status display, config load, and e2e support ([231be0b](https://github.com/net2share/dnstm/commit/231be0bb337428301aae16ca2f591dd19e833ddd))
+* **vaydns:** improve TUI labels and queue-size minimum ([8f6f04b](https://github.com/net2share/dnstm/commit/8f6f04b82b2bf075e19578ac26d7c67fad48f96a))
+* **vaydns:** include transport-specific fields in share links ([a366f17](https://github.com/net2share/dnstm/commit/a366f174c74a0a2141d84b0941960a461170950c))
+* **vaydns:** integrate with update, install, uninstall, and status systems ([2361b41](https://github.com/net2share/dnstm/commit/2361b4149e027930b9d1f67afcf813d4e9b6fbab))
+* **vaydns:** version bump, kebab-case flags, display info, re-exports ([b96de6b](https://github.com/net2share/dnstm/commit/b96de6b5dfe22bc7244167c2c229b4cf38402bdf))
+
 ## [0.6.8](https://github.com/net2share/dnstm/compare/v0.6.7...v0.6.8) (2026-03-06)
 
 
