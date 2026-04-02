@@ -166,11 +166,13 @@ func endProgress(ctx *actions.Context) {
 }
 
 // failProgress shows an error in the progress view and returns the error.
-// Unlike the previous pattern, this always returns the error instead of swallowing it.
+// In interactive mode, the error is displayed in the progress view and nil is
+// returned to prevent the menu from showing the same error again.
 func failProgress(ctx *actions.Context, err error) error {
 	if ctx.IsInteractive {
 		ctx.Output.Error(fmt.Sprintf("Failed: %v", err))
 		ctx.Output.EndProgress()
+		return nil
 	}
 	return err
 }

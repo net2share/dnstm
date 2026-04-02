@@ -163,6 +163,11 @@ Status:    %s
 		} else if v.ClientIDSize > 0 {
 			info += fmt.Sprintf("ClientID:  %d bytes\n", v.ClientIDSize)
 		}
+		rt := v.RecordType
+		if rt == "" {
+			rt = "txt"
+		}
+		info += fmt.Sprintf("Record:    %s\n", rt)
 	}
 	return info
 }

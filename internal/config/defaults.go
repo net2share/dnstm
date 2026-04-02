@@ -84,11 +84,15 @@ func (c *Config) ApplyDefaults() {
 				if t.VayDNS.DnsttCompat {
 					t.VayDNS.IdleTimeout = "2m"
 				} else {
-					t.VayDNS.IdleTimeout = "60s"
+					t.VayDNS.IdleTimeout = "10s"
 				}
 			}
 			if t.VayDNS.KeepAlive == "" {
-				t.VayDNS.KeepAlive = "10s"
+				if t.VayDNS.DnsttCompat {
+					t.VayDNS.KeepAlive = "10s"
+				} else {
+					t.VayDNS.KeepAlive = "2s"
+				}
 			}
 			if t.VayDNS.QueueSize == 0 {
 				t.VayDNS.QueueSize = 512

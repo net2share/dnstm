@@ -651,24 +651,61 @@ func TestTunnelDuplicatePorts(t *testing.T) {
 	}
 }
 
-func TestTunnelDuplicateDomains(t *testing.T) {
+func TestTunnelDuplicateDomains_MultiMode(t *testing.T) {
 	cfg := &config.Config{
 		Backends: []config.BackendConfig{
 			{Tag: "socks", Type: config.BackendSOCKS, Address: "127.0.0.1:1080"},
 		},
 		Tunnels: []config.TunnelConfig{
 			{Tag: "tunnel-a", Transport: config.TransportSlipstream, Backend: "socks", Domain: "same.example.com", Port: 5310},
-			{Tag: "tunnel-b", Transport: config.TransportSlipstream, Backend: "socks", Domain: "same.example.com", Port: 5311}, // Duplicate domain
+			{Tag: "tunnel-b", Transport: config.TransportSlipstream, Backend: "socks", Domain: "same.example.com", Port: 5311},
 		},
+		Route: config.RouteConfig{Mode: "multi"},
 	}
 
 	err := cfg.Validate()
 	if err == nil {
-		t.Fatal("expected error for duplicate domains")
+		t.Fatal("expected error for duplicate domains in multi mode")
 	}
 
 	if !strings.Contains(err.Error(), "already used") {
 		t.Errorf("error = %q, expected 'already used'", err.Error())
+	}
+}
+
+func TestTunnelDuplicateDomains_SingleMode(t *testing.T) {
+	cfg := &config.Config{
+		Backends: []config.BackendConfig{
+			{Tag: "socks", Type: config.BackendSOCKS, Address: "127.0.0.1:1080"},
+		},
+		Tunnels: []config.TunnelConfig{
+			{Tag: "tunnel-a", Transport: config.TransportSlipstream, Backend: "socks", Domain: "same.example.com", Port: 5310},
+			{Tag: "tunnel-b", Transport: config.TransportSlipstream, Backend: "socks", Domain: "same.example.com", Port: 5311},
+		},
+		Route: config.RouteConfig{Mode: "single"},
+	}
+
+	err := cfg.Validate()
+	if err != nil {
+		t.Fatalf("duplicate domains should be allowed in single mode, got: %v", err)
+	}
+}
+
+func TestTunnelDuplicateDomains_DefaultMode(t *testing.T) {
+	// Default mode (empty) is single — duplicates should be allowed
+	cfg := &config.Config{
+		Backends: []config.BackendConfig{
+			{Tag: "socks", Type: config.BackendSOCKS, Address: "127.0.0.1:1080"},
+		},
+		Tunnels: []config.TunnelConfig{
+			{Tag: "tunnel-a", Transport: config.TransportSlipstream, Backend: "socks", Domain: "same.example.com", Port: 5310},
+			{Tag: "tunnel-b", Transport: config.TransportSlipstream, Backend: "socks", Domain: "same.example.com", Port: 5311},
+		},
+	}
+
+	err := cfg.Validate()
+	if err != nil {
+		t.Fatalf("duplicate domains should be allowed in default (single) mode, got: %v", err)
 	}
 }
 

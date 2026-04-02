@@ -6,7 +6,7 @@ For setting up the testing environment and running tests, see the [Testing Guide
 
 ## Binary Version Pinning
 
-Transport binaries (slipstream-server, dnstt-server, ssserver, microsocks, sshtun-user) have their versions pinned in the codebase. Each dnstm release specifies exact binary versions it expects.
+Transport binaries (slipstream-server, dnstt-server, vaydns-server, ssserver, microsocks, sshtun-user) have their versions pinned in the codebase. Each dnstm release specifies exact binary versions it expects.
 
 ### How It Works
 
@@ -40,6 +40,7 @@ The manifest at `/etc/dnstm/versions.json` tracks installed binary versions:
 ```json
 {
   "slipstream-server": "v2026.02.05",
+  "vaydns-server": "v0.2.7",
   "ssserver": "v1.24.0",
   "microsocks": "v1.0.5",
   "sshtun-user": "v0.3.4",

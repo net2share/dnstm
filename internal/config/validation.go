@@ -144,11 +144,14 @@ func (c *Config) validateTunnels() error {
 			usedPorts[t.Port] = t.Tag
 		}
 
-		// Check domain uniqueness
-		if existing, ok := usedDomains[t.Domain]; ok {
-			return fmt.Errorf("tunnel '%s': domain '%s' already used by %s", t.Tag, t.Domain, existing)
+		// Check domain uniqueness (only in multi mode — single mode allows duplicates
+		// since only one tunnel is active at a time)
+		if c.IsMultiMode() {
+			if existing, ok := usedDomains[t.Domain]; ok {
+				return fmt.Errorf("tunnel '%s': domain '%s' already used by %s", t.Tag, t.Domain, existing)
+			}
+			usedDomains[t.Domain] = t.Tag
 		}
-		usedDomains[t.Domain] = t.Tag
 
 		// Validate Slipstream Plus-specific config
 		if t.Transport == TransportSlipstreamPlus && t.SlipstreamPlus != nil {

@@ -108,27 +108,18 @@ func HandleTunnelShare(ctx *actions.Context) error {
 	}
 
 	if ctx.IsInteractive {
-		infoCfg := actions.InfoConfig{
-			Title:    fmt.Sprintf("Share: %s", tag),
-			CopyText: url,
-			Sections: []actions.InfoSection{
-				{
-					Title: "Client Config URL",
-					Rows: []actions.InfoRow{
-						{Value: url},
-					},
-				},
-				{
-					Title: "Details",
-					Rows: []actions.InfoRow{
-						{Key: "Transport", Value: config.GetTransportTypeDisplayName(tunnelCfg.Transport)},
-						{Key: "Backend", Value: config.GetBackendTypeDisplayName(backend.Type)},
-						{Key: "Domain", Value: tunnelCfg.Domain},
-					},
-				},
-			},
-		}
-		return ctx.Output.ShowInfo(infoCfg)
+		// Print directly to terminal (not TUI) so the URL is easily selectable
+		fmt.Println()
+		fmt.Printf("Share: %s\n\n", tag)
+		fmt.Println(url)
+		fmt.Println()
+		fmt.Printf("Transport: %s\n", config.GetTransportTypeDisplayName(tunnelCfg.Transport))
+		fmt.Printf("Backend:   %s\n", config.GetBackendTypeDisplayName(backend.Type))
+		fmt.Printf("Domain:    %s\n", tunnelCfg.Domain)
+		fmt.Println()
+		fmt.Print("Press Enter to continue...")
+		fmt.Scanln()
+		return nil
 	}
 
 	ctx.Output.Println(url)

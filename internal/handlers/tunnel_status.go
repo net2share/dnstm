@@ -67,6 +67,11 @@ func HandleTunnelStatus(ctx *actions.Context) error {
 		} else if v.ClientIDSize > 0 {
 			mainSection.Rows = append(mainSection.Rows, actions.InfoRow{Key: "Client ID", Value: fmt.Sprintf("%d bytes", v.ClientIDSize)})
 		}
+		rt := v.RecordType
+		if rt == "" {
+			rt = "txt"
+		}
+		mainSection.Rows = append(mainSection.Rows, actions.InfoRow{Key: "Record Type", Value: rt})
 	}
 	infoCfg.Sections = append(infoCfg.Sections, mainSection)
 

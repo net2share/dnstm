@@ -74,10 +74,10 @@ func HandleUpdate(ctx *actions.Context) error {
 	// Confirm updates
 	if !force {
 		if ctx.IsInteractive {
-			ctx.Output.EndProgress()
+			ctx.Output.DismissProgress()
 			confirm, err := tui.RunConfirm(tui.ConfirmConfig{
 				Title:       "Install updates?",
-				Description: "The updates listed above will be installed.",
+				Description: formatUpdateSummary(report),
 			})
 			if err != nil {
 				return err
@@ -138,6 +138,22 @@ func HandleUpdate(ctx *actions.Context) error {
 		ctx.Output.EndProgress()
 	}
 	return nil
+}
+
+// formatUpdateSummary builds a summary string of available updates for the confirm dialog.
+func formatUpdateSummary(report *updater.UpdateReport) string {
+	var lines []string
+	if report.DnstmUpdate != nil {
+		lines = append(lines, fmt.Sprintf("dnstm: %s → %s", report.DnstmUpdate.Current, report.DnstmUpdate.Latest))
+	}
+	for _, u := range report.BinaryUpdates {
+		current := u.CurrentVersion
+		if current == "" {
+			current = "?"
+		}
+		lines = append(lines, fmt.Sprintf("%s: %s → %s", u.Binary, current, u.LatestVersion))
+	}
+	return strings.Join(lines, "\n")
 }
 
 // displayUpdateReport shows available updates to the user.

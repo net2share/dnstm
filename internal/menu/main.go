@@ -307,9 +307,26 @@ func runTunnelMenu() error {
 	for {
 		options := []tui.MenuOption{
 			{Label: "Add", Value: actions.ActionTunnelAdd},
-			{Label: "List →", Value: "list"},
-			{Label: "Back", Value: "back"},
 		}
+
+		// Load tunnels and show inline list
+		cfg, _ := config.Load()
+		if cfg != nil && len(cfg.Tunnels) > 0 {
+			options = append(options, tui.MenuOption{Separator: true})
+			for _, t := range cfg.Tunnels {
+				tunnel := router.NewTunnel(&t)
+				status := "○"
+				if tunnel.IsActive() {
+					status = "●"
+				}
+				transportName := config.GetTransportTypeDisplayName(t.Transport)
+				label := fmt.Sprintf("%s %s (%s → %s)", status, t.Tag, transportName, t.Backend)
+				options = append(options, tui.MenuOption{Label: label, Value: "tunnel:" + t.Tag})
+			}
+		}
+
+		options = append(options, tui.MenuOption{Separator: true})
+		options = append(options, tui.MenuOption{Label: "Back", Value: "back"})
 
 		choice, err := tui.RunMenu(tui.MenuConfig{
 			Title:   "Tunnels",
@@ -319,17 +336,18 @@ func runTunnelMenu() error {
 			return errCancelled
 		}
 
-		switch choice {
-		case actions.ActionTunnelAdd:
+		switch {
+		case choice == actions.ActionTunnelAdd:
 			if err := RunAction(actions.ActionTunnelAdd); err != nil {
 				if err != errCancelled {
 					_ = tui.ShowMessage(tui.AppMessage{Type: "error", Message: err.Error()})
 				}
 			}
-			// No WaitForEnter needed - progress view handles its own dismissal
-		case "list":
-			// List menu handles its own navigation
-			_ = runTunnelListMenu()
+		case strings.HasPrefix(choice, "tunnel:"):
+			tag := strings.TrimPrefix(choice, "tunnel:")
+			if err := runTunnelManageMenu(tag); err != errCancelled {
+				tui.WaitForEnter()
+			}
 		}
 	}
 }
@@ -503,10 +521,25 @@ func runBackendMenu() error {
 	for {
 		options := []tui.MenuOption{
 			{Label: "Add", Value: actions.ActionBackendAdd},
-			{Label: "List →", Value: "list"},
-			{Label: "Available Types", Value: actions.ActionBackendAvailable},
-			{Label: "Back", Value: "back"},
 		}
+
+		// Load backends and show inline list
+		cfg, _ := config.Load()
+		if cfg != nil && len(cfg.Backends) > 0 {
+			options = append(options, tui.MenuOption{Separator: true})
+			for _, b := range cfg.Backends {
+				typeName := config.GetBackendTypeDisplayName(b.Type)
+				builtIn := ""
+				if b.IsBuiltIn() {
+					builtIn = " [built-in]"
+				}
+				label := fmt.Sprintf("%s (%s)%s", b.Tag, typeName, builtIn)
+				options = append(options, tui.MenuOption{Label: label, Value: "backend:" + b.Tag})
+			}
+		}
+
+		options = append(options, tui.MenuOption{Separator: true})
+		options = append(options, tui.MenuOption{Label: "Back", Value: "back"})
 
 		choice, err := tui.RunMenu(tui.MenuConfig{
 			Title:   "Backends",
@@ -516,8 +549,8 @@ func runBackendMenu() error {
 			return errCancelled
 		}
 
-		switch choice {
-		case actions.ActionBackendAdd:
+		switch {
+		case choice == actions.ActionBackendAdd:
 			if err := RunAction(actions.ActionBackendAdd); err != nil {
 				if err != errCancelled {
 					_ = tui.ShowMessage(tui.AppMessage{Type: "error", Message: err.Error()})
@@ -525,16 +558,11 @@ func runBackendMenu() error {
 			} else if !isInfoViewAction(actions.ActionBackendAdd) {
 				tui.WaitForEnter()
 			}
-		case "list":
-			// List menu handles its own navigation
-			_ = runBackendListMenu()
-		case actions.ActionBackendAvailable:
-			if err := RunAction(actions.ActionBackendAvailable); err != nil {
-				if err != errCancelled {
-					_ = tui.ShowMessage(tui.AppMessage{Type: "error", Message: err.Error()})
-				}
+		case strings.HasPrefix(choice, "backend:"):
+			tag := strings.TrimPrefix(choice, "backend:")
+			if err := runBackendManageMenu(tag); err != errCancelled {
+				tui.WaitForEnter()
 			}
-			// No WaitForEnter needed - ShowInfo handles its own dismissal
 		}
 	}
 }

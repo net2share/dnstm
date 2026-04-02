@@ -2,23 +2,24 @@
 
 ## Overview
 
-dnstm manages DNS tunnel services on Linux servers. It supports two transport protocols (Slipstream and DNSTT) and four backend types.
+dnstm manages DNS tunnel services on Linux servers. It supports three transport protocols (Slipstream, DNSTT, and VayDNS) and four backend types.
 
 ## Transport Types
 
-| Transport | Description |
-|-----------|-------------|
-| `slipstream` | High-performance DNS tunnel with TLS encryption |
-| `dnstt` | Classic DNS tunnel with Curve25519 encryption |
+| Transport    | Description                                                |
+| ------------ | ---------------------------------------------------------- |
+| `slipstream` | High-performance DNS tunnel with TLS encryption            |
+| `dnstt`      | Classic DNS tunnel with Curve25519 encryption              |
+| `vaydns`     | Next-gen DNS tunnel with Curve25519 keys and KCP transport |
 
 Transports forward traffic to backends:
 
-| Backend Type | Description | Transport Support |
-|--------------|-------------|-------------------|
-| `socks` | Built-in SOCKS5 proxy (microsocks) | Both |
-| `ssh` | Built-in SSH server | Both |
-| `shadowsocks` | Shadowsocks server (SIP003 plugin) | Slipstream only |
-| `custom` | Custom target address | Both |
+| Backend Type  | Description                        | Transport Support |
+| ------------- | ---------------------------------- | ----------------- |
+| `socks`       | Built-in SOCKS5 proxy (microsocks) | All               |
+| `ssh`         | Built-in SSH server                | All               |
+| `shadowsocks` | Shadowsocks server (SIP003 plugin) | Slipstream only   |
+| `custom`      | Custom target address              | All               |
 
 ## Operating Modes
 
@@ -69,6 +70,7 @@ Transports forward traffic to backends:
 ### Router (`/etc/dnstm/config.json`)
 
 Central configuration managing:
+
 - Operating mode (single/multi)
 - Tunnels and backends
 - Routing rules
@@ -86,12 +88,20 @@ Individual systemd services for each configured tunnel. Each runs on an auto-all
 Each tunnel stores its cryptographic material in `/etc/dnstm/tunnels/<tag>/`:
 
 **Slipstream** — TLS certificates:
+
 - `cert.pem`, `key.pem` (ECDSA P-256, 10-year validity, self-signed)
 - SHA256 fingerprints for client verification
 
 **DNSTT** — Curve25519 key pairs:
+
 - `server.key`, `server.pub` (64-character hex strings)
 - Public key for client verification
+
+**VayDNS** — Curve25519 key pairs:
+
+- `server.key`, `server.pub` (same format as DNSTT)
+- Public key for client verification
+- Supports dnstt-compatible wire format for backward compatibility
 
 ## Directory Structure
 
@@ -111,6 +121,7 @@ Each tunnel stores its cryptographic material in `/etc/dnstm/tunnels/<tag>/`:
 ├── dnstm                 # CLI binary
 ├── slipstream-server     # Slipstream binary
 ├── dnstt-server          # DNSTT binary
+├── vaydns-server         # VayDNS binary
 ├── ssserver              # Shadowsocks binary
 ├── microsocks            # SOCKS proxy binary
 └── sshtun-user           # SSH user management tool
@@ -119,6 +130,7 @@ Each tunnel stores its cryptographic material in `/etc/dnstm/tunnels/<tag>/`:
 ## Service Management
 
 All services run under the `dnstm` system user with:
+
 - `PrivateTmp=true`
 - `ProtectSystem=strict`
 - `ProtectHome=true`
@@ -128,10 +140,12 @@ All services run under the `dnstm` system user with:
 ## Firewall Integration
 
 Supports:
+
 - UFW
 - firewalld
 - iptables (direct)
 
 Configures:
+
 - Port 53 UDP/TCP for DNS
 - Transport ports (5310+ for multi-mode backends)

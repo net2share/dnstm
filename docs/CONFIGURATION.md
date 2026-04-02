@@ -129,6 +129,7 @@ Use Shadowsocks encryption (Slipstream only, via SIP003 plugin).
 ```
 
 Supported methods:
+
 - `aes-256-gcm` (recommended)
 - `chacha20-ietf-poly1305`
 
@@ -186,12 +187,70 @@ Classic DNS tunnel using Curve25519 keys.
 
 **Note:** DNSTT does not support the `shadowsocks` backend type.
 
+### VayDNS
+
+Next-generation DNS tunnel using Curve25519 keys with KCP transport.
+
+```json
+{
+  "tag": "my-tunnel",
+  "transport": "vaydns",
+  "backend": "socks",
+  "domain": "t.example.com",
+  "port": 5312,
+  "vaydns": {
+    "mtu": 1232,
+    "private_key": "/etc/dnstm/tunnels/my-tunnel/server.key",
+    "idle_timeout": "10s",
+    "keep_alive": "2s",
+    "clientid_size": 2,
+    "queue_size": 512
+  }
+}
+```
+
+VayDNS with dnstt-compatible wire format:
+
+```json
+{
+  "tag": "my-compat-tunnel",
+  "transport": "vaydns",
+  "backend": "socks",
+  "domain": "t.example.com",
+  "port": 5313,
+  "vaydns": {
+    "mtu": 1232,
+    "dnstt_compat": true
+  }
+}
+```
+
+**VayDNS configuration fields:**
+
+| Field             | Type   | Default                              | Description                                                                                                  |
+| ----------------- | ------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `mtu`             | int    | 1232                                 | MTU size (512-1400)                                                                                          |
+| `private_key`     | string | (auto-generated)                     | Path to Curve25519 private key                                                                               |
+| `idle_timeout`    | string | `10s` (native) / `2m` (dnstt-compat) | Connection idle timeout                                                                                      |
+| `keep_alive`      | string | `2s` (native) / `10s` (dnstt-compat) | Keepalive interval (must be < idle_timeout)                                                                  |
+| `fallback`        | string | (empty)                              | UDP endpoint for non-DNS packets                                                                             |
+| `dnstt_compat`    | bool   | false                                | Enable dnstt-compatible wire format (8-byte client IDs)                                                      |
+| `clientid_size`   | int    | 2                                    | Client ID size in bytes (1-8, ignored when dnstt_compat is true)                                             |
+| `queue_size`      | int    | 512                                  | Packet queue size (min 32)                                                                                   |
+| `kcp_window_size` | int    | 0                                    | KCP window size (0 = queue_size/2, must be ≤ queue_size)                                                     |
+| `queue_overflow`  | string | `drop`                               | Queue overflow strategy: `drop` or `block`                                                                   |
+| `log_level`       | string | `info`                               | Server log level: `debug`, `info`, `warning`, `error`                                                        |
+| `record_type`     | string | `txt`                                | DNS record type: `txt`, `cname`, `a`, `aaaa`, `mx`, `ns`, `srv` (must be `txt` when dnstt_compat is enabled) |
+
+**Note:** VayDNS does not support the `shadowsocks` backend type.
+
 ## Transport-Backend Compatibility
 
-| Transport | socks | ssh | shadowsocks | custom |
-|-----------|-------|-----|-------------|--------|
-| slipstream | ✓ | ✓ | ✓ | ✓ |
-| dnstt | ✓ | ✓ | ✗ | ✓ |
+| Transport  | socks | ssh | shadowsocks | custom |
+| ---------- | ----- | --- | ----------- | ------ |
+| slipstream | ✓     | ✓   | ✓           | ✓      |
+| dnstt      | ✓     | ✓   | ✗           | ✓      |
+| vaydns     | ✓     | ✓   | ✗           | ✓      |
 
 ## Route Configuration
 
@@ -205,10 +264,10 @@ Classic DNS tunnel using Curve25519 keys.
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| `mode` | Operating mode: `single` or `multi` |
-| `active` | Active tunnel tag (single mode only) |
+| Field     | Description                                      |
+| --------- | ------------------------------------------------ |
+| `mode`    | Operating mode: `single` or `multi`              |
+| `active`  | Active tunnel tag (single mode only)             |
 | `default` | Default route for unmatched domains (multi mode) |
 
 ## Directory Structure
@@ -220,8 +279,8 @@ Classic DNS tunnel using Curve25519 keys.
     └── <tag>/
         ├── cert.pem      # TLS certificate (Slipstream)
         ├── key.pem       # TLS private key (Slipstream)
-        ├── server.key    # Curve25519 private key (DNSTT)
-        ├── server.pub    # Curve25519 public key (DNSTT)
+        ├── server.key    # Curve25519 private key (DNSTT, VayDNS)
+        ├── server.pub    # Curve25519 public key (DNSTT, VayDNS)
         └── config.json   # Shadowsocks config for SIP003
 ```
 
@@ -230,23 +289,26 @@ Classic DNS tunnel using Curve25519 keys.
 **Location**: `/etc/dnstm/tunnels/<tag>/cert.pem` and `key.pem`
 
 Properties:
+
 - ECDSA P-256 algorithm
 - 10-year validity
 - Self-signed
 - Auto-generated per tunnel if not provided
 
 View fingerprint:
+
 ```bash
 dnstm tunnel status <tag>
 ```
 
-## Keys (DNSTT)
+## Keys (DNSTT, VayDNS)
 
 **Location**: `/etc/dnstm/tunnels/<tag>/server.key` and `server.pub`
 
-Auto-generated per tunnel if not provided.
+Auto-generated per tunnel if not provided. Both DNSTT and VayDNS use Curve25519 key pairs.
 
 View public key:
+
 ```bash
 dnstm tunnel status <tag>
 ```
@@ -254,22 +316,26 @@ dnstm tunnel status <tag>
 ## Port Allocation
 
 Ports auto-allocated starting from 5310:
+
 - First tunnel: 5310
 - Second tunnel: 5311
 - etc.
 
 Port 53 is used by:
+
 - Active transport (single-mode, binds directly)
 - DNS router (multi-mode)
 
 ## User and Permissions
 
 Services run as `dnstm` system user:
+
 - UID: auto-allocated
 - Home: `/etc/dnstm`
 - Shell: `/usr/sbin/nologin`
 
 Directory permissions:
+
 - `/etc/dnstm/` - 755
 - `/etc/dnstm/tunnels/` - 750
 - `/etc/dnstm/tunnels/<tag>/` - 750
@@ -293,9 +359,11 @@ firewall-cmd --permanent --add-port=53/tcp
 ## Binaries
 
 Transport binaries are stored in `/usr/local/bin/`:
+
 - `dnstm` - CLI tool
 - `slipstream-server` - Slipstream transport
 - `dnstt-server` - DNSTT transport
+- `vaydns-server` - VayDNS transport
 - `ssserver` - Shadowsocks server
 - `microsocks` - SOCKS5 proxy
 - `sshtun-user` - SSH user management tool
@@ -350,8 +418,20 @@ When cert/key paths are omitted, they are auto-generated:
       "tag": "my-slip",
       "transport": "slipstream",
       "backend": "socks",
-      "domain": "t.example.com",
+      "domain": "t1.example.com",
       "port": 5310
+    },
+    {
+      "tag": "my-vaydns",
+      "transport": "vaydns",
+      "backend": "socks",
+      "domain": "t2.example.com",
+      "port": 5311,
+      "vaydns": {
+        "mtu": 1232,
+        "idle_timeout": "15s",
+        "keep_alive": "3s"
+      }
     }
   ],
   "route": {

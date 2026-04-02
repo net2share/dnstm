@@ -102,14 +102,24 @@ dnstm tunnel add -t my-tunnel \
   --domain t.example.com
 ```
 
-| Flag              | Description                                   |
-| ----------------- | --------------------------------------------- |
-| `--tag`, `-t`     | Tunnel tag (auto-generated if omitted)        |
-| `--transport`     | Transport type: `slipstream` or `dnstt`       |
-| `--backend`, `-b` | Backend tag to forward traffic to             |
-| `--domain`, `-d`  | Domain name                                   |
-| `--port`, `-p`    | Port number (auto-allocated if not specified) |
-| `--mtu`           | MTU for DNSTT (default: 1232)                 |
+| Flag                | Description                                                        |
+| ------------------- | ------------------------------------------------------------------ |
+| `--tag`, `-t`       | Tunnel tag (auto-generated if omitted)                             |
+| `--transport`       | Transport type: `slipstream`, `dnstt`, or `vaydns`                 |
+| `--backend`, `-b`   | Backend tag to forward traffic to                                  |
+| `--domain`, `-d`    | Domain name                                                        |
+| `--port`, `-p`      | Port number (auto-allocated if not specified)                      |
+| `--mtu`             | MTU for DNSTT/VayDNS (default: 1232)                               |
+| `--dnstt-compat`    | VayDNS: enable dnstt-compatible wire format                        |
+| `--clientid-size`   | VayDNS: client ID size in bytes (1-8, default: 2)                  |
+| `--idle-timeout`    | VayDNS: idle timeout duration (default: 10s, 2m with dnstt-compat) |
+| `--keepalive`       | VayDNS: keepalive interval (default: 2s, 10s with dnstt-compat)    |
+| `--fallback`        | VayDNS: UDP fallback endpoint for non-DNS packets                  |
+| `--queue-size`      | VayDNS: packet queue size (min 32, default: 512)                   |
+| `--kcp-window-size` | VayDNS: KCP window size (default: queue_size/2)                    |
+| `--queue-overflow`  | VayDNS: queue overflow strategy (`drop` or `block`)                |
+| `--log-level`       | VayDNS: server log level (debug, info, warning, error)             |
+| `--record-type`     | VayDNS: DNS record type (txt, cname, a, aaaa, mx, ns, srv)         |
 
 ### Tunnel Share Flags
 
@@ -129,13 +139,13 @@ dnstm tunnel share -t dnstt-ssh --user tunnel-user --key /root/.ssh/client_key
 dnstm tunnel share -t slip-socks --no-cert
 ```
 
-| Flag              | Description                                             |
-| ----------------- | ------------------------------------------------------- |
-| `--tag`, `-t`     | Tunnel tag                                              |
-| `--user`          | SSH username (required for SSH backend)                 |
-| `--password`      | SSH password (required if no key, SSH backend)          |
-| `--key`           | Path to SSH private key (alternative to password)       |
-| `--no-cert`       | Skip embedding TLS certificate (Slipstream)             |
+| Flag          | Description                                       |
+| ------------- | ------------------------------------------------- |
+| `--tag`, `-t` | Tunnel tag                                        |
+| `--user`      | SSH username (required for SSH backend)           |
+| `--password`  | SSH password (required if no key, SSH backend)    |
+| `--key`       | Path to SSH private key (alternative to password) |
+| `--no-cert`   | Skip embedding TLS certificate (Slipstream)       |
 
 The generated URL encodes transport config (domain, cert/pubkey), backend config (type, credentials), and can be imported directly with `dnstc tunnel import`.
 
@@ -188,7 +198,7 @@ dnstm backend add \
 **Notes:**
 
 - SOCKS and SSH backends are created automatically during installation and cannot be added manually.
-- DNSTT transport does not support the `shadowsocks` backend type.
+- DNSTT and VayDNS transports do not support the `shadowsocks` backend type.
 
 ## Config Commands
 
@@ -349,6 +359,21 @@ sudo dnstm tunnel add -t dnstt-1 \
   --transport dnstt \
   --backend socks \
   --domain t2.example.com
+
+sudo dnstm tunnel add -t vaydns-1 \
+  --transport vaydns \
+  --backend socks \
+  --domain t3.example.com
+
+# VayDNS with custom parameters
+sudo dnstm tunnel add -t vaydns-custom \
+  --transport vaydns \
+  --backend socks \
+  --domain t4.example.com \
+  --idle-timeout 30s \
+  --keepalive 5s \
+  --record-type cname \
+  --clientid-size 4
 ```
 
 ### Switch Between Tunnels

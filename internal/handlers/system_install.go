@@ -29,6 +29,11 @@ func HandleInstall(ctx *actions.Context) error {
 
 	// Check if already installed
 	if router.IsInitialized() && !force {
+		// If binaries are missing, install just the missing ones
+		missing := transport.GetMissingBinaries()
+		if len(missing) > 0 {
+			return installMissingBinaries(ctx, missing)
+		}
 		return fmt.Errorf("dnstm is already installed. Use --force to reinstall")
 	}
 
@@ -245,24 +250,78 @@ func ensureDnstmInstalled(ctx *actions.Context) error {
 	return nil
 }
 
+// installMissingBinaries installs only the binaries that are missing.
+// This handles the upgrade case where a new dnstm version adds a new transport binary.
+func installMissingBinaries(ctx *actions.Context, missing []string) error {
+	if ctx.IsInteractive {
+		ctx.Output.BeginProgress("Install Missing Binaries")
+	}
+
+	ctx.Output.Info("Installing missing transport binaries...")
+	statusFn := func(msg string) { ctx.Output.Status(msg) }
+
+	for _, name := range missing {
+		binType := binary.BinaryType(name)
+		switch binType {
+		case binary.BinaryDNSTTServer:
+			if err := transport.EnsureDnsttInstalledWithStatus(statusFn); err != nil {
+				return fmt.Errorf("failed to install %s: %w", name, err)
+			}
+		case binary.BinarySlipstreamServer:
+			if err := transport.EnsureSlipstreamInstalledWithStatus(statusFn); err != nil {
+				return fmt.Errorf("failed to install %s: %w", name, err)
+			}
+		case binary.BinarySSServer:
+			if err := transport.EnsureShadowsocksInstalledWithStatus(statusFn); err != nil {
+				return fmt.Errorf("failed to install %s: %w", name, err)
+			}
+		case binary.BinaryVayDNSServer:
+			if err := transport.EnsureVayDNSInstalledWithStatus(statusFn); err != nil {
+				return fmt.Errorf("failed to install %s: %w", name, err)
+			}
+		case binary.BinarySSHTunUser:
+			if err := transport.EnsureSSHTunUserInstalledWithStatus(statusFn); err != nil {
+				ctx.Output.Warning("sshtun-user: " + err.Error())
+			}
+		default:
+			ctx.Output.Warning(fmt.Sprintf("Unknown binary: %s", name))
+		}
+	}
+
+	// Update version manifest with installed versions
+	manifest, err := updater.LoadManifest()
+	if err != nil {
+		manifest = updater.NewManifest()
+	}
+	for _, name := range missing {
+		def, ok := binary.GetDef(binary.BinaryType(name))
+		if ok && def.PinnedVersion != "" {
+			manifest.SetVersion(name, def.PinnedVersion)
+		}
+	}
+	if err := manifest.Save(); err != nil {
+		ctx.Output.Warning("Failed to update version manifest: " + err.Error())
+	}
+
+	ctx.Output.Success("Missing binaries installed!")
+
+	if ctx.IsInteractive {
+		ctx.Output.EndProgress()
+	}
+
+	return nil
+}
+
 // createVersionManifest creates the initial version manifest after installation.
 // Uses pinned versions from binary definitions as the source of truth.
 func createVersionManifest(ctx *actions.Context) error {
-	manifest := &updater.VersionManifest{}
+	manifest := updater.NewManifest()
 
-	binaries := []binary.BinaryType{
-		binary.BinarySlipstreamServer,
-		binary.BinarySSServer,
-		binary.BinaryMicrosocks,
-		binary.BinarySSHTunUser,
-	}
-
-	for _, binType := range binaries {
-		def, ok := binary.GetDef(binType)
-		if !ok || def.PinnedVersion == "" {
+	for _, def := range binary.ServerBinaries() {
+		if def.SkipUpdate || def.PinnedVersion == "" {
 			continue
 		}
-		manifest.SetVersion(string(binType), def.PinnedVersion)
+		manifest.SetVersion(string(def.Type), def.PinnedVersion)
 	}
 
 	return manifest.Save()

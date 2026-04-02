@@ -4,25 +4,26 @@ A CLI tool to deploy and manage DNS tunnel servers on Linux. Run single tunnels 
 
 ## Supported Transports
 
-| Transport      | Description                                     |
-| -------------- | ----------------------------------------------- |
-| **Slipstream** | High-performance DNS tunnel with TLS encryption |
-| **DNSTT**      | Classic DNS tunnel using Curve25519 keys        |
+| Transport      | Description                                      |
+| -------------- | ------------------------------------------------ |
+| **VayDNS**     | Next-gen DNS tunnel with Curve25519 keys and KCP |
+| **DNSTT**      | Classic DNS tunnel using Curve25519 keys         |
+| **Slipstream** | High-performance DNS tunnel with TLS encryption  |
 
 ## Supported Backends
 
-| Backend         | Description                       | Transports        |
-| --------------- | --------------------------------- | ----------------- |
-| **SOCKS**       | Built-in microsocks SOCKS5 proxy  | Slipstream, DNSTT |
-| **SSH**         | Forward to local SSH server       | Slipstream, DNSTT |
-| **Shadowsocks** | Encrypted proxy via SIP003 plugin | Slipstream only   |
-| **Custom**      | Forward to any TCP address        | Slipstream, DNSTT |
+| Backend         | Description                       | Transports                |
+| --------------- | --------------------------------- | ------------------------- |
+| **SOCKS**       | Built-in microsocks SOCKS5 proxy  | Slipstream, DNSTT, VayDNS |
+| **SSH**         | Forward to local SSH server       | Slipstream, DNSTT, VayDNS |
+| **Shadowsocks** | Encrypted proxy via SIP003 plugin | Slipstream only           |
+| **Custom**      | Forward to any TCP address        | Slipstream, DNSTT, VayDNS |
 
 ## Features
 
 - Two operating modes: single-tunnel and multi-tunnel (DNS router)
 - Interactive menu and full CLI support
-- Auto-generated TLS certificates (Slipstream) and Curve25519 keys (DNSTT)
+- Auto-generated TLS certificates (Slipstream) and Curve25519 keys (DNSTT, VayDNS)
 - Shareable `dnst://` URLs for easy client setup (`tunnel share`)
 - Firewall configuration (UFW, firewalld, iptables)
 - systemd service management with security hardening
@@ -89,10 +90,10 @@ t.example.com.   IN  NS  ns.example.com.
 ### Concepts
 
 - **Backend**: Where traffic goes after decapsulation (socks, ssh, shadowsocks, custom)
-- **Transport**: DNS tunnel protocol (slipstream or dnstt)
+- **Transport**: DNS tunnel protocol (slipstream, dnstt, or vaydns)
 - **Tunnel**: A transport + backend + domain combination
 
-> **Note:** Slipstream + Shadowsocks uses SIP003 plugin mode - the shadowsocks server runs as a plugin to slipstream, providing encrypted tunneling. This requires defining a shadowsocks backend instead of using the built-in socks proxy.
+> **Note:** Slipstream + Shadowsocks uses SIP003 plugin mode - the shadowsocks server runs as a plugin to slipstream, providing encrypted tunneling. This requires defining a shadowsocks backend instead of using the built-in socks proxy. DNSTT and VayDNS do not support Shadowsocks backends.
 
 ### Install
 
@@ -125,9 +126,15 @@ sudo dnstm tunnel add -t dnstt-ssh --transport dnstt --backend ssh --domain t2.e
 sudo dnstm backend add -t my-ss --type shadowsocks --password mypass123 --method aes-256-gcm
 sudo dnstm tunnel add -t slip-ss --transport slipstream --backend my-ss --domain t3.example.com
 
+# Add vaydns + socks tunnel
+sudo dnstm tunnel add -t vaydns-socks --transport vaydns --backend socks --domain t4.example.com
+
+# Add vaydns tunnel with dnstt-compatible wire format
+sudo dnstm tunnel add -t vaydns-compat --transport vaydns --backend socks --domain t5.example.com --dnstt-compat
+
 # Add slipstream + custom backend (e.g., MTProto proxy)
 sudo dnstm backend add -t mtproto --type custom --address 127.0.0.1:8443
-sudo dnstm tunnel add -t slip-mtproto --transport slipstream --backend mtproto --domain t4.example.com
+sudo dnstm tunnel add -t slip-mtproto --transport slipstream --backend mtproto --domain t6.example.com
 ```
 
 #### 3. Config File
@@ -136,7 +143,7 @@ sudo dnstm tunnel add -t slip-mtproto --transport slipstream --backend mtproto -
 sudo dnstm config load config.json
 ```
 
-Example `config.json` (certs/keys auto-generated):
+Example `config.json` (certs/keys auto-generated when paths are omitted):
 
 ```json
 {
@@ -144,12 +151,18 @@ Example `config.json` (certs/keys auto-generated):
     {
       "tag": "socks",
       "type": "socks",
-      "socks": { "user": "myuser", "password": "mypass" }
+      "socks": {
+        "user": "myuser",
+        "password": "mypass"
+      }
     },
     {
       "tag": "my-ss",
       "type": "shadowsocks",
-      "shadowsocks": { "password": "mypass123", "method": "aes-256-gcm" }
+      "shadowsocks": {
+        "password": "mypass123",
+        "method": "aes-256-gcm"
+      }
     },
     {
       "tag": "mtproto",
@@ -163,31 +176,67 @@ Example `config.json` (certs/keys auto-generated):
       "transport": "slipstream",
       "backend": "socks",
       "domain": "t1.example.com",
-      "port": 5310
-    },
-    {
-      "tag": "dnstt-ssh",
-      "transport": "dnstt",
-      "backend": "ssh",
-      "domain": "t2.example.com",
-      "port": 5311
+      "port": 5310,
+      "slipstream": {
+        "cert": "/path/to/cert.pem",
+        "key": "/path/to/key.pem"
+      }
     },
     {
       "tag": "slip-ss",
       "transport": "slipstream",
       "backend": "my-ss",
+      "domain": "t2.example.com",
+      "port": 5311
+    },
+    {
+      "tag": "dnstt-ssh",
+      "transport": "dnstt",
+      "backend": "ssh",
       "domain": "t3.example.com",
-      "port": 5312
+      "port": 5312,
+      "dnstt": {
+        "mtu": 1232
+      }
+    },
+    {
+      "tag": "vaydns-socks",
+      "transport": "vaydns",
+      "backend": "socks",
+      "domain": "t4.example.com",
+      "port": 5313,
+      "vaydns": {
+        "mtu": 1232,
+        "idle_timeout": "10s",
+        "keep_alive": "2s",
+        "clientid_size": 2,
+        "queue_size": 512,
+        "record_type": "txt"
+      }
+    },
+    {
+      "tag": "vaydns-compat",
+      "transport": "vaydns",
+      "backend": "ssh",
+      "domain": "t5.example.com",
+      "port": 5314,
+      "vaydns": {
+        "dnstt_compat": true,
+        "mtu": 1232
+      }
     },
     {
       "tag": "slip-mtproto",
       "transport": "slipstream",
       "backend": "mtproto",
-      "domain": "t4.example.com",
-      "port": 5313
+      "domain": "t6.example.com",
+      "port": 5315
     }
   ],
-  "route": { "mode": "multi" }
+  "route": {
+    "mode": "multi",
+    "default": "slip-socks"
+  }
 }
 ```
 

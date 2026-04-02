@@ -202,7 +202,7 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 		}
 
 		// idle_timeout
-		defaultIdle := "60s"
+		defaultIdle := "10s"
 		if vaydnsDnsttCompat {
 			defaultIdle = "2m"
 		}
@@ -230,11 +230,15 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 		}
 
 		// keepalive
+		defaultKeep := "2s"
+		if vaydnsDnsttCompat {
+			defaultKeep = "10s"
+		}
 		for {
 			keepStr, confirmed, keepErr := tui.RunInput(tui.InputConfig{
 				Title:       "Keepalive Interval",
 				Description: "Keepalive ping interval; must be less than idle timeout",
-				Value:       "10s",
+				Value:       defaultKeep,
 			})
 			if keepErr != nil {
 				return keepErr
@@ -243,7 +247,7 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 				return nil
 			}
 			if keepStr == "" {
-				keepStr = "10s"
+				keepStr = defaultKeep
 			}
 			keepDur, parseErr := time.ParseDuration(keepStr)
 			if parseErr != nil {
@@ -415,6 +419,20 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 
 		recordType := ctx.GetString("record-type")
 
+		// Validate record-type
+		if recordType != "" {
+			valid := false
+			for _, rt := range config.ValidVayDNSRecordTypes {
+				if recordType == rt {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				return fmt.Errorf("invalid --record-type '%s' (must be one of: txt, cname, a, aaaa, mx, ns, srv)", recordType)
+			}
+		}
+
 		// clientid-size is ignored by vaydns-server when dnstt-compat is set (forced to 8)
 		if dnsttCompat && cid != 0 {
 			return fmt.Errorf("--clientid-size cannot be used with --dnstt-compat (compat mode forces 8-byte client IDs)")
@@ -453,7 +471,7 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 
 // promptModeSwitch prompts the user to switch from single to multi mode when adding a second tunnel.
 // Returns true if mode was switched, false if user declined.
-func promptModeSwitch(ctx *actions.Context, cfg *config.Config) (bool, error) {
+func promptModeSwitch(ctx *actions.Context, cfg *config.Config, newTunnel *config.TunnelConfig) (bool, error) {
 	existingTunnel := cfg.Tunnels[0].Tag
 
 	confirm, err := tui.RunConfirm(tui.ConfirmConfig{
@@ -462,6 +480,7 @@ func promptModeSwitch(ctx *actions.Context, cfg *config.Config) (bool, error) {
 			"You already have tunnel '%s'. Single mode only allows one active tunnel.\nMulti mode allows running multiple tunnels simultaneously with DNS-based routing.",
 			existingTunnel,
 		),
+		Default: true,
 	})
 	if err != nil {
 		return false, err
@@ -470,6 +489,13 @@ func promptModeSwitch(ctx *actions.Context, cfg *config.Config) (bool, error) {
 	if !confirm {
 		_ = tui.ShowMessage(tui.AppMessage{Type: "info", Message: "Staying in single mode. New tunnel will be added but only one can be active."})
 		return false, nil
+	}
+
+	// Check if the new tunnel's domain conflicts with existing tunnels before switching
+	for _, t := range cfg.Tunnels {
+		if t.Domain == newTunnel.Domain {
+			return false, fmt.Errorf("cannot switch to multi mode: new tunnel '%s' and existing tunnel '%s' share domain '%s'", newTunnel.Tag, t.Tag, newTunnel.Domain)
+		}
 	}
 
 	r, err := router.New(cfg)
@@ -487,11 +513,20 @@ func promptModeSwitch(ctx *actions.Context, cfg *config.Config) (bool, error) {
 }
 
 func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *config.Config) error {
+	// Check for duplicate domain in multi mode
+	if cfg.IsMultiMode() {
+		for _, t := range cfg.Tunnels {
+			if t.Domain == tunnelCfg.Domain {
+				return fmt.Errorf("domain '%s' is already used by tunnel '%s' (duplicate domains not allowed in multi mode)", tunnelCfg.Domain, t.Tag)
+			}
+		}
+	}
+
 	// Check if we need to switch to multi mode
 	// This happens when adding a second tunnel while in single mode
 	if cfg.IsSingleMode() && len(cfg.Tunnels) > 0 {
 		if ctx.IsInteractive {
-			switchedMode, err := promptModeSwitch(ctx, cfg)
+			switchedMode, err := promptModeSwitch(ctx, cfg, tunnelCfg)
 			if err != nil {
 				return err
 			}
@@ -671,6 +706,23 @@ func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *con
 		ctx.Output.Println()
 		ctx.Output.Info("Public Key:")
 		ctx.Output.Println(publicKey)
+	}
+
+	if tunnelCfg.Transport == config.TransportVayDNS && tunnelCfg.VayDNS != nil {
+		v := tunnelCfg.VayDNS
+		ctx.Output.Println()
+		ctx.Output.Status(fmt.Sprintf("Idle Timeout: %s", v.ResolvedVayDNSIdleTimeout()))
+		ctx.Output.Status(fmt.Sprintf("Keepalive: %s", v.ResolvedVayDNSKeepAlive()))
+		if v.DnsttCompat {
+			ctx.Output.Status("Mode: dnstt-compat (8-byte client IDs)")
+		} else if v.ClientIDSize > 0 {
+			ctx.Output.Status(fmt.Sprintf("Client ID Size: %d bytes", v.ClientIDSize))
+		}
+		rt := v.RecordType
+		if rt == "" {
+			rt = "txt"
+		}
+		ctx.Output.Status(fmt.Sprintf("Record Type: %s", rt))
 	}
 
 	if ctx.IsInteractive {

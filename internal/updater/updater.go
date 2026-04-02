@@ -2,13 +2,9 @@ package updater
 
 import (
 	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"path/filepath"
-	"runtime"
 
 	"github.com/net2share/dnstm/internal/binary"
+	"github.com/net2share/go-corelib/binman"
 )
 
 // UpdateOptions configures the update behavior.
@@ -57,6 +53,15 @@ func (r *UpdateReport) UpdateCount() int {
 // StatusFunc is a callback for reporting status messages.
 type StatusFunc func(message string)
 
+// GetDnstmLatestVersion fetches the latest dnstm release version from GitHub.
+func GetDnstmLatestVersion() (string, error) {
+	release, err := binman.GetLatestRelease("net2share/dnstm")
+	if err != nil {
+		return "", err
+	}
+	return release.TagName, nil
+}
+
 // CheckForUpdates checks for available updates without applying them.
 func CheckForUpdates(currentDnstmVersion string, opts UpdateOptions) (*UpdateReport, error) {
 	report := &UpdateReport{}
@@ -79,7 +84,7 @@ func CheckForUpdates(currentDnstmVersion string, opts UpdateOptions) (*UpdateRep
 	if !opts.SelfOnly {
 		manifest, err := LoadManifest()
 		if err != nil {
-			manifest = &VersionManifest{}
+			manifest = NewManifest()
 		}
 
 		report.BinaryUpdates = checkBinaryUpdates(manifest)
@@ -124,83 +129,12 @@ func checkBinaryUpdates(manifest *VersionManifest) []BinaryUpdate {
 }
 
 // PerformSelfUpdate downloads and replaces the dnstm binary on disk.
-// The caller continues updating binaries in the current process.
 func PerformSelfUpdate(latestVersion string, statusFn StatusFunc) error {
-	if statusFn != nil {
-		statusFn(fmt.Sprintf("Downloading dnstm %s...", latestVersion))
-	}
-
-	// Determine download URL
-	arch := runtime.GOARCH
-	osName := runtime.GOOS
-	downloadURL := fmt.Sprintf(
-		"https://github.com/net2share/dnstm/releases/download/%s/dnstm-%s-%s",
-		latestVersion, osName, arch,
-	)
-
-	// Download to temp file
-	tmpFile, err := os.CreateTemp("", "dnstm-update-*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
-
-	resp, err := http.Get(downloadURL)
-	if err != nil {
-		tmpFile.Close()
-		return fmt.Errorf("failed to download: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		tmpFile.Close()
-		return fmt.Errorf("download failed with status %d", resp.StatusCode)
-	}
-
-	_, err = io.Copy(tmpFile, resp.Body)
-	tmpFile.Close()
-	if err != nil {
-		return fmt.Errorf("failed to write binary: %w", err)
-	}
-
-	// Make executable
-	if err := os.Chmod(tmpPath, 0755); err != nil {
-		return fmt.Errorf("failed to set permissions: %w", err)
-	}
-
-	// Get the target path
-	targetPath := "/usr/local/bin/dnstm"
-	currentExe, err := os.Executable()
-	if err == nil {
-		// Use the same path as current executable if possible
-		resolved, err := filepath.EvalSymlinks(currentExe)
-		if err == nil && filepath.Dir(resolved) == "/usr/local/bin" {
-			targetPath = resolved
-		}
-	}
-
-	if statusFn != nil {
-		statusFn("Installing new version...")
-	}
-
-	// Remove the running binary first (Linux keeps it in memory for the
-	// current process but frees the path for a new file).
-	os.Remove(targetPath)
-
-	// Move new binary into place
-	if err := os.Rename(tmpPath, targetPath); err != nil {
-		// Rename failed (cross-device), try copy
-		if err := copyFile(tmpPath, targetPath); err != nil {
-			return fmt.Errorf("failed to install binary: %w", err)
-		}
-	}
-
-	if statusFn != nil {
-		statusFn(fmt.Sprintf("dnstm updated to %s", latestVersion))
-	}
-
-	return nil
+	return binman.SelfUpdate(binman.SelfUpdateConfig{
+		Repo:       "net2share/dnstm",
+		URLPattern: "https://github.com/net2share/dnstm/releases/download/{version}/dnstm-{os}-{arch}",
+		StatusFn:   binman.StatusFunc(statusFn),
+	}, latestVersion)
 }
 
 // PerformBinaryUpdates updates the specified binaries.
@@ -227,7 +161,7 @@ func PerformBinaryUpdates(updates []BinaryUpdate, statusFn StatusFunc) error {
 	// Update each binary
 	manifest, _ := LoadManifest()
 	if manifest == nil {
-		manifest = &VersionManifest{}
+		manifest = NewManifest()
 	}
 
 	mgr := binary.NewDefaultManager()
@@ -269,22 +203,4 @@ func PerformBinaryUpdates(updates []BinaryUpdate, statusFn StatusFunc) error {
 	}
 
 	return nil
-}
-
-// copyFile copies a file from src to dst.
-func copyFile(src, dst string) error {
-	source, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer source.Close()
-
-	dest, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
-	if err != nil {
-		return err
-	}
-	defer dest.Close()
-
-	_, err = io.Copy(dest, source)
-	return err
 }

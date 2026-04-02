@@ -363,15 +363,27 @@ func TestValidate_Tunnels(t *testing.T) {
 			wantErr: "port 5310 already used by",
 		},
 		{
-			name: "duplicate domains",
+			name: "duplicate domains in multi mode",
 			cfg: &Config{
 				Backends: []BackendConfig{validBackend},
 				Tunnels: []TunnelConfig{
 					{Tag: "tunnel-a", Transport: TransportSlipstream, Backend: "socks", Domain: "test.example.com", Port: 5310},
 					{Tag: "tunnel-b", Transport: TransportSlipstream, Backend: "socks", Domain: "test.example.com", Port: 5311},
 				},
+				Route: RouteConfig{Mode: "multi"},
 			},
 			wantErr: "domain 'test.example.com' already used by",
+		},
+		{
+			name: "duplicate domains allowed in single mode",
+			cfg: &Config{
+				Backends: []BackendConfig{validBackend},
+				Tunnels: []TunnelConfig{
+					{Tag: "tunnel-a", Transport: TransportSlipstream, Backend: "socks", Domain: "test.example.com", Port: 5310},
+					{Tag: "tunnel-b", Transport: TransportSlipstream, Backend: "socks", Domain: "test.example.com", Port: 5311},
+				},
+				Route: RouteConfig{Mode: "single"},
+			},
 		},
 		{
 			name: "dnstt mtu too low",

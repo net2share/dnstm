@@ -2,6 +2,7 @@ package binary
 
 import (
 	"os"
+	"runtime"
 	"testing"
 )
 
@@ -28,85 +29,125 @@ func TestGetPath_EnvVarOverride(t *testing.T) {
 	}
 }
 
-func TestIsPlatformSupported(t *testing.T) {
+func TestToBinmanDef(t *testing.T) {
+	// Test that toBinmanDef correctly converts local BinaryDef to binman.BinaryDef
+	def := DefaultBinaries[BinaryDNSTTClient]
+	bd := toBinmanDef(def)
+
+	if bd.Name != string(BinaryDNSTTClient) {
+		t.Errorf("Name = %s, want %s", bd.Name, string(BinaryDNSTTClient))
+	}
+	if bd.EnvOverride != def.EnvVar {
+		t.Errorf("EnvOverride = %s, want %s", bd.EnvOverride, def.EnvVar)
+	}
+	if bd.URLPattern != def.URLPattern {
+		t.Errorf("URLPattern = %s, want %s", bd.URLPattern, def.URLPattern)
+	}
+}
+
+func TestToBinmanDef_Archive(t *testing.T) {
+	def := DefaultBinaries[BinarySSServer]
+	bd := toBinmanDef(def)
+
+	if bd.ArchiveType != "tar.xz" {
+		t.Errorf("ArchiveType = %s, want tar.xz", bd.ArchiveType)
+	}
+}
+
+func TestArchMappings_Shadowsocks(t *testing.T) {
+	def := DefaultBinaries[BinarySSServer]
+	if def.archMappings == nil {
+		t.Fatal("SSServer archMappings should be populated by init()")
+	}
+
+	ssarch, ok := def.archMappings["ssarch"]
+	if !ok {
+		t.Fatal("SSServer should have ssarch mapping")
+	}
+
+	expected := map[string]string{
+		"linux/amd64":  "x86_64-unknown-linux-gnu",
+		"linux/arm64":  "aarch64-unknown-linux-gnu",
+		"darwin/amd64": "x86_64-apple-darwin",
+		"darwin/arm64": "aarch64-apple-darwin",
+	}
+
+	for platform, want := range expected {
+		if got := ssarch[platform]; got != want {
+			t.Errorf("ssarch[%s] = %s, want %s", platform, got, want)
+		}
+	}
+}
+
+func TestArchMappings_Microsocks(t *testing.T) {
+	def := DefaultBinaries[BinaryMicrosocks]
+	if def.archMappings == nil {
+		t.Fatal("Microsocks archMappings should be populated by init()")
+	}
+
+	msarch, ok := def.archMappings["microsocksarch"]
+	if !ok {
+		t.Fatal("Microsocks should have microsocksarch mapping")
+	}
+
+	// Should have at least linux/amd64 mapping
+	if _, ok := msarch["linux/amd64"]; !ok {
+		t.Error("Microsocks should have linux/amd64 mapping")
+	}
+}
+
+func TestServerBinaries(t *testing.T) {
+	defs := ServerBinaries()
+	if len(defs) != 6 {
+		t.Errorf("ServerBinaries() returned %d, want 6", len(defs))
+	}
+
+	// Check VayDNS is included
+	found := false
+	for _, def := range defs {
+		if def.Type == BinaryVayDNSServer {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("ServerBinaries() should include VayDNS")
+	}
+}
+
+func TestChecksumURLs(t *testing.T) {
+	// Verify all server binaries except sshtun-user have checksum URLs
+	for _, def := range ServerBinaries() {
+		if def.Type == BinarySSHTunUser {
+			if def.ChecksumURL != "" {
+				t.Errorf("SSHTunUser should have no ChecksumURL, got %s", def.ChecksumURL)
+			}
+			continue
+		}
+		if def.ChecksumURL == "" {
+			t.Errorf("%s should have a ChecksumURL", def.Type)
+		}
+	}
+}
+
+func TestDetectLibc(t *testing.T) {
+	// detectLibc should return either "glibc" or "musl"
+	libc := detectLibc()
+	if libc != "glibc" && libc != "musl" {
+		t.Errorf("detectLibc() = %s, want glibc or musl", libc)
+	}
+}
+
+func TestPlatformSupport(t *testing.T) {
 	mgr := NewManager(t.TempDir())
 
-	// DNSTT should be supported on current platform (linux/darwin/windows)
-	def := DefaultBinaries[BinaryDNSTTClient]
-	if !mgr.isPlatformSupported(def) {
-		t.Errorf("Expected DNSTT to be supported on %s/%s", mgr.os, mgr.arch)
-	}
-}
-
-func TestBuildURLWithVersion(t *testing.T) {
-	mgr := &Manager{
-		binDir: "/tmp",
-		os:     "linux",
-		arch:   "amd64",
-	}
-
-	tests := []struct {
-		binType BinaryType
-		version string
-		want    string
-	}{
-		{
-			BinaryDNSTTClient,
-			"latest",
-			"https://github.com/net2share/dnstt/releases/download/latest/dnstt-client-linux-amd64",
-		},
-		{
-			BinarySlipstreamServer,
-			"v2026.02.22.1",
-			"https://github.com/net2share/slipstream-rust-build/releases/download/v2026.02.22.1/slipstream-server-linux-amd64",
-		},
-		{
-			BinarySSServer,
-			"v1.23.0",
-			"https://github.com/shadowsocks/shadowsocks-rust/releases/download/v1.23.0/shadowsocks-v1.23.0.x86_64-unknown-linux-gnu.tar.xz",
-		},
-		{
-			BinaryMicrosocks,
-			"v1.0.5",
-			"https://github.com/net2share/microsocks-build/releases/download/v1.0.5/microsocks-x86_64-linux-gnu",
-		},
-		{
-			BinarySSHTunUser,
-			"v0.3.4",
-			"https://github.com/net2share/sshtun-user/releases/download/v0.3.4/sshtun-user-linux-amd64",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(string(tt.binType), func(t *testing.T) {
-			def := DefaultBinaries[tt.binType]
-			got := mgr.buildURLWithVersion(def, tt.version)
-			if got != tt.want {
-				t.Errorf("buildURLWithVersion() = %s, want %s", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestGetShadowsocksArch(t *testing.T) {
-	tests := []struct {
-		os   string
-		arch string
-		want string
-	}{
-		{"linux", "amd64", "x86_64-unknown-linux-gnu"},
-		{"linux", "arm64", "aarch64-unknown-linux-gnu"},
-		{"darwin", "amd64", "x86_64-apple-darwin"},
-		{"darwin", "arm64", "aarch64-apple-darwin"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.os+"-"+tt.arch, func(t *testing.T) {
-			mgr := &Manager{os: tt.os, arch: tt.arch}
-			got := mgr.getShadowsocksArch()
-			if got != tt.want {
-				t.Errorf("getShadowsocksArch() = %s, want %s", got, tt.want)
-			}
-		})
+	// DNSTT should be supported on current platform
+	_, err := mgr.GetPath(BinaryDNSTTClient)
+	// Error is expected (binary not found), but should NOT be "not supported"
+	if err != nil {
+		platform := runtime.GOOS + "/" + runtime.GOARCH
+		if err.Error() == "binary dnstt-client not supported on "+platform {
+			t.Errorf("DNSTT should be supported on %s", platform)
+		}
 	}
 }

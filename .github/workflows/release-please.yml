@@ -65,7 +65,7 @@ jobs:
           fi
           VERSION=${{ needs.release-please.outputs.tag_name }}
           OUTPUT_NAME="dnstm-${{ matrix.goos }}-${ARCH}"
-          go build -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o "${OUTPUT_NAME}" .
+          go build -trimpath -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o "${OUTPUT_NAME}" .
           chmod +x "${OUTPUT_NAME}"
 
       - name: Upload artifact

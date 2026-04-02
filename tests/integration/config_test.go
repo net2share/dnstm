@@ -361,11 +361,11 @@ func TestConfigApplyDefaults(t *testing.T) {
 	if vaydns.VayDNS.MTU != 1232 {
 		t.Errorf("VayDNS.MTU = %d, want 1232", vaydns.VayDNS.MTU)
 	}
-	if vaydns.VayDNS.IdleTimeout != "60s" {
-		t.Errorf("VayDNS.IdleTimeout = %q, want '60s'", vaydns.VayDNS.IdleTimeout)
+	if vaydns.VayDNS.IdleTimeout != "10s" {
+		t.Errorf("VayDNS.IdleTimeout = %q, want '10s'", vaydns.VayDNS.IdleTimeout)
 	}
-	if vaydns.VayDNS.KeepAlive != "10s" {
-		t.Errorf("VayDNS.KeepAlive = %q, want '10s'", vaydns.VayDNS.KeepAlive)
+	if vaydns.VayDNS.KeepAlive != "2s" {
+		t.Errorf("VayDNS.KeepAlive = %q, want '2s'", vaydns.VayDNS.KeepAlive)
 	}
 	if vaydns.VayDNS.ClientIDSize != 2 {
 		t.Errorf("VayDNS.ClientIDSize = %d, want 2", vaydns.VayDNS.ClientIDSize)

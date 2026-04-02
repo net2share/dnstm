@@ -68,7 +68,7 @@ var ValidVayDNSRecordTypes = []string{"txt", "cname", "a", "aaaa", "mx", "ns", "
 // ResolvedVayDNSIdleTimeout returns the idle-timeout string for vaydns-server, applying defaults when empty.
 func (v *VayDNSConfig) ResolvedVayDNSIdleTimeout() string {
 	if v == nil {
-		return "60s"
+		return "10s"
 	}
 	if v.IdleTimeout != "" {
 		return v.IdleTimeout
@@ -76,18 +76,21 @@ func (v *VayDNSConfig) ResolvedVayDNSIdleTimeout() string {
 	if v.DnsttCompat {
 		return "2m"
 	}
-	return "60s"
+	return "10s"
 }
 
 // ResolvedVayDNSKeepAlive returns the keepalive string for vaydns-server, applying defaults when empty.
 func (v *VayDNSConfig) ResolvedVayDNSKeepAlive() string {
 	if v == nil {
-		return "10s"
+		return "2s"
 	}
 	if v.KeepAlive != "" {
 		return v.KeepAlive
 	}
-	return "10s"
+	if v.DnsttCompat {
+		return "10s"
+	}
+	return "2s"
 }
 
 // VayDNSClientIDSizeForFlag returns the value for -clientid-size, or 0 if the flag must be omitted (-dnstt-compat).

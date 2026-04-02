@@ -11,8 +11,8 @@ func TestVayDNSConfig_ResolvedVayDNSIdleTimeout(t *testing.T) {
 		v    *VayDNSConfig
 		want string
 	}{
-		{"nil", nil, "60s"},
-		{"default native", &VayDNSConfig{}, "60s"},
+		{"nil", nil, "10s"},
+		{"default native", &VayDNSConfig{}, "10s"},
 		{"default compat", &VayDNSConfig{DnsttCompat: true}, "2m"},
 		{"explicit overrides compat default", &VayDNSConfig{DnsttCompat: true, IdleTimeout: "90s"}, "90s"},
 		{"explicit native", &VayDNSConfig{IdleTimeout: "30s"}, "30s"},
@@ -32,8 +32,9 @@ func TestVayDNSConfig_ResolvedVayDNSKeepAlive(t *testing.T) {
 		v    *VayDNSConfig
 		want string
 	}{
-		{"nil", nil, "10s"},
-		{"default", &VayDNSConfig{}, "10s"},
+		{"nil", nil, "2s"},
+		{"default native", &VayDNSConfig{}, "2s"},
+		{"default compat", &VayDNSConfig{DnsttCompat: true}, "10s"},
 		{"explicit", &VayDNSConfig{KeepAlive: "3s"}, "3s"},
 	}
 	for _, tt := range tests {
@@ -80,7 +81,7 @@ func TestValidate_VayDNSSessionTiming(t *testing.T) {
 			Transport: TransportVayDNS,
 			Backend:   "socks",
 			Domain:    "d.example.com",
-			VayDNS:    &VayDNSConfig{IdleTimeout: "5s", KeepAlive: ""},
+			VayDNS:    &VayDNSConfig{IdleTimeout: "5s", KeepAlive: "5s"},
 		}}
 		err := cfg.Validate()
 		if err == nil || !strings.Contains(err.Error(), "keep_alive must be less") {

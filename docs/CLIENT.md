@@ -27,8 +27,10 @@ For manual client setup without dnstc, follow the sections below.
 ### Prerequisites
 
 Download client binaries:
+
 - [slipstream-client](https://github.com/net2share/slipstream-rust-build/releases)
 - [dnstt-client](https://www.bamsoftware.com/software/dnstt/)
+- [vaydns-client](https://github.com/net2share/vaydns/releases)
 - [sslocal](https://github.com/shadowsocks/shadowsocks-rust/releases) (for Shadowsocks)
 
 ### Connection Info
@@ -40,17 +42,20 @@ dnstm tunnel status <name>
 ```
 
 This shows:
+
 - Domain
 - Port
 - Certificate fingerprint (Slipstream)
-- Public key (DNSTT)
+- Public key (DNSTT, VayDNS)
 - Password and method (Shadowsocks)
 
 ## Certificate/Key Files
 
 Certificate and key files are stored per-tunnel on the server:
+
 - Slipstream certificates: `/etc/dnstm/tunnels/<tag>/cert.pem`
 - DNSTT public keys: `/etc/dnstm/tunnels/<tag>/server.pub`
+- VayDNS public keys: `/etc/dnstm/tunnels/<tag>/server.pub`
 
 ## Slipstream + Shadowsocks
 
@@ -150,6 +155,7 @@ curl -x socks5h://127.0.0.1:1080 https://httpbin.org/ip
 ### 1. Get Public Key
 
 From server:
+
 ```bash
 dnstm tunnel status <name>
 ```
@@ -163,6 +169,7 @@ dnstt-client -udp 8.8.8.8:53 -pubkey PUBLIC_KEY DOMAIN 127.0.0.1:1080
 ```
 
 Or with key file:
+
 ```bash
 scp root@server:/etc/dnstm/tunnels/<tag>/server.pub ./
 dnstt-client -udp 8.8.8.8:53 -pubkey-file server.pub DOMAIN 127.0.0.1:1080
@@ -216,14 +223,90 @@ ssh -D 1080 -f -N -p 2222 user@127.0.0.1
 curl -x socks5h://127.0.0.1:1080 https://httpbin.org/ip
 ```
 
+## VayDNS SOCKS
+
+### 1. Get Public Key
+
+From server:
+
+```bash
+dnstm tunnel status <name>
+```
+
+Copy the public key (64 hex digits).
+
+### 2. Connect
+
+```bash
+vaydns-client -udp 8.8.8.8:53 -pubkey PUBLIC_KEY -domain DOMAIN -socks 127.0.0.1:1080
+```
+
+Or with key file:
+
+```bash
+scp root@server:/etc/dnstm/tunnels/<tag>/server.pub ./
+vaydns-client -udp 8.8.8.8:53 -pubkey-file server.pub -domain DOMAIN -socks 127.0.0.1:1080
+```
+
+When connecting to a VayDNS tunnel with dnstt-compat mode enabled, you can use either `vaydns-client` with `-dnstt-compat` or the standard `dnstt-client`:
+
+```bash
+# Using vaydns-client in compat mode
+vaydns-client -udp 8.8.8.8:53 -pubkey PUBLIC_KEY -domain DOMAIN -dnstt-compat -socks 127.0.0.1:1080
+
+# Using dnstt-client (since server is in dnstt-compat mode)
+dnstt-client -udp 8.8.8.8:53 -pubkey PUBLIC_KEY DOMAIN 127.0.0.1:1080
+```
+
+### 3. Test
+
+```bash
+curl -x socks5h://127.0.0.1:1080 https://httpbin.org/ip
+```
+
+## VayDNS SSH
+
+### 1. Get Public Key
+
+```bash
+dnstm tunnel status <name>
+```
+
+### 2. Start Tunnel
+
+```bash
+vaydns-client -udp 8.8.8.8:53 -pubkey PUBLIC_KEY -domain DOMAIN -socks 127.0.0.1:2222
+```
+
+### 3. SSH Through Tunnel
+
+```bash
+ssh -p 2222 user@127.0.0.1
+```
+
+### 4. SOCKS Proxy via SSH
+
+```bash
+ssh -D 1080 -p 2222 user@127.0.0.1
+```
+
+### 5. Test with curl
+
+```bash
+ssh -D 1080 -f -N -p 2222 user@127.0.0.1
+curl -x socks5h://127.0.0.1:1080 https://httpbin.org/ip
+```
+
 ## DNS Resolvers
 
 Use any public DNS resolver. Recommended order:
+
 - `8.8.8.8` (Google) - most reliable
 - `9.9.9.9` (Quad9)
 - `1.1.1.1` (Cloudflare)
 
 If UDP is blocked, use DNS-over-TLS or DNS-over-HTTPS:
+
 - DNSTT: `-dot 8.8.8.8:853` or `-doh https://dns.google/dns-query`
 
 ## Troubleshooting
@@ -231,11 +314,13 @@ If UDP is blocked, use DNS-over-TLS or DNS-over-HTTPS:
 ### Connection Timeout
 
 1. Verify server is running:
+
    ```bash
    dnstm router status
    ```
 
 2. Check server logs:
+
    ```bash
    dnstm tunnel logs <name>
    ```
@@ -245,24 +330,27 @@ If UDP is blocked, use DNS-over-TLS or DNS-over-HTTPS:
 ### Certificate Mismatch (Slipstream)
 
 Copy the latest certificate from server:
+
 ```bash
 scp root@server:/etc/dnstm/tunnels/<tag>/cert.pem ./cert.pem
 ```
 
-### Wrong Public Key (DNSTT)
+### Wrong Public Key (DNSTT, VayDNS)
 
 Get the correct key:
+
 ```bash
 dnstm tunnel status <name>
 ```
 
 ### Slow Connection
 
-DNSTT is slower than Slipstream due to protocol overhead. For better performance, use Slipstream transports.
+DNSTT is slower than Slipstream due to protocol overhead. VayDNS improves on DNSTT with KCP transport. For best performance, use Slipstream transports.
 
 ### Slipstream Connection Disconnects
 
 Check the client output for errors. Common issues:
+
 - Certificate mismatch: re-copy the certificate
 - DNS propagation: try a different resolver
 - Server not running: check `dnstm router status`
