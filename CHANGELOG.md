@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/net2share/dnstm/compare/v0.7.1...v0.7.2) (2026-04-04)
+
+
+### Bug Fixes
+
+* **build:** add CGO_ENABLED=0 for static binaries ([9e1ec7f](https://github.com/net2share/dnstm/commit/9e1ec7fe972ff96362930e50667d19a40041c9c2))
+
 ## [0.7.1](https://github.com/net2share/dnstm/compare/v0.7.0...v0.7.1) (2026-04-02)
 
 
