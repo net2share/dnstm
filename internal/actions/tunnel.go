@@ -201,6 +201,59 @@ func init() {
 		},
 	})
 
+	// Register tunnel.stats action
+	Register(&Action{
+		ID:                ActionTunnelStats,
+		Parent:            ActionTunnel,
+		Use:               "stats",
+		Short:             "Show tunnel usage statistics",
+		Long:              "Show live usage statistics including active clients, connections, and bandwidth",
+		MenuLabel:         "Stats",
+		RequiresRoot:      true,
+		RequiresInstalled: true,
+		Args: &ArgsSpec{
+			Name:        "tag",
+			Description: "Tunnel tag (optional, shows all tunnels if omitted)",
+			Required:    false,
+			PickerFunc:  TunnelPicker,
+		},
+	})
+
+	// Register tunnel.metrics action
+	Register(&Action{
+		ID:                ActionTunnelMetrics,
+		Parent:            ActionTunnel,
+		Use:               "metrics",
+		Short:             "Configure Prometheus metrics endpoint",
+		Long:              "Enable or disable the Prometheus metrics endpoint for a tunnel's monitor",
+		MenuLabel:         "Metrics",
+		RequiresRoot:      true,
+		RequiresInstalled: true,
+		Args: &ArgsSpec{
+			Name:        "tag",
+			Description: "Tunnel tag",
+			Required:    true,
+			PickerFunc:  TunnelPicker,
+		},
+		Inputs: []InputField{
+			{
+				Name:        "enable",
+				Label:       "Enable Metrics",
+				Type:        InputTypeBool,
+				Description: "Enable or disable the Prometheus metrics endpoint",
+			},
+			{
+				Name:        "address",
+				Label:       "Metrics Address",
+				ShortFlag:   'a',
+				Type:        InputTypeText,
+				Default:     ":9100",
+				Placeholder: ":9100",
+				Description: "Address to serve Prometheus metrics on (e.g. :9100)",
+			},
+		},
+	})
+
 	// Register tunnel.add action
 	Register(&Action{
 		ID:                ActionTunnelAdd,

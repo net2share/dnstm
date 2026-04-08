@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"github.com/net2share/dnstm/internal/certs"
 	"github.com/net2share/dnstm/internal/config"
 	"github.com/net2share/dnstm/internal/keys"
+	"github.com/net2share/dnstm/internal/monitor"
 	"github.com/net2share/dnstm/internal/router"
 	"github.com/net2share/dnstm/internal/system"
 	"github.com/net2share/dnstm/internal/transport"
@@ -762,6 +764,14 @@ func createTunnelService(tunnelCfg *config.TunnelConfig, backend *config.Backend
 	// Create the systemd service
 	if err := result.CreateService(tunnel.ServiceName); err != nil {
 		return err
+	}
+
+	// Start paired sniffer process (auto-captures DNS traffic for user stats)
+	if tunnelCfg.Transport == "dnstt" {
+		if err := monitor.StartSniffer(tunnel.Tag, []string{tunnelCfg.Domain}, monitor.ReadMetricsConf(tunnel.Tag)); err != nil {
+			// Non-fatal — tunnel still works without monitoring
+			log.Printf("Warning: failed to start sniffer: %v", err)
+		}
 	}
 
 	return nil

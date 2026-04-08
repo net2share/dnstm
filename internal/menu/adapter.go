@@ -16,7 +16,8 @@ func isInfoViewAction(actionID string) bool {
 	switch actionID {
 	// Info views
 	case actions.ActionRouterStatus, actions.ActionTunnelStatus, actions.ActionTunnelShare,
-		actions.ActionBackendStatus, actions.ActionBackendAvailable, actions.ActionBackendAdd:
+		actions.ActionBackendStatus, actions.ActionBackendAvailable, actions.ActionBackendAdd,
+		actions.ActionTunnelStats, actions.ActionTunnelMetrics:
 		return true
 	// Progress views
 	case actions.ActionRouterSwitch, actions.ActionRouterStart, actions.ActionRouterStop,

@@ -5,6 +5,7 @@ import (
 
 	"github.com/net2share/dnstm/internal/actions"
 	"github.com/net2share/dnstm/internal/config"
+	"github.com/net2share/dnstm/internal/monitor"
 	"github.com/net2share/dnstm/internal/router"
 )
 
@@ -50,6 +51,10 @@ func HandleTunnelRemove(ctx *actions.Context) error {
 	currentStep++
 	ctx.Output.Step(currentStep, totalSteps, "Removing service...")
 	tunnel := router.NewTunnel(tunnelCfg)
+
+	// Stop and remove paired sniffer process
+	_ = monitor.RemoveSniffer(tunnel.Tag)
+
 	if err := tunnel.RemoveService(); err != nil {
 		ctx.Output.Warning("Service removal warning: " + err.Error())
 	} else {
