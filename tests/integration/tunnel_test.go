@@ -286,6 +286,68 @@ func TestTunnelAdd_VayDNS_WithFallback(t *testing.T) {
 	}
 }
 
+func TestTunnelAdd_SlipstreamPlus(t *testing.T) {
+	env := NewTestEnv(t)
+
+	cfg := env.DefaultConfig()
+	if err := env.WriteConfig(cfg); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	loaded, err := env.ReadConfig()
+	if err != nil {
+		t.Fatalf("failed to read config: %v", err)
+	}
+
+	loaded.Tunnels = append(loaded.Tunnels, config.TunnelConfig{
+		Tag:       "test-plus",
+		Transport: config.TransportSlipstreamPlus,
+		Backend:   "socks",
+		Domain:    "plus.example.com",
+		Port:      5314,
+		Enabled:   boolPtr(true),
+		SlipstreamPlus: &config.SlipstreamPlusConfig{
+			Cert:               "/path/to/cert",
+			Key:                "/path/to/key",
+			MaxConnections:     128,
+			IdleTimeoutSeconds: 45,
+			Fallback:           "127.0.0.1:9999",
+		},
+	})
+
+	if err := env.WriteConfig(loaded); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	reloaded, err := env.ReadConfig()
+	if err != nil {
+		t.Fatalf("failed to reload config: %v", err)
+	}
+
+	tunnel := reloaded.GetTunnelByTag("test-plus")
+	if tunnel == nil {
+		t.Fatal("tunnel not found")
+	}
+	if tunnel.Transport != config.TransportSlipstreamPlus {
+		t.Errorf("transport = %v, want %v", tunnel.Transport, config.TransportSlipstreamPlus)
+	}
+	if tunnel.SlipstreamPlus == nil {
+		t.Fatal("SlipstreamPlus config is nil")
+	}
+	if tunnel.SlipstreamPlus.MaxConnections != 128 {
+		t.Errorf("MaxConnections = %d, want 128", tunnel.SlipstreamPlus.MaxConnections)
+	}
+	if tunnel.SlipstreamPlus.IdleTimeoutSeconds != 45 {
+		t.Errorf("IdleTimeoutSeconds = %d, want 45", tunnel.SlipstreamPlus.IdleTimeoutSeconds)
+	}
+	if tunnel.SlipstreamPlus.Fallback != "127.0.0.1:9999" {
+		t.Errorf("Fallback = %q, want '127.0.0.1:9999'", tunnel.SlipstreamPlus.Fallback)
+	}
+	if !tunnel.IsSlipstreamPlus() {
+		t.Error("IsSlipstreamPlus() should return true")
+	}
+}
+
 func TestTunnelList(t *testing.T) {
 	env := NewTestEnv(t)
 
@@ -522,6 +584,28 @@ func TestTunnelValidation(t *testing.T) {
 				VayDNS:    &config.VayDNSConfig{MTU: 2000},
 			},
 			wantErr: "vaydns.mtu must be between",
+		},
+		{
+			name: "slipstream-plus bad fallback",
+			tunnel: config.TunnelConfig{
+				Tag:            "plus-bad-fb",
+				Transport:      config.TransportSlipstreamPlus,
+				Backend:        "socks",
+				Domain:         "test.example.com",
+				SlipstreamPlus: &config.SlipstreamPlusConfig{Fallback: "not-host-port"},
+			},
+			wantErr: "slipstream_plus.fallback must be host:port",
+		},
+		{
+			name: "slipstream-plus negative max_connections",
+			tunnel: config.TunnelConfig{
+				Tag:            "plus-neg-mc",
+				Transport:      config.TransportSlipstreamPlus,
+				Backend:        "socks",
+				Domain:         "test.example.com",
+				SlipstreamPlus: &config.SlipstreamPlusConfig{MaxConnections: -1},
+			},
+			wantErr: "max_connections must not be negative",
 		},
 	}
 

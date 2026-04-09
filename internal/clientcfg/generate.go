@@ -55,6 +55,19 @@ func Generate(tunnel *config.TunnelConfig, backend *config.BackendConfig, opts G
 		}
 		cfg.Transport.PubKey = pubKey
 
+	case config.TransportSlipstreamPlus:
+		if !opts.NoCert {
+			certPath := filepath.Join(tunnelDir, "cert.pem")
+			if tunnel.SlipstreamPlus != nil && tunnel.SlipstreamPlus.Cert != "" {
+				certPath = tunnel.SlipstreamPlus.Cert
+			}
+			certPEM, err := os.ReadFile(certPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read certificate: %w", err)
+			}
+			cfg.Transport.Cert = string(certPEM)
+		}
+
 	case config.TransportVayDNS:
 		pubKeyPath := filepath.Join(tunnelDir, "server.pub")
 		pubKey, err := keys.ReadPublicKey(pubKeyPath)

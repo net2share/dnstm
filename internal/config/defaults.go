@@ -59,6 +59,17 @@ func (c *Config) ApplyDefaults() {
 				t.DNSTT.MTU = 1232
 			}
 		}
+		if t.Transport == TransportSlipstreamPlus {
+			if t.SlipstreamPlus == nil {
+				t.SlipstreamPlus = &SlipstreamPlusConfig{}
+			}
+			if t.SlipstreamPlus.MaxConnections == 0 {
+				t.SlipstreamPlus.MaxConnections = 256
+			}
+			if t.SlipstreamPlus.IdleTimeoutSeconds == 0 {
+				t.SlipstreamPlus.IdleTimeoutSeconds = 60
+			}
+		}
 		if t.Transport == TransportVayDNS {
 			if t.VayDNS == nil {
 				t.VayDNS = &VayDNSConfig{}

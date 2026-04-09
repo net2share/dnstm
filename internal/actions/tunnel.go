@@ -425,6 +425,11 @@ func TransportOptions() []SelectOption {
 			Description: "High-performance DNS tunnel with TLS",
 		},
 		{
+			Label:       "Slipstream Plus",
+			Value:       string(config.TransportSlipstreamPlus),
+			Description: "Slipstream Plus with Turbo mode and backpressure (Fox-Fig fork)",
+		},
+		{
 			Label:       "DNSTT",
 			Value:       string(config.TransportDNSTT),
 			Description: "Classic DNS tunnel (dnstt-server)",

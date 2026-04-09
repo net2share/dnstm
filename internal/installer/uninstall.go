@@ -67,6 +67,7 @@ func PerformFullUninstall(output actions.OutputWriter, isInteractive bool) error
 		"/usr/local/bin/ssserver",
 		"/usr/local/bin/sshtun-user",
 		"/usr/local/bin/vaydns-server",
+		"/usr/local/bin/slipstream-plus-server",
 		"/usr/local/bin/microsocks",
 	}
 	for _, bin := range binaries {
