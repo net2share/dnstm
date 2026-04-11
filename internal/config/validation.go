@@ -211,7 +211,7 @@ func (c *Config) validateTunnels() error {
 					}
 				}
 				if !validRT {
-					return fmt.Errorf("tunnel '%s': vaydns.record_type must be one of: txt, cname, a, aaaa, mx, ns, srv", t.Tag)
+					return fmt.Errorf("tunnel '%s': vaydns.record_type must be one of: txt, null, cname, a, aaaa, mx, ns, srv, caa", t.Tag)
 				}
 				if t.VayDNS.DnsttCompat && t.VayDNS.RecordType != "txt" {
 					return fmt.Errorf("tunnel '%s': vaydns.record_type must be txt when dnstt_compat is enabled", t.Tag)
