@@ -375,9 +375,9 @@ func init() {
 			},
 			{
 				Name:        "record-type",
-				Label:       "VayDNS record type (txt, cname, a, aaaa, mx, ns, srv)",
+				Label:       "VayDNS record type (txt, null, cname, a, aaaa, mx, ns, srv, caa)",
 				Type:        InputTypeText,
-				Description: "DNS record type (txt, cname, a, aaaa, mx, ns, srv). Default: txt. Cannot use non-txt with --dnstt-compat",
+				Description: "DNS record type (txt, null, cname, a, aaaa, mx, ns, srv, caa). Default: txt. Cannot use non-txt with --dnstt-compat",
 				ShowIf: func(ctx *Context) bool {
 					return !ctx.IsInteractive && config.TransportType(ctx.GetString("transport")) == config.TransportVayDNS
 				},

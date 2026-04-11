@@ -240,7 +240,7 @@ VayDNS with dnstt-compatible wire format:
 | `kcp_window_size` | int    | 0                                    | KCP window size (0 = queue_size/2, must be ≤ queue_size)                                                     |
 | `queue_overflow`  | string | `drop`                               | Queue overflow strategy: `drop` or `block`                                                                   |
 | `log_level`       | string | `info`                               | Server log level: `debug`, `info`, `warning`, `error`                                                        |
-| `record_type`     | string | `txt`                                | DNS record type: `txt`, `cname`, `a`, `aaaa`, `mx`, `ns`, `srv` (must be `txt` when dnstt_compat is enabled) |
+| `record_type`     | string | `txt`                                | DNS record type: `txt`, `null`, `cname`, `a`, `aaaa`, `mx`, `ns`, `srv`, `caa` (must be `txt` when dnstt_compat is enabled) |
 
 **Note:** VayDNS does not support the `shadowsocks` backend type.
 

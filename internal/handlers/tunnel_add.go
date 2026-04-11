@@ -297,6 +297,8 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 				{Label: "SRV", Value: "srv"},
 				{Label: "A", Value: "a"},
 				{Label: "AAAA", Value: "aaaa"},
+				{Label: "NULL", Value: "null"},
+				{Label: "CAA", Value: "caa"},
 			}
 			rtValue, rtErr := tui.RunMenu(tui.MenuConfig{
 				Title:   "DNS Record Type",
@@ -425,7 +427,7 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 				}
 			}
 			if !valid {
-				return fmt.Errorf("invalid --record-type '%s' (must be one of: txt, cname, a, aaaa, mx, ns, srv)", recordType)
+				return fmt.Errorf("invalid --record-type '%s' (must be one of: txt, null, cname, a, aaaa, mx, ns, srv, caa)", recordType)
 			}
 		}
 
