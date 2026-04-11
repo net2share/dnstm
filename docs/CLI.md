@@ -119,7 +119,7 @@ dnstm tunnel add -t my-tunnel \
 | `--kcp-window-size` | VayDNS: KCP window size (default: queue_size/2)                    |
 | `--queue-overflow`  | VayDNS: queue overflow strategy (`drop` or `block`)                |
 | `--log-level`       | VayDNS: server log level (debug, info, warning, error)             |
-| `--record-type`     | VayDNS: DNS record type (txt, cname, a, aaaa, mx, ns, srv)         |
+| `--record-type`     | VayDNS: DNS record type (txt, null, cname, a, aaaa, mx, ns, srv, caa)         |
 
 ### Tunnel Share Flags
 
