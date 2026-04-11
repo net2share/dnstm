@@ -51,7 +51,7 @@ type VayDNSConfig struct {
 }
 
 // ValidVayDNSRecordTypes returns the valid record types for VayDNS.
-var ValidVayDNSRecordTypes = []string{"txt", "cname", "a", "aaaa", "mx", "ns", "srv"}
+var ValidVayDNSRecordTypes = []string{"txt", "null", "cname", "a", "aaaa", "mx", "ns", "srv", "caa"}
 
 // ResolvedVayDNSIdleTimeout returns the idle-timeout string for vaydns-server, applying defaults when empty.
 func (v *VayDNSConfig) ResolvedVayDNSIdleTimeout() string {
